@@ -132,6 +132,11 @@ class Config:
     tp2_bps: float = 400.0          # the final 30% rides the macro trail
     be_after_r: float = 1.0         # pre-scale breakeven after 1R
     time_exit_bars: int = 40        # 40 x 15m = 10h (a day-trade horizon)
+    scratch_after_bars: int = 3     # no-follow-through: if an entry never
+                                    # shows follow-through within this many
+                                    # closed bars, cut it early
+    scratch_min_mfe_r: float = 0.5  # ... where "follow-through" = this much
+                                    # favorable excursion (R) at least once
     retest_bars: int = 8
     # ---- universe (coin finder) ----------------------------------------
     top_n: int = 70                 # hunting ground: 60-80 coins (v2)
@@ -752,6 +757,7 @@ def restore_day_state(cfg: Config, book: "PaperBook", risk: "RiskEngine",
                     trail_mode=bool(rp["trail_mode"]),
                     trail_ref=float(rp["trail_ref"]),
                     lev=float(rp.get("lev", cfg.lev)),
+                    mfe_r=float(rp.get("mfe_r", 0.0)),
                     legs=[Leg(str(lg["exit_reason"]), float(lg["qty"]),
                               float(lg["entry_px"]), float(lg["exit_px"]),
                               float(lg["fees"]), float(lg["pnl"]),
@@ -999,6 +1005,7 @@ class AppState:
                     "bars_held": p.bars_held, "scaled": p.scaled,
                     "be_armed": p.be_armed, "trail_mode": p.trail_mode,
                     "trail_ref": p.trail_ref, "lev": p.lev,
+                    "mfe_r": p.mfe_r,
                     "legs": [{"exit_reason": lg.exit_reason, "qty": lg.qty,
                               "entry_px": lg.entry_px, "exit_px": lg.exit_px,
                               "fees": lg.fees, "pnl": lg.pnl,
@@ -1529,6 +1536,7 @@ class Position:
     lev: float = 20.0             # module 1: per-trade dynamic leverage
     trail_mode: bool = False      # module 4: velocity trail on the runner
     trail_ref: float = 0.0        # pivot: prev-candle low (long) / high
+    mfe_r: float = 0.0            # max favorable excursion, in R units
 
     @property
     def risk(self) -> float:
@@ -1802,6 +1810,13 @@ class PaperBook:
             return
         pos.bars_held += 1            # fill candle == bar 1 (engine parity)
         fill_bar = (t_open == pos.fill_t)
+        # max favorable excursion (R units) -- the "is it working?" gauge.
+        # the fill bar's own high/low may predate the fill, so only count
+        # it from the bar AFTER the fill onward (conservative).
+        if not fill_bar and pos.risk > 0:
+            fav = ((h - pos.entry_px) / pos.risk if pos.side > 0
+                   else (pos.entry_px - lo) / pos.risk)
+            pos.mfe_r = max(pos.mfe_r, fav)
         # on the FILL bar a level only counts when the bar CLOSED beyond
         # it -- proof that price crossed it AFTER the fill (a same-bar
         # wick before the fill proves nothing)
@@ -1885,6 +1900,24 @@ class PaperBook:
                     self._close_remainder(coin, pos, pos.tp2_px, "tp2",
                                           t_open)
                     return
+        # 4b. no-follow-through scratch (market): an entry that has been
+        #     underwater for N closed bars and never showed follow-through
+        #     (MFE < scratch_min_mfe_r) is a failed sweep -- cut it before
+        #     the market collects the full stop. Only pre-scale (the tiered
+        #     phases have their own stop/trail); the stop check above still
+        #     wins first when both would fire on the same bar.
+        if pos in self.positions.values() and not pos.scaled and \
+                not fill_bar and pos.bars_held >= self.cfg.scratch_after_bars \
+                and pos.mfe_r < self.cfg.scratch_min_mfe_r:
+            underwater = (pos.side > 0 and c < pos.entry_px) or \
+                         (pos.side < 0 and c > pos.entry_px)
+            if underwater:
+                LOG.info("[SCRATCH] %s no follow-through in %d bars "
+                         "(MFE %.2fR < %.2fR) -- cutting at market %.6g",
+                         coin, pos.bars_held, pos.mfe_r,
+                         self.cfg.scratch_min_mfe_r, c)
+                self._close_remainder(coin, pos, c, "scratch", t_open)
+                return
         # 5. time kill (market)
         if pos in self.positions.values() and \
                 pos.bars_held >= self.cfg.time_exit_bars:
