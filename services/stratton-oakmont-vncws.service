@@ -1,0 +1,16 @@
+[Unit]
+# Bridges the loopback-only VNC server to a WebSocket the browser can speak,
+# on loopback as well -- the panel is what reaches it, and the panel is what
+# holds the login. Nothing here is exposed to the network directly.
+Description=STRATTON OAKMONT VNC websocket bridge for the phone
+After=stratton-oakmont-vnc.service
+Requires=stratton-oakmont-vnc.service
+
+[Service]
+User=stratton
+ExecStart=/usr/bin/websockify 127.0.0.1:6080 127.0.0.1:5900
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

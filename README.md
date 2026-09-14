@@ -1,4 +1,4 @@
-# TBT-Engine
+# Stratton Oakmont
 
 **Start here: [HANDOFF.md](HANDOFF.md)** — what the system does, why every
 number is the number it is, every bug and trap already paid for, and what is
@@ -7,7 +7,7 @@ still open. Read that first; this file is the inventory of the folder.
 The whole trading stack, in one place. Gathered 2026-09-04 with every trading
 service stopped.
 
-This folder is a **byte-exact mirror** of `/home/tbt/bot` on the server: 122
+This folder is a **byte-exact mirror** of `/home/stratton-oakmont/bot` on the server: 122
 files, every name matching, every key file verified identical. Edit here and
 the server does not change; edit there and this copy goes stale.
 
@@ -23,17 +23,17 @@ Everything now lives under one root, on both machines.
 | `data/` | live state — watchlist, measurements, the paper book, archives |
 | `signals/` | the Chrome DevTools layer that reads the chart |
 | `exchange/` | the Bitunix side |
-| `tools/` | 22 inspection scripts, moved in from `/home/tbt/tools` |
+| `tools/` | 22 inspection scripts, moved in from `/home/stratton-oakmont/tools` |
 | `pine/` | the indicator — Mac and server copies verified identical |
 | `services/` | reference copies of the live systemd units |
-| `scratch/` | loose scripts that used to sit in `/home/tbt` |
+| `scratch/` | loose scripts that used to sit in `/home/stratton-oakmont` |
 | `old/` | stale unit copies, old logs, dead-code tarballs |
 | `logs/` | runtime logs |
 
 The root stayed named `bot` on the server on purpose: every systemd unit points
 at `~/bot` and seven source files write that path literally. Renaming it would
 mean editing all of them for nothing but cosmetics, so everything else moved in
-instead. `/home/tbt/tools` is left behind as a symlink, so anything reaching
+instead. `/home/stratton-oakmont/tools` is left behind as a symlink, so anything reaching
 for the old path still lands correctly.
 
 ### Contains secrets
@@ -51,7 +51,7 @@ drive, a repo, or a zip you send anywhere.
 1. **`boom2.py`** — the scanner. Walks every listed symbol, measures how far
    each travels and how often it makes one of the two shapes, writes the ranked
    `data/watchlist.json` and `data/watch_measures.json`. Runs on
-   `tbt-boom.timer`.
+   `stratton-oakmont-boom.timer`.
 2. **`scout.py`** — walks the top 150 through chart window 1, reads the shape
    off the candles, writes `data/scout.json`.
 3. **`papertrade.py`** — the book. Holds chart window 0 still, scores the
@@ -95,13 +95,13 @@ wallet: equity path, drawdown, stop streaks, expectancy.
 
 Paper book: **$100.00, zero trades.** Nothing has ever passed the 70 floor.
 
-Stopped: `tbt-paper`, `tbt-scout`, `tbt-guard`, `tbt-recorder`,
-`tbt-boom.timer`. Still up so the charts and app stay reachable:
-`tbt-chrome`, `tbt-panel`, `tbt-vnc`, `tbt-vncws`.
+Stopped: `stratton-oakmont-paper`, `stratton-oakmont-scout`, `stratton-oakmont-guard`, `stratton-oakmont-recorder`,
+`stratton-oakmont-boom.timer`. Still up so the charts and app stay reachable:
+`stratton-oakmont-chrome`, `stratton-oakmont-panel`, `stratton-oakmont-vnc`, `stratton-oakmont-vncws`.
 
 Verified after the move: all 41 source files parse, all six engine modules
 import, every systemd unit resolves to a file that exists, the tools run from
-their new home, and `/home/tbt` is clear of loose Python.
+their new home, and `/home/stratton-oakmont` is clear of loose Python.
 
 ### Open bug
 
@@ -142,16 +142,16 @@ the tab since.
 
 ## Two landmines found while gathering this
 
-**`old/tbt-paper.service.STALE-DO-NOT-INSTALL`** is an old copy that differs
+**`old/stratton-oakmont-paper.service.STALE-DO-NOT-INSTALL`** is an old copy that differs
 from the live unit in exactly the two places that were bugs: it runs
 `--min-confidence 0`, so the book would trade everything with no quality floor,
 and `--interval 0.05`, which is the twenty-polls-a-second setting that had the
-box at load 3.6. `old/tbt-scout.service.STALE-DO-NOT-INSTALL` still walks only
+box at load 3.6. `old/stratton-oakmont-scout.service.STALE-DO-NOT-INSTALL` still walks only
 40 coins with the old dwell. Both were sitting loose in the home directory
 where they could be installed by accident. The live units in
 `/etc/systemd/system/` are the truth, and `services/` holds honest copies.
 
-**`scratch/`** holds five scripts that were sitting directly in `/home/tbt`,
+**`scratch/`** holds five scripts that were sitting directly in `/home/stratton-oakmont`,
 which is on the Python path for anything started from there. That position has
 broken this system three times by shadowing a real module — `nt.py` took out
 `pathlib`, and `inspect.py` and `platform.py` did the same before it. None of
@@ -167,13 +167,13 @@ The full research datasets (`quant/data/` ~5.2 GB, `data/` ~95 MB,
 archive hosted on the project's own VPS:
 
 ```
-scp tbt:/root/ict_sniper/data_archive/tbt_data.tar.zst .
-shasum -a 256 -c tbt_data.sha256        # verify integrity
-tar --use-compress-program=unzstd -xf tbt_data.tar.zst
+scp stratton:/root/ict_sniper/data_archive/stratton-oakmont-data.tar.zst .
+shasum -a 256 -c stratton-oakmont-data.sha256        # verify integrity
+tar --use-compress-program=unzstd -xf stratton-oakmont-data.tar.zst
 ```
 
 - Archive format: single `tar.zst` (zstd level 3), one file, no split
-- Checksum: `tbt_data.sha256` next to the archive
-- Regenerate the archive on the box: `tar -cf - quant/data data scalper/data | zstd -3 -T0 -o tbt_data.tar.zst`
+- Checksum: `stratton-oakmont-data.sha256` next to the archive
+- Regenerate the archive on the box: `tar -cf - quant/data data scalper/data | zstd -3 -T0 -o stratton-oakmont-data.tar.zst`
 - Alternative for GitHub: attach the archive (split into <2 GB parts) to a
   Release of this repository -- ask for a fine-grained token if you want that.

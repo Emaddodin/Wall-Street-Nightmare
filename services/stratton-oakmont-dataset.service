@@ -1,0 +1,21 @@
+[Unit]
+# Rebuilds data/dataset/ from the recorded signals and outcomes, so the
+# flow dataset grows with the recorder instead of going stale. Reads files
+# only -- it touches no chart and no service.
+Description=STRATTON OAKMONT flow dataset builder
+
+[Service]
+User=stratton
+WorkingDirectory=/home/stratton-oakmont/bot
+# The last stage retrains the LIVE filter, not merely evaluates it: the
+# books hot-reload model.npz every minute, and a model that is never
+# retrained goes quietly stale -- which the healthcheck would then only
+# be able to shout about after two days. The save is atomic (tmp+rename),
+# so a hot reload can never read a half-written artifact.
+ExecStart=/bin/sh -c '/home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/dataset/make_dataset.py && /home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/dataset/sweep.py > /home/stratton-oakmont/bot/data/dataset/sweep.txt && /home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/dataset/sampler.py > /home/stratton-oakmont/bot/data/dataset/samples/build.txt && /home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/dataset/selector.py --samples /home/stratton-oakmont/bot/data/dataset/samples/features.npz > /home/stratton-oakmont/bot/data/dataset/selector.txt && /home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/dataset/selector.py --save-model /home/stratton-oakmont/bot/data/dataset/samples/model.npz > /home/stratton-oakmont/bot/data/dataset/retrain.txt'
+Restart=no
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

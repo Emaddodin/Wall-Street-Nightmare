@@ -1,0 +1,8 @@
+[Unit]
+Description=STRATTON OAKMONT case study -- the path of every open trade, a line a minute
+
+[Service]
+Type=oneshot
+User=stratton
+WorkingDirectory=/home/stratton-oakmont/bot
+ExecStart=/home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/tools/casestudy.py record

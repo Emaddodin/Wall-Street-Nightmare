@@ -1,5 +1,5 @@
 import pathlib
-p = pathlib.Path('/home/tbt/bot/papertrade.py'); s = p.read_text()
+p = pathlib.Path('/home/stratton-oakmont/bot/papertrade.py'); s = p.read_text()
 old = '''              _rr = coin_reach(sym0)[0] if 'sym0' in dir() else None'''
 new = '''              # The coin this window is on, so the level can be measured on
               # its own scale. read_window works in TradingView's naming, so

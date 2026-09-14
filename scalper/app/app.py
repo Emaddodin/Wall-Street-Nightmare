@@ -3,7 +3,7 @@
 Same structure the operator knows: black/gold phone UI, Face ID
 (WebAuthn) + password, served on 443 with the same Let's Encrypt cert and
 the same RP/origin -- but it tracks the SCALPER paper book instead of the
-TBT engine.  The WebAuthn credential file is migrated from the old panel's
+Stratton Oakmont engine.  The WebAuthn credential file is migrated from the old panel's
 store so the phone's Face ID keeps working without re-registration.
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ REJECTS = DATA / "logs" / "rejections.jsonl"
 RESEARCH = DATA / "research" / "research.jsonl"
 PAUSED = DATA / "state" / "paused"
 CREDS = Path(os.getenv("SCALPER_CREDS", str(DATA / "state" / "webauthn_creds.json")))
-LEGACY_CREDS = Path("/root/.tbt_panel_creds.json")
+LEGACY_CREDS = Path("/root/.so_panel_creds.json")
 
 TOKEN = os.getenv("SCALPER_APP_TOKEN", "")
 RP_ID = os.getenv("SCALPER_RPID", "62.60.198.135.nip.io")

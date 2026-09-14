@@ -1,7 +1,7 @@
 # Scalper — crypto intraday confluence bot (isolated research/paper project)
 
 A separate, self-contained project. It shares **no code** with the
-production TBT engine next door — no imports, no shared files — only the
+production Stratton Oakmont engine next door — no imports, no shared files — only the
 concept of reading the operator's TESLA indicator off the same TradingView
 charts the production bot used (the charts are shared *infrastructure*, the
 code is not).

@@ -1,6 +1,6 @@
 # FINAL REPORT — New Leveraged Crypto Futures Strategy Research
 
-Project: TBT-Engine `quant/` (new, independent of the legacy TBT/scalper
+Project: Stratton Oakmont `quant/` (new, independent of the legacy Stratton Oakmont/scalper
 strategies).  Mission: discover the strongest short-term leveraged crypto
 futures strategy the historical data can support, researched toward the
 target of +100% net daily ROE.

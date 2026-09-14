@@ -1,6 +1,6 @@
 # ICT Sniper -- new server (82.115.21.155)
 
-Old server 62.60.198.135:2222 is DEAD (unreachable, 2026-09-13). `ssh tbt`
+Old server 62.60.198.135:2222 is DEAD (unreachable, 2026-09-13). `ssh stratton`
 now points here.
 
 ## Layout
@@ -15,9 +15,9 @@ now points here.
     /root/ict_sniper/bot_execution.log     rotating bot log
 
 ## Services
-    systemctl status tbt-hl-sniper    # the paper book
-    systemctl status tbt-hl-app       # phone app on :8443
-    journalctl -u tbt-hl-sniper -f
+    systemctl status stratton-oakmont-hl-sniper    # the paper book
+    systemctl status stratton-oakmont-hl-app       # phone app on :8443
+    journalctl -u stratton-oakmont-hl-sniper -f
 
 ## App
     https://82.115.21.155:8443   (self-signed cert -> accept the warning)
@@ -48,8 +48,8 @@ Fills in paper mode are simulated from closed 5m candles with the exact
 backtest rules; nothing is ever signed or sent.
 
 ## Monitoring -- guard + health checker (same pattern as the old server)
-    tbt-hl-watchdog.timer   every 5 min  -> hl_watchdog.py   (repairs + ntfy)
-    tbt-hl-health.timer     every 10 min -> hl_healthcheck.py --notify
+    stratton-oakmont-hl-watchdog.timer   every 5 min  -> hl_watchdog.py   (repairs + ntfy)
+    stratton-oakmont-hl-health.timer     every 10 min -> hl_healthcheck.py --notify
 Watchdog checks: both services up, book state finite, PAPER LOCK intact,
 no signing key in the bot env, no --live flags in the unit, book freshness
 (10 min) with ONE self-heal restart per hour, journal errors, app HTTP on
@@ -64,5 +64,5 @@ message). Manual runs:
     ./venv/bin/python hl_watchdog.py --test      # one test alarm
 
 ## Security
-    fail2ban 1.0.2: jails sshd + tbt-app (app logins: 8/10min -> 2h ban)
+    fail2ban 1.0.2: jails sshd + stratton-app (app logins: 8/10min -> 2h ban)
     sshd: key-only (passwordauthentication no), root via key

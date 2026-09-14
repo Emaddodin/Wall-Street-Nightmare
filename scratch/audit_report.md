@@ -1,4 +1,4 @@
-# TBT-Engine audit report
+# Stratton Oakmont audit report
 
 Scope: the full trading chain (atrscan → scout → perch → papertrade → guard/panel), the learned
 filter path, the dataset package, the exchange/CDP layers, and the tools, as they run on the server
@@ -42,12 +42,12 @@ Fix: `back = adv[i]` unconditionally (for BUY the low is also reached on an adve
 panel.py:456: def set_wanted(syms) -> None:            # writes data/chart_coins.json (tmp+replace)
 panel.py:1287:            set_wanted(syms)             # manual /api/coins — no perch gate
 panel.py:186:                set_wanted(want)          # autopilot — gated by perch_owns_charts() at 126-128
-perch.py:166:    write_atomic(WANTED, want)           # tbt-perch.timer, every 2 minutes
+perch.py:166:    write_atomic(WANTED, want)           # stratton-oakmont-perch.timer, every 2 minutes
 ```
 
 Proof: the panel's autopilot deliberately stands down while perch runs
 (`panel.py:126-128`, `perch_owns_charts()`), but the manual switch handler (`panel.py:1280-1290`)
-does not. Perch rewrites the file every 2 minutes (`services/tbt-perch.timer`,
+does not. Perch rewrites the file every 2 minutes (`services/stratton-oakmont-perch.timer`,
 `OnUnitActiveSec=2min`), so an operator's choice from the phone is silently overwritten within
 one perch cycle and the guard (`guard.py:161-179`) then enforces the perch's coin. Additionally
 the panel offers two pickers (chart 1 + chart 2) while only one standing window exists — the
@@ -60,8 +60,8 @@ the switch with a message while perch owns the charts, as the autopilot already 
 ## 3. [major, conditional on server state] `atrscan.py:253` vs `boom2.py:464` — two services write `watchlist.json` with different selection criteria
 
 ```python
-atrscan.py:253:  write_atomic(WATCH, [r["sym"] for r in keep])     # ATR>=2.5 top-60, tbt-atr.timer every 10 min
-boom2.py:464:    write_atomic(BOT / "data" / "watchlist.json", watch)  # reach/shapes/min-lev 50, tbt-boom.timer every 30 min
+atrscan.py:253:  write_atomic(WATCH, [r["sym"] for r in keep])     # ATR>=2.5 top-60, stratton-oakmont-atr.timer every 10 min
+boom2.py:464:    write_atomic(BOT / "data" / "watchlist.json", watch)  # reach/shapes/min-lev 50, stratton-oakmont-boom.timer every 30 min
 boom2.py:458:    write_atomic(BOT / "data" / "watch_measures.json", full)
 ```
 
@@ -71,31 +71,31 @@ different coin populations every 10-30 minutes; and because `watch_measures.json
 only covers boom2's list, whenever atrscan's list is in force the scout walks coins with no
 reach/smooth measurements — exactly the state `papertrade.py:1274-1289` warns silently drops the
 heaviest judgement term. HANDOFF.md says boom2 is retired, but the unit/timer files still ship —
-verify `systemctl is-enabled tbt-boom.timer` on the server.
+verify `systemctl is-enabled stratton-oakmont-boom.timer` on the server.
 
 Fix: remove the watchlist write from the retired boom2 (leave boom.json + watch_measures.json),
-or disable the tbt-boom.timer, so atrscan is the single watchlist owner.
+or disable the stratton-oakmont-boom.timer, so atrscan is the single watchlist owner.
 
 ## 4. [major] The live filter artifact (`model.npz`) is never retrained by any scheduled job
 
 ```python
-services/tbt-dataset.service:10: ... && /home/tbt/venv/bin/python -u /home/tbt/bot/dataset/selector.py
-                                   --samples /home/tbt/bot/data/dataset/samples/features.npz > .../selector.txt'
+services/stratton-oakmont-dataset.service:10: ... && /home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/dataset/selector.py
+                                   --samples /home/stratton-oakmont/bot/data/dataset/samples/features.npz > .../selector.txt'
 dataset/selector.py:251:    if args.save_model:      # the ONLY writer of model.npz
 tools/healthcheck.py:249-250: filter_model.model_check(DATA / "dataset" / "samples" / "model.npz")
 filter_model.py:71:            return [("fault" if hours > 48 else "ok", ...
 ```
 
-Proof: the nightly pipeline (tbt-dataset.timer, 18:30 UTC) runs selector with `--samples`, which
+Proof: the nightly pipeline (stratton-oakmont-dataset.timer, 18:30 UTC) runs selector with `--samples`, which
 evaluates AUC and saves nothing; only `selector.py --save-model` writes the artifact that
-`tbt-paper.service` and `tbt-beast.service` load as a hard startup gate (`--filter-model
+`stratton-oakmont-paper.service` and `stratton-beast.service` load as a hard startup gate (`--filter-model
 data/dataset/samples/model.npz`). The healthcheck comment says its 48h age check exists to verify
 "the nightly retrain is still alive" — a retrain that is not scheduled anywhere. The book's
 hot-reload (`papertrade.py`, mtime-based, 60 s check) therefore only ever fires after a manual
 retrain: the learned filter silently ages, and after 48 h the health alarm fires with no scheduled
 remedy.
 
-Fix: append `&& selector.py --save-model data/dataset/samples/model.npz` to the tbt-dataset
+Fix: append `&& selector.py --save-model data/dataset/samples/model.npz` to the stratton-oakmont-dataset
 service (or add a dedicated retrain unit) and keep the artifact-age check.
 
 ## 5. [minor] Paper simulator misprices two fills: the edge limit as a taker, the late-market fallback as a maker
@@ -139,11 +139,11 @@ at hand), or pass the book's stop to the scout through the existing `_ROOM`/`_SH
 
 ```python
 funnel.py:34-37:  ["journalctl", "-u", UNIT, ...]            # journal follows --unit
-funnel.py:82:     ["systemctl", "show", "tbt-paper", "-p", "ActiveEnterTimestamp", ...]  # hardcoded
+funnel.py:82:     ["systemctl", "show", "stratton-oakmont-paper", "-p", "ActiveEnterTimestamp", ...]  # hardcoded
 ```
 
-Proof: `dayreport --unit tbt-beast` (`tools/dayreport.py:244-247`, wired in
-`services/tbt-report.service`) invokes funnel with `--unit tbt-beast`, which reads the beast's
+Proof: `dayreport --unit stratton-beast` (`tools/dayreport.py:244-247`, wired in
+`services/stratton-oakmont-report.service`) invokes funnel with `--unit stratton-beast`, which reads the beast's
 journal but the paper unit's restart timestamp. The beast funnel then counts lines from before
 the beast's last restart (old wordings) or misses fresh ones — the exact mixed-denominator failure
 the file's own comments (`funnel.py:185-190`) say it was rebuilt to avoid, and it can light the
@@ -216,7 +216,7 @@ fill-bookkeeping out of `cancel_resting`).
   drawdown and streak arithmetic are right.
 - **Paper book write** is atomic (tmp + replace, `papertrade.py` book section), and two processes
   on the *same* book are refused by a per-book pid lock (stale locks taken over).
-- **Two books on one box** (tbt-paper + tbt-beast): separate ledgers, locks and journals; the only
+- **Two books on one box** (stratton-oakmont-paper + stratton-beast): separate ledgers, locks and journals; the only
   shared read-only files are scout.json/boom.json/watch files, which are written atomically by
   their single owners (modulo finding 3 above).
 - **Python compatibility**: every audited file parses under 3.11 (ast check over the whole tree);

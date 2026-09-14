@@ -1,6 +1,6 @@
 import pathlib
 import re
-p = pathlib.Path('/home/tbt/bot/boom2.py'); s = p.read_text()
+p = pathlib.Path('/home/stratton-oakmont/bot/boom2.py'); s = p.read_text()
 
 # the watchlist filtered on a field that was never measured, so it was always
 # empty and the scout has been falling back to the short list all along

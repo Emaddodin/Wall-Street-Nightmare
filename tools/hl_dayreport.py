@@ -19,7 +19,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-UNIT = "tbt-hl-sniper"
+UNIT = "stratton-oakmont-hl-sniper"
 STATE = Path("/root/ict_sniper/data/state/paper.json")
 
 RE_UNI = re.compile(r"\[UNIVERSE\] top-(\d+) by ATR%: (.*)")

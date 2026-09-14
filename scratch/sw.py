@@ -1,5 +1,5 @@
 import pathlib
-p = pathlib.Path('/home/tbt/bot/papertrade.py'); s = p.read_text()
+p = pathlib.Path('/home/stratton-oakmont/bot/papertrade.py'); s = p.read_text()
 old = '''                        else:
                             _ctp, _csl = geo_leg(sym, ohlc, s["t"])
                         if a.min_expansion > 0:'''

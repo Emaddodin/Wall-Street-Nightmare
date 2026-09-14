@@ -1,0 +1,13 @@
+[Unit]
+Description=STRATTON OAKMONT control panel (cannot enable live trading)
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/home/stratton-oakmont/bot
+ExecStart=/home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/panel.py
+Restart=always
+RestartSec=8
+
+[Install]
+WantedBy=multi-user.target

@@ -1,6 +1,6 @@
 # SELECTIVE_BITUNIX_REPORT.md — Selectivity, Leverage & the +100%/day Question
 
-Project: TBT-Engine `quant/`, second research round.  Question posed:
+Project: Stratton Oakmont `quant/`, second research round.  Question posed:
 
 > "Can a highly selective automated crypto futures strategy achieve
 > approximately +100% daily ROE on Bitunix with positive expectancy,

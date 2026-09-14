@@ -26,8 +26,8 @@ LIVE = DATA / "state" / "live.json"
 CANDLES = DATA / "candles"
 WATCH = DATA / "state" / "watchdog.json"
 
-SERVICES = ["tbt-scalper-paper", "tbt-scalper-app", "ssh", "fail2ban",
-            "tbt-scalper-backup.timer"]
+SERVICES = ["stratton-oakmont-paper", "stratton-oakmont-app", "ssh", "fail2ban",
+            "stratton-oakmont-backup.timer"]
 REALARM_S = 15 * 60
 CANDLE_MAX_AGE_S = 10 * 60
 DISK_MAX_PCT = 90
@@ -122,7 +122,7 @@ def checks() -> None:
 
     # 3 -- engine errors in the journal
     r = subprocess.run(
-        ["journalctl", "-u", "tbt-scalper-paper", "--since", "-6 min",
+        ["journalctl", "-u", "stratton-oakmont-paper", "--since", "-6 min",
          "--no-pager"], capture_output=True, text=True, timeout=20)
     errs = sum(1 for line in r.stdout.splitlines()
                if ("traceback" in line.lower() or "step failed" in line.lower()
@@ -188,10 +188,10 @@ def checks() -> None:
             if time.time() - last > 3600:
                 w["heal:restart"] = {"last": time.time()}
                 save_watch(w)
-                subprocess.run(["systemctl", "restart", "tbt-scalper-paper"],
+                subprocess.run(["systemctl", "restart", "stratton-oakmont-paper"],
                                capture_output=True, timeout=60)
                 ntfy("the bot went silent and restarted itself "
-                     "(tbt-scalper-paper). It will not sleep.")
+                     "(stratton-oakmont-paper). It will not sleep.")
     except Exception:
         pass
 

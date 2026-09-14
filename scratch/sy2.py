@@ -1,5 +1,5 @@
 import pathlib
-p = pathlib.Path('/home/tbt/bot/papertrade.py')
+p = pathlib.Path('/home/stratton-oakmont/bot/papertrade.py')
 L = p.read_text().split("\n")
 i = next(k for k, l in enumerate(L) if "coin_reach(sym0)" in l)
 pad = " " * (len(L[i]) - len(L[i].lstrip()))

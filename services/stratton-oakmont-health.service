@@ -1,0 +1,11 @@
+[Unit]
+# Monitoring that does not depend on anyone being awake -- not the operator,
+# not a laptop, not a chat session. It runs here, it decides here, and it
+# shouts here.
+Description=STRATTON OAKMONT health check -- shout if anything is wrong
+
+[Service]
+Type=oneshot
+User=stratton
+WorkingDirectory=/home/stratton-oakmont/bot
+ExecStart=/home/stratton-oakmont/venv/bin/python /home/stratton-oakmont/bot/tools/healthcheck.py --notify

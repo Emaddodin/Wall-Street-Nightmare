@@ -1,0 +1,20 @@
+[Unit]
+# Walks chart window 0 through the watchlist and appends every bar the
+# council published, with the higher-timeframe setting recorded per file --
+# the only honest ground truth for judging the council at 1h. Window 0 is
+# the book's own window, so this must never run while the book does.
+Description=STRATTON OAKMONT council collector (window 0, only while the book is stopped)
+After=stratton-oakmont-chrome.service
+Requires=stratton-oakmont-chrome.service
+
+[Service]
+User=stratton
+WorkingDirectory=/home/stratton-oakmont/bot
+ExecStartPre=/bin/sh -c '! systemctl is-active --quiet stratton-oakmont-paper'
+ExecStart=/home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/tools/collect.py 0
+Restart=no
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

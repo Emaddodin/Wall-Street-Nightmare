@@ -1,4 +1,4 @@
-# TBT-Engine — what this is and everything it took to get here
+# Stratton Oakmont — what this is and everything it took to get here
 
 Written to be read cold. If you are picking this up with no memory of the
 work, read this file top to bottom and you will know what the system does,
@@ -13,7 +13,7 @@ says so.
 ## 1. What the system does
 
 It watches the crypto coins whose candles are biggest right now, waits for the
-TBT Sniper indicator to print a signal on one of them, judges that signal
+Stratton Oakmont Sniper indicator to print a signal on one of them, judges that signal
 against what actually separated winners from losers, and takes **eight trades
 a day** — one position at a time, half the wallet, five percent target, 1.25%
 stop.
@@ -29,7 +29,7 @@ guard.py       every  2 min   keeps the browser, the charts and the candles hone
 ```
 
 Nothing in it invents a signal. `--source combo` reads what the indicator
-publishes — `TBT_BUY_SCORE`, its tier, its span, `SNIP_*_VOTE`, `TSL_WIRED`,
+publishes — `STRATTON_BUY_SCORE`, its tier, its span, `SNIP_*_VOTE`, `TSL_WIRED`,
 `STATE`, `VOTES_PACKED` — off the study on a live TradingView chart, over the
 Chrome DevTools Protocol.
 
@@ -37,7 +37,7 @@ Chrome DevTools Protocol.
 
 ## 2. The live configuration, and why
 
-`services/tbt-paper.service`:
+`services/stratton-oakmont-paper.service`:
 
 ```
 --source combo        the indicator's own signal, not a shape this engine invents
@@ -263,14 +263,14 @@ survive.
 owns `data/chart_coins.json` — every two minutes it parks the book's window on
 the ripest high-ATR coin. Autopilot wrote the same file once an hour from
 `data/eligible.json`, the retired scanner's ranking rather than the ATR
-watchlist, and enforced its choice with `tbtctl coins`, **which restarts the
-book**. At 23:08:52 it wrote COLLECTUSDT and restarted `tbt-paper` and
-`tbt-guard`; sixty-two seconds later perch wrote NOMUSDT over it. Two owners of
+watchlist, and enforced its choice with `strattonctl coins`, **which restarts the
+book**. At 23:08:52 it wrote COLLECTUSDT and restarted `stratton-oakmont-paper` and
+`stratton-oakmont-guard`; sixty-two seconds later perch wrote NOMUSDT over it. Two owners of
 one file, and the loser's move cost a restart. This is the same hourly restart
 that once meant no resting order in the whole life of this book ever survived
 long enough to fill — the earlier fix stopped it comparing the scout's window,
 which was only half the cause. Now `perch_owns_charts()` stands autopilot down
-whenever `tbt-perch.timer` is active, ahead of the on/off toggle, and every
+whenever `stratton-oakmont-perch.timer` is active, ahead of the on/off toggle, and every
 read of that toggle defaults to **off** so a missing file cannot hand the
 charts back. Five tests in `tests/test_panel_autopilot.py`.
 
@@ -350,7 +350,7 @@ leftovers**: a repaired freeze alarming for twenty minutes when the guard
 fixes it in three; `boom.json` freshness demanded from a scanner retired on
 purpose; a service caught mid-restart reported as down; `following 0 chart
 window(s)` latched from a line printed once at startup; the evaluation counter
-knowing only the shape source's vocabulary; `tbt-boom.timer` inactive by
+knowing only the shape source's vocabulary; `stratton-oakmont-boom.timer` inactive by
 design. Each now has a test. **A status page nobody believes is worse than
 none.**
 
@@ -568,16 +568,16 @@ a stale reading is never attached to a moment it did not describe.
 
 ```bash
 # health
-ssh tbt "cd /home/tbt/bot && sudo -u tbt /home/tbt/venv/bin/python tools/healthcheck.py"
+ssh stratton "cd /home/stratton-oakmont/bot && sudo -u stratton /home/stratton-oakmont/venv/bin/python tools/healthcheck.py"
 
 # the whole test suite, on the server
-ssh tbt "cd /home/tbt/bot && sudo -u tbt /home/tbt/venv/bin/python -m pytest tests/ -q"
+ssh stratton "cd /home/stratton-oakmont/bot && sudo -u stratton /home/stratton-oakmont/venv/bin/python -m pytest tests/ -q"
 
 # deploy a file
-scp -q papertrade.py tbt:/tmp/dep/ && ssh tbt "cp /tmp/dep/papertrade.py /home/tbt/bot/ && chown tbt:tbt /home/tbt/bot/papertrade.py"
+scp -q papertrade.py stratton:/tmp/dep/ && ssh stratton "cp /tmp/dep/papertrade.py /home/stratton-oakmont/bot/ && chown stratton:stratton /home/stratton-oakmont/bot/papertrade.py"
 
 # deploy a unit (both copies, then reload)
-ssh tbt "cp /tmp/dep/tbt-paper.service /home/tbt/bot/services/ && cp /tmp/dep/tbt-paper.service /etc/systemd/system/ && systemctl daemon-reload"
+ssh stratton "cp /tmp/dep/stratton-oakmont-paper.service /home/stratton-oakmont/bot/services/ && cp /tmp/dep/stratton-oakmont-paper.service /etc/systemd/system/ && systemctl daemon-reload"
 ```
 
 **Resetting the book** stops the service, archives `data/paper.json` and
@@ -610,7 +610,7 @@ does.
   hour and was holding 2.45 GB of a 3.9 GB box after sixteen hours. The
   guard's emergency path never fired because memory kept recovering just over
   its line between rounds, so it never got a second consecutive strike.
-  `tools/recycle_chrome.py` + `tbt-recycle.timer` now bound the growth every
+  `tools/recycle_chrome.py` + `stratton-oakmont-recycle.timer` now bound the growth every
   two hours instead of reacting to it, and they act only when **no position is
   open** and Chrome has been up at least six hours. An unreadable book counts
   as a position open — not knowing is not permission. Five tests in
@@ -664,7 +664,7 @@ write nothing.
   three agents pay nothing, and only the 4.4% ATR found anything to pay for.
 - **2026-09-05 23:28 UTC** — found the panel autopilot still restarting the
   book hourly and fighting perch over `chart_coins.json`; it had restarted
-  `tbt-paper` and `tbt-guard` at 23:08:52. Gated it behind
+  `stratton-oakmont-paper` and `stratton-oakmont-guard` at 23:08:52. Gated it behind
   `perch_owns_charts()`, defaulted the toggle off, set the live
   `autopilot.json` to off, added `tests/test_panel_autopilot.py`. 402 tests
   green both sides. No position was open, so nothing was lost.
@@ -708,7 +708,7 @@ write nothing.
   declined at 04:12 with a position open, then ran at 06:13 with nothing open
   and took memory from 302 MB to **2672 MB**.
 - **2026-09-06 09:35 UTC** — **the paper book was stopped on request.**
-  `tbt-paper`, `tbt-case.timer` and `tbt-perch.timer` are inactive; the scout,
+  `stratton-oakmont-paper`, `stratton-oakmont-case.timer` and `stratton-oakmont-perch.timer` are inactive; the scout,
   guard and Chrome are still running. Final book: **equity $104.40** from a
   $100.00 start, 4 of 8 spent, all four closed — WOO -$34.25 (stop),
   USELESS -$11.26 (stop), NIULAI +$66.478181 (target), CASHCAT -$16.572684
@@ -726,11 +726,11 @@ write nothing.
   it 15 tries in. CASHCAT had already stopped out at 08:51, inside the
   blackout, so nothing was lost by the delay.
 - **2026-09-06 — the indicator's higher timeframe moved from 4h to 1h, on the
-  operator's word that 4h was wrong.** The TBT study's own "Higher timeframe"
+  operator's word that 4h was wrong.** The Stratton Oakmont study's own "Higher timeframe"
   input drives the HTF phase gate, the HTF council vote and the ripeness tide,
   so it is one setting with three faces. Changed everywhere it is used:
   `tools/sethtf.py` (the tool that pushes the value onto every chart window)
-  now sets `60`; the Pine default in `pine/TBT_Sniper.pine` is now `60`, so a
+  now sets `60`; the Pine default in `pine/Stratton_Oakmont_Sniper.pine` is now `60`, so a
   re-added study or a layout reset lands on 1h instead of 30m; README's
   settings line and `tools/collect.py`'s warning now say one hour. The live
   charts were switched in the same pass: `sethtf.py` was deployed to the box
@@ -740,7 +740,7 @@ write nothing.
   overrides the Pine default, which is why the tool run mattered and why a
   fresh chart inherits the layout rather than the Pine. `hunt.py`/
   `hunt_paper.py` were left alone: their 4h resample is the hunt strategy's
-  own EMA21 trend, not the TBT indicator's higher timeframe. A trading
+  own EMA21 trend, not the Stratton Oakmont indicator's higher timeframe. A trading
   dataset was built from this workflow in the same pass — section 15.
 
 ## 15a. The engineering pass — journal, silence, risk arithmetic
@@ -773,12 +773,12 @@ stop, the budget or any score weight.
   highest-ATR coins while the recorder captured everything the windows
   showed. The population is the strategy. Verified independently: a manual
   re-trace of all 110 exits against the raw fav/adv data matched every one.
-- **Continuous ground truth.** `tbt-recorder` is enabled again on the box
+- **Continuous ground truth.** `stratton-oakmont-recorder` is enabled again on the box
   (it was inactive and the signal files had not grown since 2026-09-04), so
   every new print is collected at the now-correct 1h setting.
-  `tbt-collect.timer` appends council history every six hours — its unit
-  refuses to run while `tbt-paper` is active, because the collector walks
-  the book's window. `tbt-dataset.timer` rebuilds the flow dataset daily at
+  `stratton-oakmont-collect.timer` appends council history every six hours — its unit
+  refuses to run while `stratton-oakmont-paper` is active, because the collector walks
+  the book's window. `stratton-oakmont-dataset.timer` rebuilds the flow dataset daily at
   18:30 UTC from the growing files.
 - **`tools/sync.sh`** — the byte-exact mirror is now a command: dry run by
   default, `--apply` to push, `--with-dataset` to include the regenerated
@@ -823,7 +823,7 @@ sides). The results, measured 2026-09-06:
   (one line per scan: timestamp + the kept list), so every future sweep can
   slice on actual list membership at signal time. That, plus the recorder
   collecting at 1h, is the decisive next measurement -- no conclusion
-  before it exists. `tbt-dataset.timer` now runs the sweep after each
+  before it exists. `stratton-oakmont-dataset.timer` now runs the sweep after each
   dataset rebuild and writes `data/dataset/sweep.txt`.
 
 ## 15c. The learned selector — the "makes sense" filter, measured
@@ -890,7 +890,7 @@ real unseen days, 472 tests green:
 The honest ceiling stands: even the learned top slice (14.6%) is below the
 21.9% break-even at this R:R, so no bet is justified yet. The machine is
 built and turns nightly: dataset, sweep, 10M sampler and selector all run
-on `tbt-dataset.timer`; the real record grows at 1h; the day the walk-
+on `stratton-oakmont-dataset.timer`; the real record grows at 1h; the day the walk-
 forward top slice clears break-even is the day the learned filter replaces
 the entry score. Until then it stays advisory.
 
@@ -1044,7 +1044,7 @@ entry. Both are now measured on the recorded data and wired:
 - **The eagle now ranks on it.** The scout attaches the expansion to every
   ripe row; `perch.ripest()` prefers the expanding coin among equally-ripe
   ones (closeness to the print still outranks expansion). The eagle was
-  re-enabled (`tbt-perch.timer`) and is flying: first pick MARSCOINUSDT,
+  re-enabled (`stratton-oakmont-perch.timer`) and is flying: first pick MARSCOINUSDT,
   zero modules from a SELL print. Two new tests pin the ordering.
 - **`dataset/entries.py` -- which entry survives the 1.25% stop.** Over
   the 10,702 real recorded paths, entering at the candle's extreme takes
@@ -1101,7 +1101,7 @@ where it can be, tested, and live on the server:
   expansion, not by watchlist order: `scout.walk_order` sorts by expansion
   and `dwell_for` budgets each coin's dwell from it. The fastest-growing
   coins get looked at first and longest.
-- **Nightly backup (`tools/backup.py`, `tbt-backup.timer`).** One tar of
+- **Nightly backup (`tools/backup.py`, `stratton-oakmont-backup.timer`).** One tar of
   the irreplaceable record — signals, outcomes, the book, both journals —
   written atomically, seven kept, 02:17 server time. The first one, fired
   at install, held 8.7 MB. No code can regenerate this data; this is the
@@ -1131,9 +1131,9 @@ end to end, and the VNC desktop was made to show both charts at once:
   same learned filter (threshold 0.123) still loaded. The first attempt at
   the archive shell one-liner mangled its heredoc and stopped the book
   mid-reset; the recovery is documented here because it is the trap: do
-  these steps with `ssh tbt 'cat > ...'` from a heredoc on the local side,
+  these steps with `ssh stratton 'cat > ...'` from a heredoc on the local side,
   never with a heredoc inside a double-quoted ssh command.
-- **The app, verified.** `tbt-panel` on 443 (cert good to 2026-11-29),
+- **The app, verified.** `stratton-oakmont-panel` on 443 (cert good to 2026-11-29),
   state API answers the fresh book ($100.00 / 0 closed / running), the
   `/chart/0.jpg` and `/chart/1.jpg` screenshots return two different live
   pictures, and the noVNC desktop page plus the websockify bridge (6080)
@@ -1189,7 +1189,7 @@ market beside the first.
     crosses the book). Both now priced honestly; the pinned tests were
     rewritten to pin the honest semantics instead of the bug.
   The ops gaps: the nightly pipeline evaluated the filter but never
-  RETRAINED it -- `tbt-dataset.service` now ends with
+  RETRAINED it -- `stratton-oakmont-dataset.service` now ends with
   `selector.py --save-model`, and the save is atomic (tmp + rename), so
   a book hot-reloading the artifact can never read a half-write; the
   funnel's `since_restart` and the book's exit lock now follow `--book`
@@ -1201,7 +1201,7 @@ market beside the first.
   clean and left alone: the 13 learned-filter features match training
   end to end, the path_bars side orientation, the walk-forward split,
   the sampler labels, the money math.
-- **The beast (`tbt-beast.service`).** The same engine, the same
+- **The beast (`stratton-beast.service`).** The same engine, the same
   measured edges, the same 5% target and 1.25% stop -- and nothing held
   back: the whole wallet per trade (`--frac 1.0 --max-exposure 1.0`),
   the most leverage the stop allows (`--lev 75` with the liquidation
@@ -1210,8 +1210,8 @@ market beside the first.
   book's 0.123 top-10% cut -- so it eats more of the measured tail. It
   has its own ledger (`data/beast.json`), its own lock, its own journal
   (`data/beast.events.jsonl`), its own funnel (`funnel.py --unit
-  tbt-beast --book .../beast.json`) and its own daily ntfy report
-  (`tbt-report.service` second line, titled `TBT beast`). Paper, like
+  stratton-beast --book .../beast.json`) and its own daily ntfy report
+  (`stratton-oakmont-report.service` second line, titled `Stratton Oakmont beast`). Paper, like
   the book; `--live` cannot appear in its unit and does not. The book's
   own files are untouched by construction, and a test proves two books
   can run side by side on one signal without either ledger seeing the
@@ -1343,9 +1343,9 @@ The night of 2026-09-06/07, watched end to end:
 The operator judged the whole no-limits idea a mistake and asked for the
 system back to the settings we fixed together. Done:
 
-- **The beast no longer exists as a running thing.** `tbt-beast.service`
+- **The beast no longer exists as a running thing.** `stratton-beast.service`
   stopped, disabled and deleted from `/etc/systemd/system` and from
-  `services/`; the second report line is off `tbt-report.service`;
+  `services/`; the second report line is off `stratton-oakmont-report.service`;
   `beast.json`/`beast.events.jsonl` are archived with the rest
   (`beast-archive-*` stays inside the nightly backup as history); the
   README no longer lists it; tool help texts no longer name it. Its
@@ -1395,7 +1395,7 @@ costs roughly half the margin (lev is 1/(sl+maint) by construction)
 while a win pays exactly half the margin, so the book needs a high hit
 rate -- which is precisely what this easy target is meant to buy, and
 what the 12 hours measure. Old flags are one edit away in
-`services/tbt-paper.service`.
+`services/stratton-oakmont-paper.service`.
 
 ## 15o. The orchestration pass -- the reunion of agents
 
@@ -1455,7 +1455,7 @@ No setting changed. What changed is how well the pieces agree:
   over-reached once: the tier boundaries were DERIVED from winGood,
   so the x4 window scaling turned "PEERLESS" into "within 35
   candles" instead of the product's "<= 5". Fixed in
-  `pine/TBT_Sniper.pine`: PEERLESS <= 5 and EXCELLENT <= 10 candles
+  `pine/Stratton_Oakmont_Sniper.pine`: PEERLESS <= 5 and EXCELLENT <= 10 candles
   as explicit inputs, independent of the 140-candle window. The
   second factor is `confirmOnly = true` on both charts -- prints
   wait for the candle close, which is consistent with the book's
@@ -1489,7 +1489,7 @@ No setting changed. What changed is how well the pieces agree:
 
 - **14:10 UTC -- the indicator WAS built for 4h; its windows are now
   scaled to the 1h HTF.** The operator's suspicion, confirmed constant
-  by constant: every wall-clock window in `pine/TBT_Sniper.pine` is a
+  by constant: every wall-clock window in `pine/Stratton_Oakmont_Sniper.pine` is a
   4h-era bar count that kept its value when `htfTF` moved to "60" --
   so at 1h each window ran 4x shorter than designed. Rescaled x4:
   divergence horizons 25/280 -> 100/1120 (the canonical set 25..280
@@ -1539,7 +1539,7 @@ No setting changed. What changed is how well the pieces agree:
   the target before reversing. Implemented as `--trail-atr` (two tests
   pin it: the reversal closes ABOVE entry with the trail, at the full
   stop without it) and running as a PARALLEL paper book
-  (`tbt-paper-guarded.service`, own ledger `data/paper-guarded.json`,
+  (`stratton-oakmont-paper-guarded.service`, own ledger `data/paper-guarded.json`,
   same 50% rule, same gates). The main book is untouched.
 
 - **09:40 UTC** -- the app is synced with the new rule: `panel.py` reports
@@ -1550,7 +1550,7 @@ No setting changed. What changed is how well the pieces agree:
   restarted clean. The half-hour watch is re-armed for the test.
 
 - **09:44 UTC** -- the half-hour check is now institutional:
-  `tbt-testwatch.timer` fires every 30 minutes (at :00/:30), runs the
+  `stratton-oakmont-testwatch.timer` fires every 30 minutes (at :00/:30), runs the
   healthcheck, the funnel and the scoreboard (`tools/testboard.py`),
   and pushes ONE compact line to the operator's single ntfy topic;
   exits nonzero when anything is unhealthy. First run: all clear,

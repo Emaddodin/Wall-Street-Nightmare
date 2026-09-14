@@ -4,7 +4,7 @@
 # Verified 2026-09-04: no file in this repository opens, parses or imports
 # this document. It describes an earlier Tesla + HMA 1m strategy and the
 # numbers in it CONTRADICT what the engine actually runs, which is set on the
-# command line in services/tbt-paper.service:
+# command line in services/stratton-oakmont-paper.service:
 #
 #                       here            actually running
 #   leverage            20              50

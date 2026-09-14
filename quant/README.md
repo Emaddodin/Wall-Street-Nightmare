@@ -1,6 +1,6 @@
 # quant/ — New leveraged crypto futures research project
 
-Independent from the legacy TBT engine and the `scalper/` project.  This
+Independent from the legacy Stratton Oakmont engine and the `scalper/` project.  This
 directory contains the full research lifecycle for discovering the
 strongest short-term leveraged crypto futures strategy the historical data
 can support, researched toward a +100% net daily ROE target.

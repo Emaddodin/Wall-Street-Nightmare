@@ -8,8 +8,8 @@ wm/xvfb) still runs so the old app opens.
 
 | unit | what |
 |---|---|
-| `tbt-scalper-paper` | the VP scalper paper book on live Bitunix candles -- TESLA IS GONE, pure price action + volume profile, 25% risk, $100 start, daily +100% target |
-| `tbt-scalper-app` | phone app, https://62.60.198.135:8443 (own password, own port) |
+| `stratton-oakmont-paper` | the VP scalper paper book on live Bitunix candles -- TESLA IS GONE, pure price action + volume profile, 25% risk, $100 start, daily +100% target |
+| `stratton-oakmont-app` | phone app, https://62.60.198.135:8443 (own password, own port) |
 
 The app headline: day PnL vs the +100% target, green/red, "TARGET HIT"
 banner when the day is banked, and the compounding goal curve.
@@ -101,12 +101,12 @@ reached in that window.  The live book measures what happens next.
 
 ```bash
 # VPS
-journalctl -u tbt-scalper-paper -f        # the book
-systemctl restart tbt-scalper-paper       # restart (state survives)
+journalctl -u stratton-oakmont-paper -f        # the book
+systemctl restart stratton-oakmont-paper       # restart (state survives)
 curl -d test -H "Title: scalper" https://ntfy.sh/$TOPIC   # test push
 
 # Mac
-cd /Users/mac/Desktop/TBT-Engine/scalper
+cd /Users/mac/Desktop/Stratton Oakmont/scalper
 python3 tools/backtest.py --days 130 --profile aggressive
 python3 tools/compare.py --days 130
 python3 tools/walkforward.py --profile aggressive
@@ -148,12 +148,12 @@ breakout semantics); the original is archived in data/state/archive/.
 
 ## Security hardening (2026-09-08, post key-compromise)
 
-- SSH key rotated after an unauthorized login used the old `tbt-vps` key;
-  the new `tbt-vps-v2` key is the only authorized key. Old key deleted.
+- SSH key rotated after an unauthorized login used the old `stratton-vps` key;
+  the new `stratton-vps-v2` key is the only authorized key. Old key deleted.
 - SSH moved to port **2222** (socket-activated via ssh.socket override;
   22 removed); UFW now allows only 22→(removed) 80/443/2222 — the old
   8443 panel rule was dropped too.
-- sshd hardened (99-tbt.conf): MaxAuthTries 4, LoginGraceTime 45,
+- sshd hardened (99-stratton.conf): MaxAuthTries 4, LoginGraceTime 45,
   MaxStartups 3:50:10, MaxSessions 8, no X11/agent forwarding, local
   TCP forwarding only, AllowUsers root, LogLevel VERBOSE.
 - fail2ban active: sshd jail, 3 fails/10 min → 1h ban, port 2222,
@@ -220,7 +220,7 @@ knife-catches are not good calls.
 
 ## Watchdog alarm bot (2026-09-09)
 
-`watchdog.py` + `tbt-scalper-watchdog.{service,timer}` run every 5 minutes
+`watchdog.py` + `stratton-oakmont-watchdog.{service,timer}` run every 5 minutes
 (all day, Persistent across reboots) and push an ntfy "scalper-alarm"
 (high priority) when anything breaks: services down, non-finite paper
 state, engine errors in the journal, app unreachable, disk >=90%, RAM

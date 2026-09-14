@@ -1,0 +1,10 @@
+[Unit]
+Description=STRATTON OAKMONT nightly record backup timer
+
+[Timer]
+OnCalendar=*-*-* 02:17:00
+Persistent=true
+Unit=stratton-oakmont-backup.service
+
+[Install]
+WantedBy=timers.target

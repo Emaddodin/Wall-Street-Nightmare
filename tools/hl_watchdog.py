@@ -41,8 +41,8 @@ STATE = DATA / "state" / "paper.json"
 LIVE = DATA / "state" / "live.json"
 WATCH = DATA / "state" / "hl_watchdog.json"
 
-BOT_UNIT = "tbt-hl-sniper"
-APP_UNIT = "tbt-hl-app"
+BOT_UNIT = "stratton-oakmont-hl-sniper"
+APP_UNIT = "stratton-oakmont-hl-app"
 SERVICES = [BOT_UNIT, APP_UNIT, "ssh", "fail2ban"]
 APP_URL = "https://127.0.0.1:8443/"
 HL_API = "https://api.hyperliquid.xyz/info"

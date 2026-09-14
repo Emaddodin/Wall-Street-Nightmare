@@ -30,3 +30,6 @@ old/
 
 # Runtime log at the repo root
 *.log
+
+# corrupted by an old editor crash (duplicated blocks); kept on disk only
+scalper/tools/walkforward.py

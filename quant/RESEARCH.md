@@ -2,7 +2,7 @@
 
 New independent quant research project (this directory). Target: strongest
 short-term crypto futures strategy the data supports; ultimate objective
-+100% net daily ROE via leverage. Old TBT/scalper strategies are NOT
++100% net daily ROE via leverage. Old Stratton Oakmont/scalper strategies are NOT
 reused, modified, or extended — only shared infrastructure (market-data
 clients, downloaders) is reused.
 
@@ -18,7 +18,7 @@ clients, downloaders) is reused.
 | Cross-sectional panel + breadth | quant/research/panel.py | built |
 | Experiment runner + leaderboard | quant/experiments/runner.py | built |
 | Walk-forward harness | quant/tools/walkforward.py | built |
-| VPS | ssh tbt (2 CPU / 3.8 GB / 24 GB free) | reachable; old paper trader running (untouched) |
+| VPS | ssh stratton (2 CPU / 3.8 GB / 24 GB free) | reachable; old paper trader running (untouched) |
 
 ## Dataset (Phase 2)
 

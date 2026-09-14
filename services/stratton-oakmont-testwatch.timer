@@ -1,0 +1,10 @@
+[Unit]
+Description=STRATTON OAKMONT half-hour heartbeat timer for the 12-hour test
+
+[Timer]
+OnCalendar=*:00/30
+Persistent=true
+Unit=stratton-oakmont-testwatch.service
+
+[Install]
+WantedBy=timers.target

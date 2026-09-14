@@ -1,0 +1,8 @@
+[Unit]
+Description=STRATTON OAKMONT scalper watchdog (isolated research project)
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/stratton-oakmont/scalper
+ExecStart=/home/stratton-oakmont/scalper/venv/bin/python -u /home/stratton-oakmont/scalper/watchdog.py

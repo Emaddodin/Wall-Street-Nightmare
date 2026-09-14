@@ -1,11 +1,11 @@
-"""Read-only: what Higher timeframe value does the TBT study carry on each window?"""
+"""Read-only: what Higher timeframe value does the Stratton Oakmont study carry on each window?"""
 import sys
-sys.path.insert(0, "/home/tbt/bot")
+sys.path.insert(0, "/home/stratton-oakmont/bot")
 from signals.tv_cdp import TradingViewCDP
 
 JS = r"""
 (function(){try{var ch=window.TradingViewApi.activeChart();var out=[];
-ch.getAllStudies().forEach(function(s){if(s.name.indexOf('TBT')<0)return;
+ch.getAllStudies().forEach(function(s){if(s.name.indexOf('STRATTON OAKMONT')<0)return;
 var st=ch.getStudyById(s.id);var info=st.getInputsInfo?st.getInputsInfo():[];
 var vals=st.getInputValues?st.getInputValues():[];var by={};
 vals.forEach(function(v){by[v.id]=v.value;});

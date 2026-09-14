@@ -1,0 +1,8 @@
+[Unit]
+Description=STRATTON OAKMONT perch -- put the book's window over the coin about to print
+
+[Service]
+Type=oneshot
+User=stratton
+WorkingDirectory=/home/stratton-oakmont/bot
+ExecStart=/home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/perch.py

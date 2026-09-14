@@ -29,8 +29,8 @@ STATE = DATA / "state" / "paper.json"
 LIVE = DATA / "state" / "live.json"
 STAMP = DATA / "state" / "hl_health.json"
 
-BOT_UNIT = "tbt-hl-sniper"
-APP_UNIT = "tbt-hl-app"
+BOT_UNIT = "stratton-oakmont-hl-sniper"
+APP_UNIT = "stratton-oakmont-hl-app"
 APP_URL = "https://127.0.0.1:8443/"
 HL_API = "https://api.hyperliquid.xyz/info"
 
@@ -189,7 +189,7 @@ def main() -> None:
         fault("fail2ban not active")
 
     # 7 -- watchdog + health timers armed
-    for t in ("tbt-hl-watchdog.timer", "tbt-hl-health.timer"):
+    for t in ("stratton-oakmont-hl-watchdog.timer", "stratton-oakmont-hl-health.timer"):
         if sh("systemctl", "is-active", t) == "active":
             ok(f"{t} armed")
         else:

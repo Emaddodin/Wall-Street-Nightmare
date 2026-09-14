@@ -1,0 +1,22 @@
+[Unit]
+# Ranks coins by how well they deliver OUR setup, not by how loud they are.
+# The old scan counted big candles and put BTR first: 101 setups, 12 wins, and
+# 44% of its candles wick past the stop on their own. This one replays the
+# impulse, the Fibonacci pullback and the race between +10% and -2% over each
+# coin's own recent history, and ranks on the result. BICO has not printed a
+# single 8% candle and wins a third of the time; that is the coin we want and
+# the volatility scan could never see it.
+Description=STRATTON OAKMONT coin finder -- ranked by how the strategy actually does
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=stratton
+WorkingDirectory=/home/stratton-oakmont/bot
+ExecStart=/home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/boom2.py --workers 10 --top 40 --max-minutes 240 --min-shapes 1.0 --min-lev 50
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

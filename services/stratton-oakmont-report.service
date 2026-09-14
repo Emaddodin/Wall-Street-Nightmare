@@ -1,0 +1,11 @@
+[Unit]
+# What the book did, pushed to the phone. Runs on the server rather than
+# anywhere else on purpose: the data and the ntfy keys are here, and this must
+# not depend on a laptop being awake.
+Description=STRATTON OAKMONT daily report -- what the book did, and what stopped the rest
+
+[Service]
+Type=oneshot
+User=stratton
+WorkingDirectory=/home/stratton-oakmont/bot
+ExecStart=/home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/tools/dayreport.py 24

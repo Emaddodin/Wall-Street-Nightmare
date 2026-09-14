@@ -1,0 +1,19 @@
+[Unit]
+# One window stops holding a coin and walks the ranked list instead. Two coins
+# offer a setup every few days between them; forty offer several a day. The
+# strategy was never the limit -- eyesight was.
+Description=STRATTON OAKMONT scout -- walks the ranked coins looking for council plans
+After=stratton-oakmont-chrome.service
+Requires=stratton-oakmont-chrome.service
+
+[Service]
+User=stratton
+WorkingDirectory=/home/stratton-oakmont/bot
+ExecStart=/home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/scout.py \
+  --window 1 --top 150 --dwell 3 --keep-min 60
+Restart=always
+RestartSec=10
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

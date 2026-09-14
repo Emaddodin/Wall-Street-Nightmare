@@ -1,5 +1,5 @@
 import pathlib
-p = pathlib.Path('/home/tbt/bot/scout.py'); s = p.read_text()
+p = pathlib.Path('/home/stratton-oakmont/bot/scout.py'); s = p.read_text()
 s = s.replace('                        coiling, ripeness, _stop_room, BARS_JS)',
               '                        coiling, ripeness, coin_reach,\n'
               '                        _stop_room, BARS_JS)')
