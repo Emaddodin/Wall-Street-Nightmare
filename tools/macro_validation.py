@@ -67,6 +67,18 @@ def simulate(bars: list[dict], sig_i: int, st: dict, cfg: Config) -> dict:
         b = bars[k]
         if (side > 0 and float(b["l"]) <= entry) or \
                 (side < 0 and float(b["h"]) >= entry):
+            if cfg.vol_confirm_enabled and k >= cfg.vol_look + 1:
+                base = [float(x.get("v") or 0) for x in bars[k - cfg.vol_look:k]]
+                avg = sum(base) / len(base) if base else 0.0
+                v = float(b.get("v") or 0)
+                rng = float(b["h"]) - float(b["l"])
+                trs = [max(float(x["h"]) - float(x["l"]),
+                           abs(float(x["c"]) - float(x.get("o", x["c"]))))
+                       for x in bars[k - cfg.vol_look:k]]
+                avr = sum(trs) / len(trs) if trs else 0.0
+                if avg > 0 and v < cfg.vol_mult * avg and \
+                        not (avr > 0 and rng >= cfg.vol_range_mult * avr):
+                    continue          # no participation: keep waiting
             filled, fill_i = True, k
             break
     if not filled:
@@ -188,6 +200,18 @@ async def main(days: int, want: int) -> int:
                     if any(lo2 <= mins < hi2
                            for lo2, hi2 in cfg.session_dead_utc):
                         continue
+                    if (hm.tm_hour, hm.tm_min) >= cfg.flat_by_hm:
+                        continue
+                    in_prime = any(lo2 <= mins < hi2
+                                   for lo2, hi2 in cfg.session_prime_utc)
+                    if cfg.session_strict and not in_prime and \
+                            (cfg.flat_enabled or True):
+                        # normal hours: only monster structure qualifies
+                        stp = m.analyze_macro(bars[:i + 1], cfg)
+                        if not stp:
+                            continue
+                        if stp.get("leg_atr", 0.0) < cfg.macro_normal_min_leg:
+                            continue
                 st = m.analyze_macro(bars[:i + 1], cfg)
                 if not st:
                     continue
@@ -222,19 +246,45 @@ async def main(days: int, want: int) -> int:
 
     base = Config()
     quick = len(sys.argv) > 3 and sys.argv[3] == "quick"
+    if len(sys.argv) > 3 and sys.argv[3] == "sweep":
+        print("--- GRID SWEEP: hunting a positive entry config ---")
+        import itertools
+        grid = [
+            ("entry", ["retest", "momentum"]),
+            ("min_leg", [2.5, 3.0, 4.0]),
+            ("stop_buf", [0.35, 0.60]),
+            ("tp1_atr", [1.5, 2.5]),
+        ]
+        best = []
+        for vals in itertools.product(*[v for _, v in grid]):
+            kw = dict(zip([k for k, _ in grid], vals))
+            cfg = Config(session_strict=True, flat_enabled=True,
+                         macro_entry_mode=kw["entry"],
+                         macro_min_leg_atr=kw["min_leg"],
+                         macro_sl_buffer_atr=kw["stop_buf"],
+                         macro_tp1_atr=kw["tp1_atr"],
+                         trail_pivot_bars=3)
+            name = "%s|leg%.1f|buf%.2f|tp1%.1f" % (
+                kw["entry"][:3], kw["min_leg"], kw["stop_buf"],
+                kw["tp1_atr"])
+            exp, total = run(name, cfg, align=True, cap=True, session=True)
+            best.append((exp, total, name, kw))
+        best.sort(key=lambda x: -x[0])
+        print("\nTOP 5 by expectancy:")
+        for exp, total, name, kw in best[:5]:
+            print("  %+.3fR/trade | %4d setups | %s" % (exp, total, name))
+        return 0
+
     if quick:
         print("--- long-window check (align=1h, cooldown+cap) ---")
-        run("retest entry (shipped)", base)
-        run("momentum entry", Config(macro_entry_mode="momentum"))
-        run("momentum + 0.6ATR stop", Config(macro_entry_mode="momentum",
-                                             macro_sl_buffer_atr=0.60))
-        run("momentum all-in", Config(macro_entry_mode="momentum",
-                                      macro_min_leg_atr=3.0,
-                                      macro_sl_buffer_atr=0.60,
-                                      macro_retr_min=0.25,
-                                      macro_retr_max=0.75,
-                                      tp1_frac=0.25, tp2_frac=0.35,
-                                      macro_tp1_atr=2.5))
+        run("retest entry, no filters", base)
+        run("+ strict sessions only", Config(), align=True, cap=True,
+            session=True)
+        run("+ vol confirm at fill", Config(), align=True, cap=True,
+            session=True)
+        run("LIVE CONFIG (sessions+flat+vol)",
+            Config(session_strict=True, flat_enabled=True),
+            align=True, cap=True, session=True)
         return 0
     print("--- entry geometry (align=1h trend, cooldown+3/day cap) ---")
     run("retest entry (shipped)", base)

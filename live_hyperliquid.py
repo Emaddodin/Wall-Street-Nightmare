@@ -107,17 +107,17 @@ class Config:
     # ---- v4 macro-momentum structure (analyze_macro) ---------------------
     macro_arm: int = 3              # fractal arms for the 15m structure
     macro_mss_max_age: int = 30     # MSS must be this fresh (15m bars)
-    macro_min_leg_atr: float = 2.0  # impulse leg >= N x ATR (no minor wicks)
+    macro_min_leg_atr: float = 4.0  # sweep best: only monster impulses
     macro_retr_min: float = 0.10    # pullback depth vs the impulse leg
     macro_retr_max: float = 0.65    # deeper = structure likely broken
-    macro_sl_buffer_atr: float = 0.35   # stop past the pullback extreme
+    macro_sl_buffer_atr: float = 0.60   # sweep best: wide structural stop
     macro_disp_body_mult: float = 1.3   # displacement on the MSS bar
     macro_disp_body_range: float = 0.55
-    macro_tp1_atr: float = 1.5      # TP1 ~ 1.5 x ATR(15m)
+    macro_tp1_atr: float = 2.5      # sweep best: TP1 ~ 2.5 x ATR(15m)
     macro_tp1_min_r: float = 0.75   # ... but never closer than 0.75R
     macro_tp2_atr: float = 6.0      # TP2 ceiling (measured move applies)
     macro_tp2_min_r: float = 2.0    # ... and never below 2R
-    macro_entry_mode: str = "retest"   # "retest" (limit into the pullback)
+    macro_entry_mode: str = "momentum"  # sweep best: trade WITH the move
                                        # or "momentum" (stop-entry on the
                                        # resumption, trading WITH the move)
     macro_require_flip: bool = False   # pullback must HOLD the broken level
@@ -138,7 +138,7 @@ class Config:
     min_atr_pct: float = 0.8        # QUALITY gate -- untouched (backtested)
     min_vol_usdt: float = 300_000.0  # deeper liquidity pool; still liquid
     universe_refresh_s: int = 1800  # dynamic re-rank every 30 min
-    scan_candidates: int = 150      # volume-prefiltered pool to ATR-scan
+    scan_candidates: int = 100      # volume-prefiltered pool to ATR-scan
     # ---- money management ----------------------------------------------
     paper_equity: float = 10_000.0
     alloc: float = 0.5
@@ -186,10 +186,14 @@ class Config:
     velocity_enabled: bool = True     # runner trail on fast TP1
     velocity_bars: int = 3
     velocity_body_atr: float = 1.8    # sum of bodies >= N x ATR
+    velocity_cancel_tp2: bool = False  # legacy micro rule: a fast TP1 used
+                                      # to cancel TP2.  For the macro day
+                                      # trader this is OFF -- tiers bank,
+                                      # the runner trails ON TOP
     news_blackout_enabled: bool = True
-    news_blackout_utc: tuple = ((13 * 60 + 20, 13 * 60 + 50),  # US open,
-                                (14 * 60 + 20, 14 * 60 + 50))  # both DST:
-                                # minutes since UTC midnight of the window
+    news_blackout_utc: tuple = ((13 * 60 + 25, 13 * 60 + 40),  # US data
+                                (14 * 60 + 25, 14 * 60 + 40))  # releases,
+                                # both DSTs: +/-15m around 13:30/14:30 UTC
     news_calendar_url: str = ""       # optional feed; "" = static window only
     news_lead_min: int = 10           # block +/-N min around high impact
     # ---- v3 module 1: HTF trend bias (no counter-trend fading) -----------
@@ -204,11 +208,31 @@ class Config:
     vol_range_mult: float = 1.3       # OR range >= mult x its average
     # ---- v3 module 4: session / liquidity timing (v4 macro windows) -----
     session_filter_enabled: bool = True
-    # stand down 18:00-06:00 UTC: late-NY drift + the dead Asian night
-    session_dead_utc: tuple = ((18 * 60, 24 * 60), (0, 6 * 60))
-    # prime: London open 06:00-10:00 and the London/NY overlap + NY open
-    session_prime_utc: tuple = ((6 * 60, 10 * 60), (12 * 60, 16 * 60))
+    # stand down after the NY close (20:15) until the London open
+    session_dead_utc: tuple = ((20 * 60 + 15, 24 * 60), (0, 6 * 60))
+    # prime: London open 06:00-10:00 and the FULL NY session 12:00-20:00
+    session_prime_utc: tuple = ((6 * 60, 10 * 60), (12 * 60, 20 * 60))
     prime_vol_relax: float = 0.8      # prime hours: easier vol confirmation
+    prime_warmup_min: int = 30        # slot hygiene: no NEW entries in the
+                                      # N minutes before a prime window so
+                                      # the book has free slots at the open
+    session_strict: bool = True      # entries ONLY in prime windows; normal
+                                      # hours need a monster structure to
+                                      # justify the risk (see below)
+    flat_enabled: bool = True        # day-trader discipline: EVERYTHING is
+                                      # closed at market once this UTC time is
+                                      # reached -- nothing rides into the
+                                      # dead Asian night
+    flat_by_hm: tuple = (20, 15)     # (hour, minute) UTC = 23:45 Tehran
+                                      # (15 min after the NY close)
+    macro_normal_min_leg: float = 4.0  # outside prime: impulse leg must be
+                                      # >= this x ATR to even be considered
+    # --- Benz Mode: once half the daily target is banked, only monster
+    # setups qualify -- one more of them finishes the day, so Paykan-class
+    # trades are refused outright
+    monster_mode_at_pct: float = 0.50  # progress >= this -> monster only
+    monster_min_leg: float = 4.0       # impulse leg >= N x ATR
+    monster_min_tp2_pct: float = 0.25  # full-TP2 potential >= N of equity
     # ---- app + alerts (the phone app reads these files) -----------------
     data_pace_s: float = 0.45       # pause between candle requests (the
                                     # venue rate-limits bursts hard)
@@ -710,13 +734,16 @@ def restore_day_state(cfg: Config, book: "PaperBook", risk: "RiskEngine",
         snap = st.get("book_snapshot") or {}
         if snap and (int(st.get("ts") or 0) >= int(time.time() * 1000)
                      - 24 * 3600 * 1000):
+            def _f(v):
+                # tiers can be null (TP2 consumed by the trail, etc.)
+                return float(v) if v is not None else None
             for rp in snap.get("positions") or []:
                 pos = Position(
                     coin=str(rp["coin"]), side=int(rp["side"]),
                     entry_px=float(rp["entry_px"]), qty=float(rp["qty"]),
                     sl_px=float(rp["sl_px"]),
-                    be_trigger_px=float(rp["be_trigger_px"]),
-                    tp1_px=float(rp["tp1_px"]), tp2_px=float(rp["tp2_px"]),
+                    be_trigger_px=_f(rp["be_trigger_px"]),
+                    tp1_px=_f(rp["tp1_px"]), tp2_px=_f(rp["tp2_px"]),
                     tp1_qty=float(rp["tp1_qty"]),
                     tp2_qty=float(rp["tp2_qty"]),
                     runner_qty=float(rp["runner_qty"]),
@@ -737,8 +764,8 @@ def restore_day_state(cfg: Config, book: "PaperBook", risk: "RiskEngine",
                     limit_px=float(ro["limit_px"]), qty=float(ro["qty"]),
                     signal_t=int(ro["signal_t"]), placed_t=int(ro["placed_t"]),
                     entry_px=float(ro["entry_px"]), sl_px=float(ro["sl_px"]),
-                    be_trigger_px=float(ro["be_trigger_px"]),
-                    tp1_px=float(ro["tp1_px"]), tp2_px=float(ro["tp2_px"]),
+                    be_trigger_px=_f(ro["be_trigger_px"]),
+                    tp1_px=_f(ro["tp1_px"]), tp2_px=_f(ro["tp2_px"]),
                     tp1_qty=float(ro["tp1_qty"]),
                     tp2_qty=float(ro["tp2_qty"]),
                     runner_qty=float(ro["runner_qty"]),
@@ -1376,8 +1403,57 @@ class RiskEngine:
                 return "prime"
         return "normal"
 
-    def session_ok(self, now_ms: int) -> bool:
-        return self.session_state(now_ms) != "dead"
+    def flat_time_reached(self, now_ms: int) -> bool:
+        """Day-trader rule: after flat_by_hm UTC no new risk is taken."""
+        if not self.cfg.flat_enabled:
+            return False
+        utc = time.gmtime(now_ms / 1000.0)
+        hh, mm = self.cfg.flat_by_hm
+        return (utc.tm_hour, utc.tm_min) >= (hh, mm)
+
+    def session_ok(self, now_ms: int, leg_atr: float = None) -> bool:
+        """Session discipline: dead hours never trade; prime windows are
+        open season; normal hours require a monster structure (impulse leg
+        >= macro_normal_min_leg x ATR) to justify the risk."""
+        st = self.session_state(now_ms)
+        if st == "dead":
+            return False
+        if self.flat_time_reached(now_ms):
+            return False            # end of the trading day: flat only
+        if st == "normal" and self.cfg.session_strict:
+            return leg_atr is not None \
+                and leg_atr >= self.cfg.macro_normal_min_leg
+        return True
+
+    def monster_gate_ok(self, leg_atr, lev: float,
+                        tp2_bps: float) -> Tuple[bool, str]:
+        """Benz Mode: with half the daily target banked, only setups that
+        can meaningfully close the gap qualify.  A $6 tier is refused --
+        we wait for the next MINA instead of degrading to Paykans."""
+        if self.progress() < self.cfg.monster_mode_at_pct:
+            return True, ""
+        if leg_atr is not None and leg_atr < self.cfg.monster_min_leg:
+            return False, "Benz mode: leg %.1fxATR < %.0f -- waiting for a " \
+                "monster" % (leg_atr, self.cfg.monster_min_leg)
+        pot = self.cfg.alloc * lev * tp2_bps / 1e4
+        if pot < self.cfg.monster_min_tp2_pct:
+            return False, "Benz mode: TP2 potential %.0f%% of equity < %.0f%%" \
+                % (pot * 100, self.cfg.monster_min_tp2_pct * 100)
+        return True, ""
+
+    def pre_prime_stand_down(self, now_ms: int) -> bool:
+        """Slot hygiene: in the warmup minutes before a prime window,
+        stop opening NEW entries so the book has free slots when the
+        session actually fires.  Existing positions always ride their own
+        stops / targets / trails -- we never force-close anything."""
+        if not self.cfg.session_filter_enabled or self.cfg.prime_warmup_min <= 0:
+            return False
+        utc = time.gmtime(now_ms / 1000.0)
+        hm = utc.tm_hour * 60 + utc.tm_min
+        for lo, _hi in self.cfg.session_prime_utc:
+            if lo - self.cfg.prime_warmup_min <= hm < lo:
+                return True
+        return False
 
     # ---- module 5: news blackout -----------------------------------------
     def news_ok(self, now_ms: int) -> bool:
@@ -1548,7 +1624,8 @@ class PaperBook:
     # ---- signal intake ---------------------------------------------------
     def on_signal(self, coin: str, side: int, entry: float, sl: float,
                   tp1: float, tp2: float, be_trigger: float, sz_dec: int,
-                  mid: float, signal_t: int, place_fn) -> bool:
+                  mid: float, signal_t: int, place_fn,
+                  leg_atr: float = None) -> bool:
         """Rest a virtual (or live) limit at the CE."""
         if coin in self.orders or coin in self.positions:
             return False
@@ -1587,10 +1664,17 @@ class PaperBook:
             if not self.risk.news_ok(signal_t):
                 LOG.info("[SIGNAL] %s rejected: news blackout window", coin)
                 return False
-            if not self.risk.session_ok(signal_t):
-                LOG.info("[SIGNAL] %s rejected: dead session (%s UTC, module "
-                         "4)", coin,
-                         time.strftime("%H:%M", time.gmtime(signal_t / 1000.0)))
+            if not self.risk.session_ok(signal_t, leg_atr):
+                st = self.risk.session_state(signal_t)
+                LOG.info("[SIGNAL] %s rejected: %s session (%s UTC) -- outside "
+                         "prime without monster structure (leg %s xATR)",
+                         coin, st,
+                         time.strftime("%H:%M", time.gmtime(signal_t / 1000.0)),
+                         "%.1f" % leg_atr if leg_atr is not None else "-")
+                return False
+            if self.risk.pre_prime_stand_down(signal_t):
+                LOG.info("[SIGNAL] %s rejected: pre-prime stand-down (slot "
+                         "hygiene before the open)", coin)
                 return False
         sl_bps = abs(entry - sl) / entry * 1e4
         if sl_bps < self.cfg.min_sl_bps:
@@ -1616,6 +1700,13 @@ class PaperBook:
             LOG.info("[SIGNAL] %s rejected: size %.6f below min notional",
                      coin, qty)
             return False
+        tp2_bps_real = (tp2 / entry - 1.0) * side * 1e4
+        if self.risk is not None:
+            ok_m, why_m = self.risk.monster_gate_ok(leg_atr, lev,
+                                                    tp2_bps_real)
+            if not ok_m:
+                LOG.info("[SIGNAL] %s rejected: %s", coin, why_m)
+                return False
         tp1_qty = round_sz(qty * self.cfg.tp1_frac, sz_dec)
         tp2_qty = round_sz(qty * self.cfg.tp2_frac, sz_dec)
         runner_qty = round_sz(qty - tp1_qty - tp2_qty, sz_dec)
@@ -1679,6 +1770,14 @@ class PaperBook:
                         LOG.info("[ORDER] %s entry dropped: guard blocked",
                                  coin)
                         return
+                    if self.risk is not None \
+                            and not self.risk.can_open(order.side):
+                        # the book filled up while this limit rested --
+                        # re-check the portfolio cap AT FILL TIME
+                        del self.orders[coin]
+                        LOG.info("[ORDER] %s entry dropped at fill: "
+                                 "portfolio cap", coin)
+                        return
                     if self.risk is not None and not self.risk.vol_ok(coin):
                         # module 2: the retest bar shows no participation --
                         # keep the limit resting (it still expires on time)
@@ -1692,9 +1791,25 @@ class PaperBook:
         pos = self.positions.get(coin)
         if pos is None:
             return
+        if self.risk is not None and self.risk.flat_time_reached(t_open):
+            # day-trader discipline: the session is over, close at market
+            # (taker) and drop any resting limits -- nothing rides the
+            # dead Asian night
+            for oc in list(self.orders):
+                del self.orders[oc]
+                LOG.info("[FLAT] %s entry limit cancelled (end of day)", oc)
+            self._close_remainder(coin, pos, c, "flat", t_open)
+            return
         pos.bars_held += 1            # fill candle == bar 1 (engine parity)
         fill_bar = (t_open == pos.fill_t)
-        if not fill_bar:
+        # on the FILL bar a level only counts when the bar CLOSED beyond
+        # it -- proof that price crossed it AFTER the fill (a same-bar
+        # wick before the fill proves nothing)
+        be_ok = (pos.side > 0 and c >= pos.be_trigger_px) or \
+                (pos.side < 0 and c <= pos.be_trigger_px)
+        tp1_ok = (pos.side > 0 and c >= pos.tp1_px) or \
+                 (pos.side < 0 and c <= pos.tp1_px)
+        if not fill_bar or be_ok:
             # pre-scale dynamic breakeven: MFE >= 0.75R -> stop to entry
             if not pos.scaled and not pos.be_armed:
                 trig = pos.be_trigger_px
@@ -1704,7 +1819,8 @@ class PaperBook:
                     pos.be_armed = True
                     LOG.info("[BE] %s stop -> breakeven @ %.6g (0.75R "
                              "trigger hit)", coin, pos.entry_px)
-            # TP1 scale-out (v3 tri-tier: 50% at TP1)
+        if not fill_bar or tp1_ok:
+            # TP1 scale-out (v3 tri-tier: 40% at TP1)
             if not pos.scaled:
                 if (pos.side > 0 and h >= pos.tp1_px) or \
                         (pos.side < 0 and lo <= pos.tp1_px):
@@ -1728,8 +1844,11 @@ class PaperBook:
                     pos.trail_ref = min(pos.trail_ref, ref)
                     pos.sl_px = min(pos.sl_px,
                                     self._trail_stop(-1, pos.trail_ref, atr))
-        # 3. stop (conservative: SL wins over TP2 when both touched)
-        if pos in self.positions.values():
+        # 3. stop (conservative: SL wins over TP2 when both touched).
+        #    The FILL bar's own low filled the entry, so it cannot also
+        #    stop the position in the same evaluation -- its low predates
+        #    the fill.
+        if pos in self.positions.values() and not fill_bar:
             hit_sl = (pos.side > 0 and lo <= pos.sl_px) or \
                      (pos.side < 0 and h >= pos.sl_px)
             if hit_sl:
@@ -1746,6 +1865,11 @@ class PaperBook:
             if pos.scaled:
                 hit = (pos.side > 0 and h >= pos.tp2_px) or \
                       (pos.side < 0 and lo <= pos.tp2_px)
+                if fill_bar:
+                    # the high may predate the fill: the close must prove
+                    # the level was crossed AFTER entry
+                    hit = hit and ((pos.side > 0 and c >= pos.tp2_px) or
+                                   (pos.side < 0 and c <= pos.tp2_px))
             else:
                 hit = (pos.side > 0 and o >= pos.tp2_px) or \
                       (pos.side < 0 and o <= pos.tp2_px)   # gap-open
@@ -1842,10 +1966,11 @@ class PaperBook:
         pos.be_armed = True
         fast = (self.risk is not None
                 and self.risk.velocity_fast(coin, pos.side))
-        if fast:
-            pos.tp2_px = None            # module 4: whole remainder trails
-            LOG.info("[TRAIL] %s TP1 was FAST -- TP2 cancelled, the whole "
-                     "%.6f remainder rides the pivot trail", coin, pos.qty)
+        if fast and self.cfg.velocity_cancel_tp2:
+            pos.tp2_px = None            # legacy rule, opt-in only
+            LOG.info("[TRAIL] %s TP1 was FAST -- TP2 cancelled (legacy), "
+                     "the whole %.6f remainder rides the pivot trail",
+                     coin, pos.qty)
             self._emit("trail", coin=coin, side=pos.side,
                        qty=pos.qty, px=px)
         self._on_leg(coin, pos.legs[-1])
@@ -1980,6 +2105,8 @@ class UniverseScanner:
     async def _fetch(self, coin: str, interval: str, n: int,
                      sem: asyncio.Semaphore) -> List[dict]:
         async with sem:
+            if self.cfg.data_pace_s > 0:
+                await asyncio.sleep(self.cfg.data_pace_s)   # pace the burst
             now = int(time.time() * 1000)
             start = now - n * _interval_ms(interval) * 2
             return await _retry_fetch(self.info.candles_snapshot,
@@ -2189,7 +2316,8 @@ class SniperEngine:
         self.book.on_signal(
             coin, int(state["side"]), float(state["entry"]),
             float(state["sl"]), float(state["tp1"]), float(state["tp2"]),
-            float(state["be_trigger"]), sz_dec, mid, t, place)
+            float(state["be_trigger"]), sz_dec, mid, t, place,
+            state.get("leg_atr"))
 
     def _shadow_macro(self, coin: str) -> None:
         """Log-only: what the v4 macro engine would take right now, while

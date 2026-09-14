@@ -211,6 +211,14 @@ def _state_payload() -> dict:
                     return lg
             return None
 
+        def open_lot_qty(kinds):
+            """qty of the open lot carrying this tier; 0 when the tier has
+            no dedicated lot in this state (fall back to total*share)."""
+            for lo in lots_open:
+                if lo.get("kind") in kinds:
+                    return float(lo.get("qty") or 0)
+            return 0.0
+
         for name, share, reason in (("TP1", f1, "tp1"),
                                     ("TP2", f2, "tp2")):
             leg = tier_done(reason)
@@ -226,9 +234,16 @@ def _state_payload() -> dict:
                 else:
                     lvl = (first_open or {}).get("tp")
                 if lvl:
-                    usd = total_qty * share * (lvl - entry) * dirn
+                    # the tier's own slice: the dedicated open lot when one
+                    # exists (scaled state), otherwise total_qty * share
+                    tq = (open_lot_qty(("tp2",)) if name == "TP2" else 0.0) \
+                        or (total_qty * share)
+                    usd = tq * (lvl - entry) * dirn
+                    # whole position (closed legs + open lots) at this level
+                    total_at = realized + qty * (lvl - entry) * dirn
                     tiers.append({"name": name, "share": round(share * 100),
                                   "px": lvl, "usd": round(usd, 2),
+                                  "total_at": round(total_at, 2),
                                   "done": False})
         tleg = tier_done("trail")
         if tleg is not None:
@@ -237,7 +252,10 @@ def _state_payload() -> dict:
                           "usd": round(float(tleg.get("pnl") or 0), 2),
                           "done": True})
         else:
-            live_usd = (qty * f3 * (px - entry) * dirn) if px else None
+            # the runner's own live value -- its real qty, not 30% of the
+            # post-TP1 remainder (the runner is ~50% of the remainder)
+            rq = open_lot_qty(("runner", "trail")) or (total_qty * f3)
+            live_usd = (rq * (px - entry) * dirn) if px else None
             tiers.append({"name": "TRAIL", "share": round(f3 * 100),
                           "px": None,
                           "usd": round(live_usd, 2) if live_usd is not None
@@ -496,6 +514,9 @@ label{font-size:12px;color:var(--txt2);display:block;margin-top:14px;
 .pos .tier .tpx{color:var(--txt2);flex:1;text-align:right}
 .pos .tier .tusd{font-weight:700;min-width:64px;text-align:right;
  font-variant-numeric:tabular-nums}
+.pos .tier .tot{font-size:10px;font-weight:600;color:var(--txt2);
+ margin-left:8px;text-align:right;font-variant-numeric:tabular-nums;
+ white-space:nowrap}
 .pos .foot{display:flex;justify-content:space-between;align-items:center;
  margin-top:10px;padding-top:9px;border-top:1px solid var(--line);
  font-size:11px;color:var(--txt2);font-family:var(--ui)}
@@ -611,7 +632,10 @@ function draw(s){
                       :`<span class="tname">${t.name} ${t.share}%</span>`;
       const px=t.px!=null?px6(t.px):(t.live?'<span class=up>live</span>':'&mdash;');
       const us=(t.usd!=null?`<span class="tusd ${t.usd>=0?'up':'dn'}">${t.usd>=0?'+':''}${t.usd.toFixed(2)}$</span>`:'');
-      return `<div class=tier>${nm}<span class=tpx>${px}</span>${us}</div>`;
+      const tot=(!t.done&&t.total_at!=null
+        ?`<span class="tot ${t.total_at>=0?'up':'dn'}">کل ${t.total_at>=0?'+':''}${t.total_at.toFixed(2)}$</span>`
+        :'');
+      return `<div class=tier>${nm}<span class=tpx>${px}</span>${us}${tot}</div>`;
     }).join('');
     const tags=[];
     if(p.be)tags.push('<span class="tag on">BE</span>');
@@ -623,7 +647,7 @@ function draw(s){
      <div class=phead>
       <div>
        <span class=sym>${p.sym}<span class="sd ${p.side==='BUY'?'buy':'sell'}">${p.side==='BUY'?'LONG':'SHORT'}</span></span>
-       <div class=tagrow>${tags.join('')}<a class=tag href="https://www.tradingview.com/chart/?symbol=BITUNIX%3A${p.sym}">TW</a></div>
+       <div class=tagrow>${tags.join('')}<a class=tag href="https://www.tradingview.com/chart/?symbol=HYPERLIQUID%3A${p.sym}">TW</a></div>
       </div>
       <div>
        <div class="pnl ${has?(up?'up':'dn'):''}">${has?'$'+money:'&mdash;'}</div>
