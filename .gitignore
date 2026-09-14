@@ -27,3 +27,6 @@ old/
 
 # macOS
 .DS_Store
+
+# Runtime log at the repo root
+*.log
