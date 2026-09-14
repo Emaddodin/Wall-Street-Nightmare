@@ -1719,3 +1719,36 @@ The defensible reading is the one a human scalper means by it: a 100% *day*
 happens; 100% *every* day does not. The book should keep the daily target as
 a **halt condition** (stop when the day is banked, which it already does) and
 never as a sizing input.
+
+---
+
+## Session resume notes — 2026-09-14 evening (appended from the restored session)
+
+**State when the previous session died (22:07 Tehran):** bot live on `stratton`
+(82.115.21.155, service `tbt-hl-sniper`), equity 134.80 realized / ~152.5 live,
+day +34.8% realized (+52.5% live), UNI LONG open (entry 6.4363, TP1 banked
++10.30, TP2 6.7335 / runner 63.4 trailing, SL at breakeven), 7 resting orders,
+flat-by 20:15 UTC (23:45 Tehran). HEMI/MINA/UNI are hit&run-blocked for the day
+(the `halted` flag in state = per-symbol blocks, NOT a global halt).
+
+**The user's last unanswered question — resolved:** they saw the position card
+show +25 profit while the TP2 row said 18. Both were right and measured
+different things: the headline is the WHOLE remaining position at the live
+price (126.6 qty), the TP2 row is only the 30% tier at its target (63.2 qty →
++18.78). At TP2 the whole position is +47.92. No money bug — reconciled to
+the penny (156.57 − 32.06 VVV + 10.30 UNI-TP1 = 134.81).
+
+**Real bug found and fixed (app card):** the TRAIL row computed
+`remaining_qty × 30%` instead of the runner lot's actual qty (63.4) after TP1
+scale-out, understating the runner by 40% and making the rows never sum to
+the headline. `scalper/app/app.py` now uses the per-lot qty, and TP rows carry
+a `total_at` field rendered as "کل +X$" so tier-vs-whole-position is explicit.
+Deployed to the server (backup `app.py.bak-20260914-*`, service `tbt-hl-app`
+restarted, payload verified).
+
+**VVV −32.06:** the first momentum-mode monster (SHORT 22.205, stop 222 bps)
+stopped out — early-mode per-stop risk is 20% of equity by design (v2
+front-load). One such stop at 134.8 → ~107.8, still above the day open.
+
+**Still waiting on the user:** repo rename (Stratton-Oakmont) and service
+rename `tbt-hl-*` → `stratton-oakmont-hl-*`.
