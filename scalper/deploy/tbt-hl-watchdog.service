@@ -1,0 +1,11 @@
+[Unit]
+Description=ICT Sniper watchdog (Hyperliquid paper system)
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/ict_sniper
+EnvironmentFile=/root/ict_sniper/.env
+# keeps the paper lock in the watchdog's own environment too
+Environment=ICT_PAPER_ONLY=1
+ExecStart=/root/ict_sniper/venv/bin/python -u /root/ict_sniper/hl_watchdog.py

@@ -1,0 +1,23 @@
+[Unit]
+# Paper-trades the 15m strategy: an impulse on a coin that is awake, a
+# Fibonacci pullback for the entry, and a refusal if that coin's own record in
+# this state does not support it. Separate book from the 5m one on purpose --
+# they are different strategies and mixing the records would tell us nothing.
+Description=TBT 15m hunt, paper
+# Deliberately not After=tbt-boom.service: that scan is a oneshot that
+# takes twelve minutes, and ordering behind it left this service sitting
+# in 'activating' with nothing in the log. The loop already copes with the
+# coin list being absent -- it warns and tries again a minute later.
+After=network-online.target
+
+[Service]
+User=tbt
+WorkingDirectory=/home/tbt/bot
+ExecStart=/home/tbt/venv/bin/python -u /home/tbt/bot/hunt_paper.py \
+  --tp 10 --sl 2 --frac 0.10 --lev 50 --max-day 3 \
+  --min-past 8 --min-hit 17.7 --max-wick 25 --every 120
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

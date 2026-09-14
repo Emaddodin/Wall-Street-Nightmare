@@ -1,0 +1,19 @@
+[Unit]
+# One window stops holding a coin and walks the ranked list instead. Two coins
+# offer a setup every few days between them; forty offer several a day. The
+# strategy was never the limit -- eyesight was.
+Description=TBT scout -- walks the ranked coins looking for council plans
+After=tbt-chrome.service
+Requires=tbt-chrome.service
+
+[Service]
+User=tbt
+WorkingDirectory=/home/tbt/bot
+ExecStart=/home/tbt/venv/bin/python -u /home/tbt/bot/scout.py \
+  --window 1 --top 150 --dwell 3 --keep-min 60
+Restart=always
+RestartSec=10
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

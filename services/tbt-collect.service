@@ -1,0 +1,20 @@
+[Unit]
+# Walks chart window 0 through the watchlist and appends every bar the
+# council published, with the higher-timeframe setting recorded per file --
+# the only honest ground truth for judging the council at 1h. Window 0 is
+# the book's own window, so this must never run while the book does.
+Description=TBT council collector (window 0, only while the book is stopped)
+After=tbt-chrome.service
+Requires=tbt-chrome.service
+
+[Service]
+User=tbt
+WorkingDirectory=/home/tbt/bot
+ExecStartPre=/bin/sh -c '! systemctl is-active --quiet tbt-paper'
+ExecStart=/home/tbt/venv/bin/python -u /home/tbt/bot/tools/collect.py 0
+Restart=no
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

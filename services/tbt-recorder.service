@@ -1,0 +1,20 @@
+[Unit]
+# Records every signal the real indicator prints, and the path that followed.
+# The Python port of the strategy is not faithful, so this file is the only
+# honest dataset there is. It reads the charts once a minute and never writes
+# to them.
+Description=TBT signal recorder
+After=tbt-chrome.service
+Wants=tbt-chrome.service
+
+[Service]
+User=tbt
+WorkingDirectory=/home/tbt/bot
+ExecStart=/home/tbt/venv/bin/python -u /home/tbt/bot/recorder.py
+Restart=always
+RestartSec=20
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

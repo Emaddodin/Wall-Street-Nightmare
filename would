@@ -1,0 +1,6 @@
+=== the CURRENT resting order is the 16:20:05 one (the 16:15:17 signal died in my hardening restart) ===
+=== price vs THAT limit (0.19632) ===
+
+=== service still alive, no fills ===
+active
+2026-09-13 16:30:46 INFO    [STATUS] signals=1 fills=0 exits=0 | open_pos=0 resting=1 | realized_pnl=+0.00 | blocks=0 cap_hits=0 | ntfy=2/0

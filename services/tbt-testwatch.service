@@ -1,0 +1,9 @@
+[Unit]
+Description=TBT half-hour heartbeat for the 12-hour test
+After=tbt-paper.service
+
+[Service]
+Type=oneshot
+User=tbt
+WorkingDirectory=/home/tbt/bot
+ExecStart=/home/tbt/venv/bin/python -u /home/tbt/bot/tools/testwatch.py

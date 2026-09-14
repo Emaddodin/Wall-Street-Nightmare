@@ -1,0 +1,16 @@
+[Unit]
+# Rebuilds data/dataset/ from the recorded signals and outcomes, so the
+# flow dataset grows with the recorder instead of going stale. Reads files
+# only -- it touches no chart and no service.
+Description=TBT flow dataset builder
+
+[Service]
+User=tbt
+WorkingDirectory=/home/tbt/bot
+ExecStart=/bin/sh -c '/home/tbt/venv/bin/python -u /home/tbt/bot/dataset/make_dataset.py && /home/tbt/venv/bin/python -u /home/tbt/bot/dataset/sweep.py > /home/tbt/bot/data/dataset/sweep.txt && /home/tbt/venv/bin/python -u /home/tbt/bot/dataset/sampler.py > /home/tbt/bot/data/dataset/samples/build.txt && /home/tbt/venv/bin/python -u /home/tbt/bot/dataset/selector.py --samples /home/tbt/bot/data/dataset/samples/features.npz > /home/tbt/bot/data/dataset/selector.txt'
+Restart=no
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

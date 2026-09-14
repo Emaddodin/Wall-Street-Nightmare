@@ -1,0 +1,9 @@
+[Unit]
+Description=TBT nightly record backup
+After=tbt-paper.service
+
+[Service]
+Type=oneshot
+User=tbt
+WorkingDirectory=/home/tbt/bot
+ExecStart=/home/tbt/venv/bin/python /home/tbt/bot/tools/backup.py --keep 7

@@ -1,0 +1,936 @@
+//@version=5
+// =====================================================================
+// TBT SNIPER ENGINE  -  Bank + Team 45 + Tesla convergence
+//
+// Module 1  BNK : institutional S/R, volume zones, market structure shift.
+//                 Fires FIRST -- price has reached a reaction zone.
+// Module 2  T45 : 9-oscillator divergence engine over 25 and 280 bars,
+//                 plus trendline touches. Fires SECOND -- momentum exhausted.
+// Module 3  TSL : the user's existing Tesla script, read as a series.
+//                 Fires LAST -- final confirmation.
+//
+// The product page describes TWO separate outputs, and they are not the same
+// thing -- which is why the two written briefs appeared to contradict:
+//
+//   SNIPER  "scores 5 internal agents in real time, fires when at least 3
+//           agree, 5/5 is the highest-conviction setup we publish."
+//           Agents: Tesla, Bank, Team 45, trend direction, market conditions.
+//
+//   COMBO   VIP only: "fires only when all three robots converge on the same
+//           candle. You control the allowed gap between signals." One gap
+//           setting; the three tiers are derived from how tight it landed.
+//           Graded by how TIGHT that convergence turned out to be:
+//               <= 5 candles PEERLESS, <= 10 EXCELLENT, <= 20 GOOD
+//           and coloured by which module gave the final confirmation:
+//               blue Bank, orange Team 45, purple Tesla.
+//
+// Both are built here, as independent streams with their own plots and
+// alerts. Sniper can fire without Tesla wired (out of four); Combo cannot
+// fire at all without it, because Combo is defined as all three agreeing.
+//
+// Tesla is NOT recoded here. Add your Tesla indicator to the chart, point
+// both sources at its plots, and TICK "Tesla source is wired". Until that
+// box is ticked NO combo can fire, because input.source has no unset state
+// -- it silently defaults to `close`, and an unwired hook would vote "the
+// candle closed higher" while looking exactly like a Tesla confirmation.
+// =====================================================================
+// max_bars_back is set explicitly: several series are indexed with an input
+// offset (osc[t45Piv], atrV[bnkPiv]), and Pine cannot always infer the buffer
+// depth that needs, which fails the compile rather than warning.
+//
+// Left at 500. Lowering it to 320 was tried on the theory that the allocation
+// was what stalled the longer chart; it was not -- the chart that failed then
+// ran a DIFFERENT compiled version than the one that worked, and the digest
+// showed it. Same code, same result, on both charts.
+indicator("TBT Sniper Engine", "TBT", overlay=true, max_boxes_count=500, max_lines_count=500, max_bars_back=1500, max_labels_count=500)
+
+// Declared first because the Bank module 60 lines below already tests them.
+// Pine resolves top to bottom: an input declared in its own thematic group
+// further down is an "Undeclared identifier" everywhere above it, however
+// tidy the grouping looks.
+gDisp = "0 DISPLAY"
+minimal  = input.bool(false, "MINIMAL: hide everything except the final combo", group=gDisp)
+showCard = input.bool(true, "Detail card under the combo label", group=gDisp)
+
+// Signals are held back until the candle closes. DEFAULT OFF, deliberately.
+//
+// Off means a signal prints the moment its conditions align inside a forming
+// candle -- the earliest entry physically available, since the conditions read
+// that candle's own price. The cost is that it can un-print before the candle
+// closes. autotrade.py --phantom-guard covers that by flattening a position
+// whose signal is gone at the close.
+//
+// Tick it ON to go back to close-only signals, which never repaint.
+//
+// Without this a combo can be painted part-way through a forming bar and then
+// vanish when the bar closes differently. Historical bars are always closed,
+// so a backtest never shows it and the chart looks perfect -- then live you
+// take an entry on a label that was never really there. The strategy itself
+// requires entries at the candle close for the same reason.
+//
+// It also makes the alert safe whichever trigger you picked in TradingView's
+// dialog: the condition simply cannot be true mid-bar.
+confirmOnly = input.bool(false, "Signal only on closed candles", group=gDisp)
+
+// =====================================================================
+// SECTION 1 - BANK MODULE (BNK)
+// =====================================================================
+gB = "1 BANK - structure and zones"
+bnkPiv     = input.int(6, "Pivot strength", group=gB, minval=2)
+bnkVolLen = 80
+bnkVolMult = input.float(1.8, "Heavy volume multiple", group=gB, step=0.1)
+bnkZoneAtr = input.float(0.5, "Zone thickness (ATR)", group=gB, step=0.1)
+bnkKeep = 32
+bnkTouchTol= input.float(0.25, "Touch tolerance (ATR)", group=gB, step=0.05)
+bnkBreak = 0.5
+bnkShow    = input.bool(true, "Draw zones", group=gB)
+
+atrV = ta.atr(14)
+volAvg = ta.sma(volume, bnkVolLen)
+heavyVol = volume > volAvg * bnkVolMult
+
+// Confirmed pivots only. Knowable bnkPiv bars later, which is why the engine
+// never claims a level before the market actually confirmed it.
+ph = ta.pivothigh(high, bnkPiv, bnkPiv)
+pl = ta.pivotlow(low, bnkPiv, bnkPiv)
+phBar = not na(ph)
+plBar = not na(pl)
+
+var float lastSwingHigh = na
+var float lastSwingLow = na
+if phBar
+    lastSwingHigh := ph
+if plBar
+    lastSwingLow := pl
+bosUp = not na(lastSwingHigh) and close > lastSwingHigh and close[1] <= lastSwingHigh
+bosDn = not na(lastSwingLow) and close < lastSwingLow and close[1] >= lastSwingLow
+
+var array<float> demTop = array.new<float>()
+var array<float> demBot = array.new<float>()
+var array<float> supTop = array.new<float>()
+var array<float> supBot = array.new<float>()
+
+f_push(arr, v, cap) =>
+    array.push(arr, v)
+    if array.size(arr) > cap
+        array.shift(arr)
+    array.size(arr)
+
+// A zone price has closed straight through is not a zone any more. Without
+// this the book keeps handing out touches at levels the market already
+// rejected: free signal count, zero information.
+f_prune(topArr, botArr, isDemand, tol) =>
+    n = array.size(topArr)
+    if n > 0
+        for i = 0 to n - 1
+            t = array.shift(topArr)
+            b = array.shift(botArr)
+            alive = isDemand ? close >= b - tol : close <= t + tol
+            if alive
+                array.push(topArr, t)
+                array.push(botArr, b)
+    array.size(topArr)
+
+f_touch(topArr, botArr, tol) =>
+    hit = false
+    if array.size(topArr) > 0
+        for i = 0 to array.size(topArr) - 1
+            t = array.get(topArr, i)
+            b = array.get(botArr, i)
+            if low <= t + tol and high >= b - tol
+                hit := true
+    hit
+
+// Thickness uses the ATR that existed AT the pivot, not today's. The zone is
+// a fact about that bar; measuring it with later volatility would make an old
+// level breathe with current conditions.
+atrPiv = atrV[bnkPiv]
+if plBar and heavyVol[bnkPiv]
+    nD1 = f_push(demBot, pl - atrPiv * bnkZoneAtr, bnkKeep)
+    nD2 = f_push(demTop, pl + atrPiv * bnkZoneAtr, bnkKeep)
+    if bnkShow and not minimal
+        box.new(bar_index - bnkPiv, pl + atrPiv * bnkZoneAtr, bar_index + 40, pl - atrPiv * bnkZoneAtr, border_color=color.new(color.teal, 30), bgcolor=color.new(color.teal, 88))
+if phBar and heavyVol[bnkPiv]
+    nS1 = f_push(supBot, ph - atrPiv * bnkZoneAtr, bnkKeep)
+    nS2 = f_push(supTop, ph + atrPiv * bnkZoneAtr, bnkKeep)
+    if bnkShow and not minimal
+        box.new(bar_index - bnkPiv, ph + atrPiv * bnkZoneAtr, bar_index + 40, ph - atrPiv * bnkZoneAtr, border_color=color.new(color.red, 30), bgcolor=color.new(color.red, 88))
+
+demKilled = f_prune(demTop, demBot, true, atrV * bnkBreak)
+supKilled = f_prune(supTop, supBot, false, atrV * bnkBreak)
+atDemand = f_touch(demTop, demBot, atrV * bnkTouchTol)
+atSupply = f_touch(supTop, supBot, atrV * bnkTouchTol)
+
+bnkBull = (atDemand and close > open) or bosUp
+bnkBear = (atSupply and close < open) or bosDn
+
+// =====================================================================
+// SECTION 2 - TEAM 45 MODULE (T45)
+// =====================================================================
+gT = "2 TEAM45 - divergence engine"
+t45MinDiv = input.int(1, "Min concurrent divergences", group=gT, minval=1, maxval=9)
+t45Piv    = input.int(5, "Divergence pivot strength", group=gT, minval=1)
+t45Max    = input.int(320, "Max bars since pivot", group=gT, minval=10)
+t45UseTL  = input.bool(false, "Require trendline touch", group=gT)
+
+
+// Each oscillator is normalised over a window and averaged, so a divergence
+// has to survive more than one horizon rather than being an artefact of a
+// single length.
+//
+// The canonical set was 25/35/70/140/280 on the 4h build; the HTF is
+// 1h now, so the same wall-clock horizons are 100/140/280/560/1120.
+// is ninety ta.highest/lowest series. That is what breaks the compile: Bank
+// alone builds, Team 45 alone builds, together they overrun the compiler and
+// it emits an empty study with no error. Measured across 12 pairs, keeping
+// only the two ENDS of the canonical range reproduces 91% of the signals at
+// 40% of the cost -- the three middle windows are nearly redundant with them.
+// Cutting oscillators instead was tried and is far worse: three oscillators
+// over all five windows keeps only 44%.
+L_FAST = 100
+L_SLOW = 1120
+
+f_norm(src, n) =>
+    h = ta.highest(src, n)
+    l = ta.lowest(src, n)
+    h - l != 0 ? (src - l) / (h - l) * 100 - 50 : 0.0
+
+f_multi(src) =>
+    (f_norm(src, L_FAST) + f_norm(src, L_SLOW)) / 2.0
+
+[macdL, macdS, macdH] = ta.macd(close, 12, 26, 9)
+oMACD = f_multi(macdL)
+oHIST = f_multi(macdH)
+oOBV  = f_multi(ta.obv)
+oRSI  = f_multi(ta.rsi(close, 14))
+oSTO  = f_multi(ta.stoch(close, high, low, 14))
+oCCI  = f_multi(ta.cci(close, 20))
+oMFI  = f_multi(ta.mfi(hlc3, 14))
+oMOM  = f_multi(ta.mom(close, 10))
+oWPR  = f_multi(ta.wpr(14))
+
+tph = not na(ta.pivothigh(high, t45Piv, t45Piv))
+tpl = not na(ta.pivotlow(low, t45Piv, t45Piv))
+pPH = ta.valuewhen(tph, high[t45Piv], 1)
+lPH = ta.valuewhen(tph, high[t45Piv], 0)
+pPL = ta.valuewhen(tpl, low[t45Piv], 1)
+lPL = ta.valuewhen(tpl, low[t45Piv], 0)
+
+f_dLow(osc) =>
+    a = ta.valuewhen(tpl, osc[t45Piv], 1)
+    b = ta.valuewhen(tpl, osc[t45Piv], 0)
+    r = tpl and lPL < pPL and b > a ? 1 : 0
+    h = tpl and lPL > pPL and b < a ? 1 : 0
+    [r, h]
+
+f_dHigh(osc) =>
+    a = ta.valuewhen(tph, osc[t45Piv], 1)
+    b = ta.valuewhen(tph, osc[t45Piv], 0)
+    r = tph and lPH > pPH and b < a ? 1 : 0
+    h = tph and lPH < pPH and b > a ? 1 : 0
+    [r, h]
+
+[a1, b1] = f_dLow(oMACD)
+[a2, b2] = f_dLow(oHIST)
+[a3, b3] = f_dLow(oOBV)
+[a4, b4] = f_dLow(oRSI)
+[a5, b5] = f_dLow(oSTO)
+[a6, b6] = f_dLow(oCCI)
+[a7, b7] = f_dLow(oMFI)
+[a8, b8] = f_dLow(oMOM)
+[a9, b9] = f_dLow(oWPR)
+bullRegN = a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9
+bullHidN = b1 + b2 + b3 + b4 + b5 + b6 + b7 + b8 + b9
+
+[c1, d1] = f_dHigh(oMACD)
+[c2, d2] = f_dHigh(oHIST)
+[c3, d3] = f_dHigh(oOBV)
+[c4, d4] = f_dHigh(oRSI)
+[c5, d5] = f_dHigh(oSTO)
+[c6, d6] = f_dHigh(oCCI)
+[c7, d7] = f_dHigh(oMFI)
+[c8, d8] = f_dHigh(oMOM)
+[c9, d9] = f_dHigh(oWPR)
+bearRegN = c1 + c2 + c3 + c4 + c5 + c6 + c7 + c8 + c9
+bearHidN = d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8 + d9
+
+bullDivN = math.max(bullRegN, bullHidN)
+bearDivN = math.max(bearRegN, bearHidN)
+
+f_tlLow() =>
+    x1 = ta.valuewhen(tpl, bar_index[t45Piv], 1)
+    x2 = ta.valuewhen(tpl, bar_index[t45Piv], 0)
+    slope = x2 - x1 != 0 ? (lPL - pPL) / (x2 - x1) : 0.0
+    proj = lPL + slope * (bar_index - x2)
+    math.abs(low - proj) <= atrV * 0.5
+
+f_tlHigh() =>
+    x1 = ta.valuewhen(tph, bar_index[t45Piv], 1)
+    x2 = ta.valuewhen(tph, bar_index[t45Piv], 0)
+    slope = x2 - x1 != 0 ? (lPH - pPH) / (x2 - x1) : 0.0
+    proj = lPH + slope * (bar_index - x2)
+    math.abs(high - proj) <= atrV * 0.5
+
+tlLow = f_tlLow()
+tlHigh = f_tlHigh()
+t45Bull = bullDivN >= t45MinDiv and ta.barssince(tpl) <= t45Max and (not t45UseTL or tlLow)
+t45Bear = bearDivN >= t45MinDiv and ta.barssince(tph) <= t45Max and (not t45UseTL or tlHigh)
+
+// =====================================================================
+// SECTION 3 - TESLA HOOK
+// =====================================================================
+gS = "3 TESLA hook"
+tslWired   = input.bool(false, "Tesla source is wired (tick after pointing both sources at Tesla)", group=gS)
+tslMode    = input.string("flag", "How to read the Tesla sources", options=["flag", "signed", "rising", "above price"], group=gS)
+tslBullSrc = input.source(close, "Tesla BULL source", group=gS)
+tslBearSrc = input.source(close, "Tesla BEAR source", group=gS)
+
+// "flag" is the default because that is what Tesla actually publishes: two
+// SEPARATE series, Long and Short, each a one-bar 0/1 pulse. Both sides test
+// > 0 -- the bear flag is never negative, it is its own series.
+//
+// The earlier build tested `bearSrc < 0` here, which is right only for a
+// single SIGNED series and silently discarded every Tesla short: the engine
+// printed nothing but BUY combos and looked like it was working. That mode
+// still exists as "signed" for indicators that publish one such series.
+tslBullRaw = tslMode == "flag" ? tslBullSrc > 0 : tslMode == "signed" ? tslBullSrc > 0 : tslMode == "rising" ? tslBullSrc > tslBullSrc[1] : close > tslBullSrc
+tslBearRaw = tslMode == "flag" ? tslBearSrc > 0 : tslMode == "signed" ? tslBearSrc < 0 : tslMode == "rising" ? tslBearSrc < tslBearSrc[1] : close < tslBearSrc
+tslBull = tslWired and tslBullRaw
+tslBear = tslWired and tslBearRaw
+
+// =====================================================================
+// SECTION 3b - HIGHER TIMEFRAME PHASE
+// The strategy's own top-down rule: read the phase one level up, take the
+// entry down here. HMA(220) on 1h -- the 4h build's HMA(55), the same
+// ~9 days of trend, expressed in the chart's own bars now that the HTF
+// is 1h instead of 4h.
+//
+// This lives INSIDE the engine rather than in its own script because a
+// TradingView free plan allows two indicators and Tesla owns one of them.
+// Everything that is not Tesla has to fit in this one slot.
+//
+// The [1] is not decoration. Without it the line redraws inside the forming
+// higher-timeframe bar, so a signal you saw at 10:03 can be gone at 10:05 --
+// the single most common way an indicator looks perfect in replay and cannot
+// be traded live.
+// =====================================================================
+gH = "3b HIGHER TIMEFRAME phase"
+htfOn   = input.bool(true, "Gate signals on the higher-timeframe HMA", group=gH)
+htfTF   = input.timeframe("60", "Higher timeframe", group=gH)
+htfLen = 220
+htfShow = input.bool(true, "Draw the line and phase background", group=gH)
+
+f_hma(src, len) =>
+    ta.wma(2 * ta.wma(src, len / 2) - ta.wma(src, len), math.round(math.sqrt(len)))
+
+htfLine = request.security(syminfo.tickerid, htfTF, f_hma(close, htfLen)[1], lookahead=barmerge.lookahead_off)
+htfUp = not na(htfLine) and close > htfLine
+htfDn = not na(htfLine) and close < htfLine
+phaseLong = not htfOn or htfUp
+phaseShort = not htfOn or htfDn
+
+// =====================================================================
+// SECTION 4 - TBT CONVERGENCE ENGINE
+// All three modules must print inside the rolling window. The grade is how
+// tight that window turned out to be, so a combo is only "peerless" when
+// the three agreed almost simultaneously.
+// =====================================================================
+// Defaults loosened after measuring, not guessing. Across 5 pairs and 70 days
+// these four together take the rate from 10.4 to 31.5 combos a day while the
+// measured edge moves from -0.97 +/- 1.92 bps to +0.03 +/- 1.09 -- both are
+// zero, so the extra signals cost nothing that shows up. Cooldown is by far
+// the strongest lever (1.83x on its own); min-divergences, which looked like
+// the obvious one, is 1.09x.
+gC = "4 TBT convergence"
+winGood = input.int(140, "Combo gap: max candles between the three", group=gC, minval=4)
+// The TIERS are tightness, not a wall-clock window: the product grades
+// <= 5 candles PEERLESS, <= 10 EXCELLENT, <= 20 GOOD, whatever the gap
+// window is. Deriving them from winGood scaled them x4 along with the
+// window and "PEERLESS" came to mean "within 35 candles" -- which is
+// why the labels looked loose. Fixed back to the product's own words.
+winPeer = input.int(5, "PEERLESS within (candles)", group=gC, minval=2)
+winExc  = input.int(10, "EXCELLENT within (candles)", group=gC, minval=3)
+comboCooldown = input.int(20, "Bars between combos", group=gC, minval=0)
+hideOrange = input.bool(true, "Never draw orange (Team 45 confirmed last)", group=gC)
+minAgentsCombo = input.int(3, "Min agents agreeing for a combo", group=gC, minval=0, maxval=5)
+printAtEdge = input.bool(true, "Print the combo only when price is AT this candle's low (long) / high (short)", group=gC)
+edgeTol = input.float(0.05, "How close to the extreme counts as at it (%)", group=gC, step=0.01)
+showParts = input.bool(true, "Show individual module signals", group=gC)
+showHud = input.bool(true, "Show module HUD", group=gC)
+
+var int bBnkB = -10000
+var int bT45B = -10000
+var int bTslB = -10000
+var int bBnkS = -10000
+var int bT45S = -10000
+var int bTslS = -10000
+if bnkBull
+    bBnkB := bar_index
+if t45Bull
+    bT45B := bar_index
+if tslBull
+    bTslB := bar_index
+if bnkBear
+    bBnkS := bar_index
+if t45Bear
+    bT45S := bar_index
+if tslBear
+    bTslS := bar_index
+
+f_span(x, y, z) =>
+    math.max(x, math.max(y, z)) - math.min(x, math.min(y, z))
+
+f_seen(x, y, z) =>
+    x > -10000 and y > -10000 and z > -10000
+
+// The combo is stamped on the bar the LAST of the three arrives, which is
+// also the module the colour credits with the final confirmation.
+spanB = f_span(bBnkB, bT45B, bTslB)
+spanS = f_span(bBnkS, bT45S, bTslS)
+
+barOk = not confirmOnly or barstate.isconfirmed
+
+// =====================================================================
+// SECTION 3c - AGENT VOTE
+// Computed here rather than with the Sniper because the combo gate
+// below filters on it, and Pine resolves top to bottom.
+// =====================================================================
+gN = "5 SNIPER composite"
+snipOn    = input.bool(true, "Enable Sniper composite", group=gN)
+snipMin   = input.int(3, "Min agents agreeing", group=gN, minval=2, maxval=5)
+snipWin   = input.int(40, "Event memory window (candles)", group=gN, minval=1)
+trFast = 84
+trSlow = 220
+adxLen = 56
+adxMin    = input.float(18.0, "Agent 5: min ADX", group=gN, step=0.5)
+atrPctMin = 0.03
+atrPctMax = 3.0
+volOkMult = 0.7
+
+emaF = ta.ema(close, trFast)
+emaS = ta.ema(close, trSlow)
+a4Bull = emaF > emaS and close > emaF
+a4Bear = emaF < emaS and close < emaF
+
+[diPlus, diMinus, adxV] = ta.dmi(adxLen, adxLen)
+atrPct = atrV / close * 100
+regimeOk = adxV >= adxMin and atrPct >= atrPctMin and atrPct <= atrPctMax and volume >= volAvg * volOkMult
+a5Bull = regimeOk and diPlus > diMinus
+a5Bear = regimeOk and diMinus > diPlus
+
+f_live(b, w) =>
+    b > -10000 and bar_index - b <= w ? 1 : 0
+
+evB = f_live(bBnkB, snipWin) + f_live(bT45B, snipWin) + f_live(bTslB, snipWin)
+evS = f_live(bBnkS, snipWin) + f_live(bT45S, snipWin) + f_live(bTslS, snipWin)
+snipVoteB = evB + (a4Bull ? 1 : 0) + (a5Bull ? 1 : 0)
+snipVoteS = evS + (a4Bear ? 1 : 0) + (a5Bear ? 1 : 0)
+snipN = tslWired ? 5 : 4
+snipNeed = math.min(snipMin, snipN)
+
+// Filtered at the source, not at the drawing. A suppressed combo never sets
+// the cooldown either, so the next one that does pass is not blocked by a
+// signal you never saw.
+f_ago(b) =>
+    b > -10000 ? str.tostring(bar_index - b) + " ago" : "never"
+
+f_last(x, y, z) =>
+    m = math.max(x, math.max(y, z))
+    z == m ? 3 : y == m ? 2 : 1
+
+
+whoBullNow = f_last(bBnkB, bT45B, bTslB)
+whoBearNow = f_last(bBnkS, bT45S, bTslS)
+okB = (not hideOrange or whoBullNow != 2) and snipVoteB >= minAgentsCombo
+okS = (not hideOrange or whoBearNow != 2) and snipVoteS >= minAgentsCombo
+
+var int lastCombo = -10000
+okCool = bar_index - lastCombo >= comboCooldown
+// A combo that passes everything except the higher-timeframe phase is not a
+// rejected signal -- it is the same three robots agreeing, against the larger
+// trend. Those are published separately as COUNTER-TREND rather than dropped,
+// so the bot can take them at half size instead of not at all.
+// The label is the entry. Without this the combo prints wherever in the bar
+// the third robot happened to fire -- median 134 seconds into a 300 second
+// candle, measured over 97 live signals -- and by then the bar's low is
+// already behind you.
+//
+// So the convergence ARMS instead of firing, and the print waits for price to
+// be back at this bar's own extreme. On a forming bar `low` is the low so far
+// and `close` is the current price, so `close <= low * (1+tol)` means "we are
+// standing on the low right now". The moment that is true is the moment the
+// label appears, which makes printing and entering the same event.
+// On the first tick of a bar open, high, low and close are the same number,
+// so both of these are true by construction. That is the point: a convergence
+// that completed on an earlier bar prints at the very open of the next one,
+// which is the earliest an entry can exist at all. Later in the bar they turn
+// true again whenever price comes back to the extreme, so a convergence that
+// completes mid-bar still gets its entry without chasing.
+newBar = bar_index != bar_index[1]
+atLow = newBar or close <= low * (1 + edgeTol / 100)
+atHigh = newBar or close >= high * (1 - edgeTol / 100)
+edgeOkB = not printAtEdge or atLow
+edgeOkS = not printAtEdge or atHigh
+
+// armed = the three have converged and every filter passes; it stays armed
+// while the convergence is still inside the gap, so a late arrival still gets
+// its entry when price comes back.
+convergedB = okB and tslWired and f_seen(bBnkB, bT45B, bTslB) and spanB <= winGood
+convergedS = okS and tslWired and f_seen(bBnkS, bT45S, bTslS) and spanS <= winGood
+
+baseBull = okB and barOk and tslWired and convergedB and edgeOkB and okCool
+baseBear = okS and barOk and tslWired and convergedS and edgeOkS and okCool
+comboBull = baseBull and phaseLong
+comboBear = baseBear and phaseShort and not comboBull
+ctBull = baseBull and not phaseLong
+ctBear = baseBear and not phaseShort and not ctBull
+if comboBull or comboBear or ctBull or ctBear
+    lastCombo := bar_index
+
+// grade = tightness, tier 3 is the best
+f_tier(sp) =>
+    sp <= winPeer ? 3 : sp <= winExc ? 2 : 1
+f_tierName(sp) =>
+    sp <= winPeer ? "PEERLESS" : sp <= winExc ? "EXCELLENT" : "GOOD"
+
+// final confirmer: 1 Bank, 2 Team45, 3 Tesla
+tierB = f_tier(spanB)
+tierS = f_tier(spanS)
+lastB = whoBullNow
+lastS = whoBearNow
+
+// Confluence, 0-100: how much the three robots agreed, from the gap between
+// them, how many oscillators diverged, and how many agents voted. It is
+// deliberately NOT called quality or probability. Tighter convergence scored
+// WORSE than loose across 3467 offline signals and again across the 13 on this
+// chart, so a high number here means "they agreed", not "this will win".
+f_score(sp, divN, vote, agents) =>
+    a = math.max(0.0, 100.0 - sp * 5.0)
+    b = divN / 9.0 * 100.0
+    c = agents > 0 ? vote / agents * 100.0 : 0.0
+    math.round((a + b + c) / 3.0)
+
+cBank = color.new(#2962ff, 0)
+cT45  = color.new(#ff9800, 0)
+cTsl  = color.new(#9c27b0, 0)
+colB = lastB == 1 ? cBank : lastB == 2 ? cT45 : cTsl
+colS = lastS == 1 ? cBank : lastS == 2 ? cT45 : cTsl
+
+var int lastSnip = -10000
+snipCoolOk = bar_index - lastSnip >= comboCooldown
+snipBull = barOk and snipOn and phaseLong and evB > nz(evB[1], 0) and snipVoteB >= snipNeed and snipVoteB > snipVoteS and snipCoolOk
+snipBear = barOk and snipOn and phaseShort and evS > nz(evS[1], 0) and snipVoteS >= snipNeed and snipVoteS > snipVoteB and snipCoolOk and not snipBull
+if snipBull or snipBear
+    lastSnip := bar_index
+
+snipColB = snipVoteB >= snipN ? color.new(#ffd700, 0) : snipVoteB >= snipN - 1 ? color.new(#c0c0c0, 0) : color.new(#cd7f32, 0)
+snipColS = snipVoteS >= snipN ? color.new(#ffd700, 0) : snipVoteS >= snipN - 1 ? color.new(#c0c0c0, 0) : color.new(#cd7f32, 0)
+
+// =====================================================================
+// SECTION 5 - PLOTS
+// =====================================================================
+plotshape(showParts and not minimal and bnkBull, "BNK bull", shape.triangleup, location.belowbar, color.new(color.teal, 40), size=size.tiny)
+plotshape(showParts and not minimal and bnkBear, "BNK bear", shape.triangledown, location.abovebar, color.new(color.red, 40), size=size.tiny)
+plotshape(showParts and not minimal and t45Bull, "T45 bull", shape.circle, location.belowbar, color.new(color.orange, 30), size=size.tiny)
+plotshape(showParts and not minimal and t45Bear, "T45 bear", shape.circle, location.abovebar, color.new(color.orange, 30), size=size.tiny)
+plotshape(comboBull, "COMBO BUY", shape.labelup, location.belowbar, colB, text="BUY", textcolor=color.white, size=size.normal)
+plotshape(comboBear, "COMBO SELL", shape.labeldown, location.abovebar, colS, text="SELL", textcolor=color.white, size=size.normal)
+plotshape(ctBull, "CT BUY", shape.triangleup, location.belowbar, color.new(colB, 45), text="ct", textcolor=color.white, size=size.small)
+plotshape(ctBear, "CT SELL", shape.triangledown, location.abovebar, color.new(colS, 45), text="ct", textcolor=color.white, size=size.small)
+
+// Machine readable series. plotshape publishes no data a client can read and
+// display.none drops a series from the feed, so these are ordinary plots made
+// invisible with a transparent colour. SPAN and LAST are published as numbers
+// so a CDP reader can bucket returns by tightness and by final confirmer
+// without re-deriving either.
+plotshape(snipBull and not minimal, "SNIPER BUY", shape.diamond, location.belowbar, snipColB, size=size.small)
+plotshape(snipBear and not minimal, "SNIPER SELL", shape.diamond, location.abovebar, snipColS, size=size.small)
+
+plot(htfShow and not minimal ? htfLine : na, "HTF_HMA_LINE", htfUp ? color.new(#26a69a, 0) : color.new(#ef5350, 0), linewidth=2)
+bgcolor(htfShow and not minimal ? (htfUp ? color.new(#26a69a, 94) : htfDn ? color.new(#ef5350, 94) : na) : na)
+
+// The detail card. One label per combo carrying what the other two robots
+// said and when, so a signal can be judged without the module shapes on the
+// chart. "confluence" is agreement, not odds -- see f_score.
+f_when(b) =>
+    b > -10000 ? (bar_index - b == 0 ? "now" : str.tostring(bar_index - b) + "b") : "-"
+
+if showCard and (comboBull or comboBear)
+    isBull = comboBull
+    sp = isBull ? spanB : spanS
+    dv = isBull ? bullDivN : bearDivN
+    vt = isBull ? snipVoteB : snipVoteS
+    wh = isBull ? lastB : lastS
+    sc = f_score(sp, dv, vt, snipN)
+    who = wh == 1 ? "Bank" : wh == 2 ? "Team45" : "Tesla"
+    l1 = (isBull ? "BUY  " : "SELL  ") + f_tierName(sp) + "   confluence " + str.tostring(sc) + "/100"
+    l2 = "Bank " + f_when(isBull ? bBnkB : bBnkS) + "   T45 " + f_when(isBull ? bT45B : bT45S) + "   Tesla " + f_when(isBull ? bTslB : bTslS)
+    l3 = "gap " + str.tostring(sp) + "c   div " + str.tostring(dv) + "/9   agents " + str.tostring(vt) + "/" + str.tostring(snipN)
+    l4 = "last word: " + who
+    txt = l1 + "\n" + l2 + "\n" + l3 + "\n" + l4
+    stl = isBull ? label.style_label_up : label.style_label_down
+    yl = isBull ? yloc.belowbar : yloc.abovebar
+    label.new(bar_index, na, txt, yloc=yl, style=stl, color=color.new(isBull ? colB : colS, 12), textcolor=color.white, size=size.small, textalign=text.align_left)
+
+inv = color.new(color.gray, 100)
+plot(htfUp ? 1 : htfDn ? -1 : 0, "HTF_BIAS", inv)
+plot(atLow ? 1 : 0, "AT_LOW", inv)
+plot(atHigh ? 1 : 0, "AT_HIGH", inv)
+plot(comboBull or ctBull ? f_score(spanB, bullDivN, snipVoteB, snipN) : na, "TBT_BUY_SCORE", inv)
+plot(comboBear or ctBear ? f_score(spanS, bearDivN, snipVoteS, snipN) : na, "TBT_SELL_SCORE", inv)
+plot(snipVoteB, "SNIP_BUY_VOTE", inv)
+plot(snipVoteS, "SNIP_SELL_VOTE", inv)
+plot(snipN, "SNIP_AGENTS_N", inv)
+plot(ctBull ? spanB : na, "TBT_CTBUY_SPAN", inv)
+plot(ctBear ? spanS : na, "TBT_CTSELL_SPAN", inv)
+plot(comboBull ? spanB : na, "TBT_BUY_SPAN", inv)
+plot(comboBull or ctBull ? tierB : na, "TBT_BUY_TIER", inv)
+plot(comboBull or ctBull ? lastB : na, "TBT_BUY_LAST", inv)
+plot(comboBear ? spanS : na, "TBT_SELL_SPAN", inv)
+plot(comboBear or ctBear ? tierS : na, "TBT_SELL_TIER", inv)
+plot(comboBear or ctBear ? lastS : na, "TBT_SELL_LAST", inv)
+plot(tslWired ? 1 : 0, "TSL_WIRED", inv)
+plot(tslBull ? 1 : na, "TSL_BULL", inv)
+plot(tslBear ? 1 : na, "TSL_BEAR", inv)
+
+// =====================================================================
+// SECTION 6 - HUD
+// An unwired Tesla hook is a silent failure by nature: nothing fires and
+// the chart looks merely quiet. So it is stated outright.
+// =====================================================================
+var table hud = table.new(position.top_right, 2, 7, border_width=1)
+if showHud and not minimal and barstate.islast
+    bg = color.new(color.black, 25)
+    table.cell(hud, 0, 0, "TBT", text_color=color.white, bgcolor=bg)
+    table.cell(hud, 1, 0, tslWired ? "armed" : "DISARMED - wire Tesla", text_color=tslWired ? color.lime : color.orange, bgcolor=bg)
+    table.cell(hud, 0, 1, "Bank", text_color=color.white, bgcolor=bg)
+    table.cell(hud, 1, 1, bnkBull ? "BULL" : bnkBear ? "BEAR" : f_ago(math.max(bBnkB, bBnkS)), text_color=color.white, bgcolor=bg)
+    table.cell(hud, 0, 2, "Team45", text_color=color.white, bgcolor=bg)
+    table.cell(hud, 1, 2, t45Bull ? "BULL" : t45Bear ? "BEAR" : f_ago(math.max(bT45B, bT45S)), text_color=color.white, bgcolor=bg)
+    table.cell(hud, 0, 3, "Tesla", text_color=color.white, bgcolor=bg)
+    table.cell(hud, 1, 3, not tslWired ? "not wired" : tslBull ? "BULL" : tslBear ? "BEAR" : f_ago(math.max(bTslB, bTslS)), text_color=color.white, bgcolor=bg)
+    table.cell(hud, 0, 4, "Span b/s", text_color=color.white, bgcolor=bg)
+    table.cell(hud, 1, 4, (f_seen(bBnkB, bT45B, bTslB) ? str.tostring(spanB) : "-") + " / " + (f_seen(bBnkS, bT45S, bTslS) ? str.tostring(spanS) : "-"), text_color=color.white, bgcolor=bg)
+    table.cell(hud, 0, 5, "Phase " + htfTF, text_color=color.white, bgcolor=bg)
+    table.cell(hud, 1, 5, not htfOn ? "off" : htfUp ? "LONG only" : htfDn ? "SHORT only" : "-", text_color=htfUp ? color.lime : htfDn ? color.red : color.gray, bgcolor=bg)
+    table.cell(hud, 0, 6, "Zones d/s", text_color=color.white, bgcolor=bg)
+    table.cell(hud, 1, 6, str.tostring(array.size(demTop)) + " / " + str.tostring(array.size(supTop)), text_color=color.white, bgcolor=bg)
+
+// =====================================================================
+// SECTION 7 - ALERTS
+// =====================================================================
+// Two ways to alert, because they answer different needs.
+//
+// alert() carries a DYNAMIC message -- colour, grade, gap, score, the lot.
+// Set one TradingView alert to "Any alert() function call" and every combo
+// arrives fully described. This is the one to use if you want one alert.
+//
+// alertcondition() messages must be constant, so each colour gets its own
+// condition instead. Use these when you want a separate alert per colour --
+// a different sound for purple than for blue, or only blue on your phone.
+// The alert payload is JSON, not prose.
+//
+// It is parsed by a webhook that places real orders, and a regex over an
+// English sentence is the wrong thing to trust with that. Every field the
+// receiver filters on -- colour, tier, agents, direction -- is its own key,
+// and `secret` lets the receiver reject anything that did not come from this
+// alert, since a TradingView webhook URL carries no authentication of its own.
+//
+// {{SECRET}} is replaced by hand in the alert message box after pasting.
+whoB = lastB == 1 ? "blue" : lastB == 2 ? "orange" : "purple"
+whoS = lastS == 1 ? "blue" : lastS == 2 ? "orange" : "purple"
+
+f_json(side, who, tier, sp, divN, vote, score) =>
+    h = '{"secret":"{{SECRET}}","sym":"' + syminfo.ticker + '","tf":"' + timeframe.period + '","side":"' + side + '"'
+    m = ',"colour":"' + who + '","tier":"' + tier + '","gap":' + str.tostring(sp) + ',"div":' + str.tostring(divN)
+    n = ',"agents":' + str.tostring(vote) + ',"agents_max":' + str.tostring(snipN) + ',"score":' + str.tostring(score)
+    q = ',"price":' + str.tostring(close) + ',"low":' + str.tostring(low) + ',"high":' + str.tostring(high) + ',"bar":' + str.tostring(time) + '}'
+    h + m + n + q
+
+msgB = f_json("BUY", whoB, f_tierName(spanB), spanB, bullDivN, snipVoteB, f_score(spanB, bullDivN, snipVoteB, snipN))
+msgS = f_json("SELL", whoS, f_tierName(spanS), spanS, bearDivN, snipVoteS, f_score(spanS, bearDivN, snipVoteS, snipN))
+
+alertcondition(ctBull, "COUNTER-TREND BUY", "TBT counter-trend BUY")
+alertcondition(ctBear, "COUNTER-TREND SELL", "TBT counter-trend SELL")
+alertcondition(comboBull, "COMBO BUY - any colour", "TBT combo BUY")
+alertcondition(comboBear, "COMBO SELL - any colour", "TBT combo SELL")
+// The six colour-specific combo alerts were removed: alertcondition counts
+// against the same 64-output ceiling as plots, and TBT_BUY_LAST /
+// TBT_SELL_LAST already publish which module confirmed last as a number.
+alertcondition(comboBull and tierB == 3, "COMBO BUY - PEERLESS only", "TBT combo BUY, peerless convergence")
+alertcondition(comboBear and tierS == 3, "COMBO SELL - PEERLESS only", "TBT combo SELL, peerless convergence")
+alertcondition(snipBull, "SNIPER BUY", "TBT sniper BUY")
+alertcondition(snipBear, "SNIPER SELL", "TBT sniper SELL")
+alertcondition(bnkBull, "Bank bull", "Bank bullish")
+alertcondition(bnkBear, "Bank bear", "Bank bearish")
+alertcondition(t45Bull, "Team45 bull", "Team45 bullish")
+alertcondition(t45Bear, "Team45 bear", "Team45 bearish")
+
+if comboBull
+    alert(msgB, alert.freq_once_per_bar_close)
+if comboBear
+    alert(msgS, alert.freq_once_per_bar_close)
+
+// =====================================================================
+// SECTION 8 - FIBONACCI ENTRY
+// A different question from the rest of this script. Everything above asks
+// "is this a signal". This asks "and where do we get in".
+//
+// Measured over 812 of these on 15m: taking the impulse as it prints won 2.8%
+// of the time against a 10% target and a 2% stop. Waiting for price to fall
+// back to 0.618 of that same leg won 15.4%. The wait is the whole edge -- the
+// impulse is where the move already happened, and the retracement is the only
+// price at which the stop sits somewhere sane.
+//
+// Nothing here fires an order. It publishes the level, the direction and the
+// moment price reaches it, and the bot decides.
+// =====================================================================
+gF = "6 Fibonacci entry"
+fibOn   = input.bool(true, "Arm the Fibonacci entry", group=gF)
+fibMove = input.float(8.0, "Impulse: how far it has to travel (%)", group=gF, step=0.5, minval=0.5)
+fibBars = input.int(12, "Impulse: within how many candles", group=gF, minval=1, maxval=48)
+fibRetr = input.float(0.618, "Enter at this retracement of the leg", group=gF, step=0.001, minval=0.1, maxval=0.95)
+fibWait = input.int(8, "Candles to wait for the pullback", group=gF, minval=1)
+fibShow = input.bool(true, "Draw the entry level", group=gF)
+
+var float fibA     = na
+var float fibB     = na
+var int   fibDir   = 0
+var int   fibArmed = -10000
+var float fibLeg   = 0.0
+
+// The impulse: this candle's extreme against the furthest point of the last
+// fibBars candles. Written without a loop on purpose -- reading history at a
+// loop-variable offset is the kind of thing that compiles on one Pine build
+// and not the next, and the extreme is what we wanted anyway rather than
+// whichever candle happened to qualify first.
+fibLowN  = ta.lowest(low, fibBars + 1)
+fibHighN = ta.highest(high, fibBars + 1)
+fibUpPct = (high - fibLowN) / fibLowN * 100
+fibDnPct = (fibHighN - low) / fibHighN * 100
+fibUpA = fibUpPct >= fibMove ? fibLowN : na
+fibDnA = fibDnPct >= fibMove ? fibHighN : na
+
+// A fresh leg replaces an older one, but not one still inside its own wait --
+// re-arming on every candle of a long run would move the entry up with price,
+// which is the opposite of what this is for.
+fibStale = bar_index - fibArmed > fibWait
+if fibOn and not na(fibUpA) and (fibStale or fibDir != 1)
+    fibA := fibUpA
+    fibB := high
+    fibDir := 1
+    fibArmed := bar_index
+    fibLeg := (high - fibUpA) / fibUpA * 100
+else if fibOn and not na(fibDnA) and (fibStale or fibDir != -1)
+    fibA := fibDnA
+    fibB := low
+    fibDir := -1
+    fibArmed := bar_index
+    fibLeg := (fibDnA - low) / fibDnA * 100
+
+fibSpan  = na(fibA) or na(fibB) ? na : math.abs(fibB - fibA)
+fibEntry = fibDir == 1 ? fibB - fibSpan * fibRetr : fibDir == -1 ? fibB + fibSpan * fibRetr : na
+fibLive  = fibOn and fibDir != 0 and not na(fibEntry) and bar_index - fibArmed <= fibWait
+fibHit   = fibLive and (fibDir == 1 ? low <= fibEntry : high >= fibEntry)
+
+
+
+alertcondition(fibHit and fibDir == 1, "FIB entry - long", "TBT fibonacci long entry reached")
+alertcondition(fibHit and fibDir == -1, "FIB entry - short", "TBT fibonacci short entry reached")
+
+// =====================================================================
+// SECTION 9 - MOVING AVERAGE TREND
+// A moving average does not predict anything -- it is an average of what has
+// already happened, and anyone selling it as a forecast is selling hindsight.
+// What it does honestly is answer three questions the Fibonacci entry cannot:
+//
+//   which way is this coin leaning, right now, on this timeframe
+//   is that lean getting stronger or dying
+//   is price stretched so far from it that a snap back is due
+//
+// The slope is measured in ATR rather than percent, so a slope of 1 means the
+// average is climbing one candle's worth of movement per bar on any coin. That
+// is comparable across a quiet coin and a violent one; percent is not.
+// =====================================================================
+gM = "7 Moving average trend"
+maOn    = input.bool(true, "Enable the moving-average read", group=gM)
+maFastN = input.int(84, "Fast length", group=gM, minval=2)
+maSlowN = input.int(220, "Slow length", group=gM, minval=3)
+maSlopeN= input.int(5, "Measure the slope over this many candles", group=gM, minval=1)
+maStretch = input.float(2.0, "Call price stretched past this many ATR from the fast line", group=gM, step=0.1)
+maShow  = input.bool(true, "Draw the two lines", group=gM)
+
+maFast = ta.ema(close, maFastN)
+maSlow = ta.ema(close, maSlowN)
+maAtr  = ta.atr(14)
+
+// Slope per bar, in ATR. Positive means the fast line is rising.
+maSlope = maAtr > 0 ? (maFast - maFast[maSlopeN]) / maSlopeN / maAtr : 0.0
+
+// A trend that is stacked is one where price, the fast line and the slow line
+// all agree in order. That is a cleaner statement than a single crossover,
+// which flickers every time price brushes the average.
+maUp   = close > maFast and maFast > maSlow
+maDn   = close < maFast and maFast < maSlow
+maDir  = maUp ? 1 : maDn ? -1 : 0
+
+// Is the lean strengthening or fading? Comparing the slope to its own recent
+// average says which, without another input to guess at.
+maAccel = maSlope - ta.sma(maSlope, 10)
+
+// How far price has run from the fast line, in ATR. A long entry taken while
+// this is deeply positive is an entry at the top of a stretch.
+maStretchN = maAtr > 0 ? (close - maFast) / maAtr : 0.0
+maOver = math.abs(maStretchN) >= maStretch
+
+// The moving averages are read by the council, not by the bot, so they no
+// longer publish series of their own. Every output a script declares --
+// plots, shapes and alertconditions alike -- is charged against the same
+// ceiling of 64, and this engine was already close to it before any of this
+// was added.
+
+alertcondition(maOn and maDir == 1 and maDir[1] != 1, "MA trend turned up", "TBT moving averages stacked up")
+alertcondition(maOn and maDir == -1 and maDir[1] != -1, "MA trend turned down", "TBT moving averages stacked down")
+
+// =====================================================================
+// SECTION 10 - THE COUNCIL
+// Every module above answers one question well and the others badly. Bank
+// knows where price is standing. Team 45 knows whether the move is running out
+// of breath. Tesla is the third opinion that neither of them can give itself.
+// The Sniper composite knows whether the market is worth trading at all. The
+// higher timeframe knows which way the tide runs. The moving averages know
+// whether the lean is alive and whether price has stretched too far from it.
+// Fibonacci knows nothing about direction and everything about WHERE.
+//
+// So none of them votes on the whole trade. Each votes on its own question,
+// the votes are added, and a plan is published only when the answer is the
+// same from enough of them AND Fibonacci has a price to put it at. The plan
+// is what the bot reads: a direction, an entry, and a moment.
+//
+// Nothing here decides size or risk. It says what to trade and where.
+// =====================================================================
+gV = "8 The council"
+cnOn      = input.bool(true, "Convene the council", group=gV)
+cnNeed    = input.int(4, "Members that must agree", group=gV, minval=2, maxval=6)
+// A ceiling as well as a floor, which is the opposite of what a voting rule
+// usually wants. Measured over 224 published plans on 34 coins and 10,167 bars
+// of 15m history: four members agreeing won 20.7% and five won 22.2%, but all
+// six agreeing won 5.9% -- worse than a coin toss against a 17.4% break-even,
+// and 78 of the 224 plans. Unanimity is not confirmation here, it is lateness:
+// by the time the slowest member has turned, the move it was measuring is
+// already spent, and the entry sits at the end of it rather than the start.
+// Capping at five is worth +0.40% a trade against -0.07% with no cap.
+cnMax     = input.int(5, "...and no more than", group=gV, minval=2, maxval=6)
+cnVeto    = input.bool(true, "A member pointing the other way vetoes", group=gV)
+cnNeedFib = input.bool(true, "Require a Fibonacci entry before any plan", group=gV)
+cnNeedMA  = input.bool(true, "Refuse when price is stretched from the fast line", group=gV)
+cnShow    = input.bool(true, "Show what each member said", group=gV)
+cnShowLine= input.bool(true, "Draw the entry level", group=gV)
+
+// ---- each member states its case, as -1, 0 or +1 -------------------------
+// Bank, Team 45 and Tesla fire as one-bar pulses; the Sniper, the higher
+// timeframe and the averages hold a position continuously. Reading the pulses
+// raw made three of the six silent on 85-95% of candles, so a council needing
+// four voices found them twice in 711 bars.
+//
+// The engine already keeps the bar each module last spoke on -- that is what
+// the convergence measures. Reading the same memory lets a module's word stand
+// for a while, which is the only way six members can be compared at all.
+cnMem = input.int(35, "How long a module's word stands (candles)", group=gV, minval=1)
+
+f_recall(bullBar, bearBar) =>
+    freshB = bar_index - bullBar <= cnMem
+    freshS = bar_index - bearBar <= cnMem
+    freshB and (not freshS or bullBar > bearBar) ? 1 : freshS and (not freshB or bearBar > bullBar) ? -1 : 0
+
+cnBank = f_recall(bBnkB, bBnkS)
+cnT45  = f_recall(bT45B, bT45S)
+cnTsl  = f_recall(bTslB, bTslS)
+// The Sniper composite: how many of its five agents lean each way
+cnSnip = snipVoteB > snipVoteS ? 1 : snipVoteS > snipVoteB ? -1 : 0
+// The tide
+cnHtf  = htfUp ? 1 : htfDn ? -1 : 0
+// The lean, and whether it is still growing
+// A lean that is fading is not a vote. Written the other way round the fall
+// through landed back on maDir, so the acceleration test decided nothing at
+// all and the averages voted on direction alone.
+cnMa   = maDir == 1 ? (maAccel >= 0 ? 1 : 0) : maDir == -1 ? (maAccel <= 0 ? -1 : 0) : 0
+
+cnUp   = (cnBank == 1 ? 1 : 0) + (cnT45 == 1 ? 1 : 0) + (cnTsl == 1 ? 1 : 0) + (cnSnip == 1 ? 1 : 0) + (cnHtf == 1 ? 1 : 0) + (cnMa == 1 ? 1 : 0)
+cnDn   = (cnBank == -1 ? 1 : 0) + (cnT45 == -1 ? 1 : 0) + (cnTsl == -1 ? 1 : 0) + (cnSnip == -1 ? 1 : 0) + (cnHtf == -1 ? 1 : 0) + (cnMa == -1 ? 1 : 0)
+
+// A veto is not the same as a member having no opinion. Silence is allowed;
+// pointing the other way is not.
+cnAgreeLong  = cnUp >= cnNeed and cnUp <= cnMax and (not cnVeto or cnDn == 0)
+cnAgreeShort = cnDn >= cnNeed and cnDn <= cnMax and (not cnVeto or cnUp == 0)
+cnDir = cnAgreeLong ? 1 : cnAgreeShort ? -1 : 0
+
+// ---- Fibonacci says where, and the averages hold a veto on how stretched --
+cnFibOk = not cnNeedFib or (fibLive and fibDir == cnDir)
+cnMaOk  = not cnNeedMA or not (maOver and ((cnDir == 1 and maStretchN > 0) or (cnDir == -1 and maStretchN < 0)))
+
+cnPlan  = cnOn and cnDir != 0 and cnFibOk and cnMaOk
+cnEntry = cnPlan and cnNeedFib ? fibEntry : cnPlan ? close : na
+// The moment: the council agrees, and price is standing at the entry.
+cnReady = cnPlan and (not cnNeedFib or fibHit)
+
+// ---- what the bot reads ---------------------------------------------------
+// Six members, six votes, one plot. TradingView charges a script for every
+// series it publishes and the ceiling is 64, so the votes travel packed rather
+// than one line each. Each vote is -1, 0 or +1, shifted to 0..2 and written as
+// a base-3 digit, lowest digit first:
+//
+//   Bank, Team45, Tesla, Sniper, HTF, MA
+//
+// To read it back:  digit i = (packed // 3**i) % 3 - 1
+// The dropped PLAN_LEG was the same number as FIB_LEG, and the entry already
+// has a line of its own below.
+cnPack = (cnBank + 1) + (cnT45 + 1) * 3 + (cnTsl + 1) * 9 + (cnSnip + 1) * 27 + (cnHtf + 1) * 81 + (cnMa + 1) * 243
+
+// Everything that is a small whole number travels in one series. A script is
+// charged for each one it publishes and the ceiling is 64, so the flags share
+// a ride while the prices -- which cannot be packed -- keep their own.
+//
+//   STATE = planDir+1            0..2      what the council decided
+//         + (planReady) * 3      0..3      price is standing at the entry
+//         + votes      * 6       0..6      how many agreed
+//         + (fibDir+1) * 42      0..2      which way Fibonacci points
+//         + (fibHit)   * 126     0..1      price reached the level this bar
+//         + (maDir+1)  * 252     0..2      the moving-average lean
+//         + (maOver)   * 756     0..1      price is stretched from it
+//
+// To read one out:  (STATE // stride) % base
+cnState = (cnPlan ? cnDir + 1 : 1) + (cnReady ? 1 : 0) * 3 + (cnPlan ? (cnDir == 1 ? cnUp : cnDn) : 0) * 6 + (fibLive ? fibDir + 1 : 1) * 42 + (fibHit ? 1 : 0) * 126 + (maDir + 1) * 252 + (maOver ? 1 : 0) * 756
+
+plot(cnPlan ? cnEntry : na, "PLAN_ENTRY", cnShowLine ? color.new(color.yellow, 0) : inv, 2, plot.style_linebr)
+plot(cnState, "STATE", inv)
+plot(cnPack, "VOTES_PACKED", inv)
+
+plotshape(cnReady and cnDir == 1, "PLAN LONG", shape.diamond, location.belowbar, color.new(color.lime, 0), text="PLAN", textcolor=color.white, size=size.small)
+plotshape(cnReady and cnDir == -1, "PLAN SHORT", shape.diamond, location.abovebar, color.new(color.red, 0), text="PLAN", textcolor=color.white, size=size.small)
+
+alertcondition(cnReady and cnDir == 1, "COUNCIL - long plan ready", "TBT council agrees long, price at the entry")
+alertcondition(cnReady and cnDir == -1, "COUNCIL - short plan ready", "TBT council agrees short, price at the entry")
+
+// ---- the discussion, so it can be read rather than trusted ---------------
+var table cnT = table.new(position.bottom_right, 2, 9, border_width=1)
+f_say(v) => v == 1 ? "long" : v == -1 ? "short" : "-"
+// Written out per member rather than looped: a Pine array holds one type, and
+// a list of name-and-vote pairs is two. Declared here because a function
+// cannot be defined inside an if block either.
+f_row(r, nm, vv) =>
+    table.cell(cnT, 0, r, nm, bgcolor=color.new(color.black, 40), text_color=color.silver, text_size=size.tiny)
+    table.cell(cnT, 1, r, f_say(vv), bgcolor=color.new(vv == 1 ? color.green : vv == -1 ? color.red : color.gray, 55), text_color=color.white, text_size=size.tiny)
+if cnShow and barstate.islast
+    table.cell(cnT, 0, 0, "council", bgcolor=color.new(color.black, 20), text_color=color.white, text_size=size.small)
+    table.cell(cnT, 1, 0, cnDir == 1 ? "LONG " + str.tostring(cnUp) + "/6" : cnDir == -1 ? "SHORT " + str.tostring(cnDn) + "/6" : "no plan", bgcolor=color.new(cnDir == 1 ? color.green : cnDir == -1 ? color.red : color.gray, 25), text_color=color.white, text_size=size.small)
+    f_row(1, "Bank", cnBank)
+    f_row(2, "Team45", cnT45)
+    f_row(3, "Tesla", cnTsl)
+    f_row(4, "Sniper", cnSnip)
+    f_row(5, "HTF", cnHtf)
+    f_row(6, "MA", cnMa)
+    table.cell(cnT, 0, 7, "entry", bgcolor=color.new(color.black, 40), text_color=color.silver, text_size=size.tiny)
+    table.cell(cnT, 1, 7, cnPlan ? str.tostring(cnEntry, format.mintick) : "-", bgcolor=color.new(color.black, 40), text_color=color.yellow, text_size=size.tiny)
+    table.cell(cnT, 0, 8, "at it?", bgcolor=color.new(color.black, 40), text_color=color.silver, text_size=size.tiny)
+    table.cell(cnT, 1, 8, cnReady ? "YES" : "waiting", bgcolor=color.new(cnReady ? color.lime : color.gray, 35), text_color=color.white, text_size=size.tiny)

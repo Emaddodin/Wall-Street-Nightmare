@@ -1,0 +1,8 @@
+[Unit]
+Description=TBT scalper watchdog (isolated research project)
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/tbt/scalper
+ExecStart=/home/tbt/scalper/venv/bin/python -u /home/tbt/scalper/watchdog.py

@@ -1,0 +1,10 @@
+[Unit]
+Description=TBT nightly record backup timer
+
+[Timer]
+OnCalendar=*-*-* 02:17:00
+Persistent=true
+Unit=tbt-backup.service
+
+[Install]
+WantedBy=timers.target

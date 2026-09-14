@@ -1,0 +1,4 @@
+# aggressive with the session filter off -- comparison baseline only
+strategy:
+  session:
+    asia_sweep_filter: false

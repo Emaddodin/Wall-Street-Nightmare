@@ -1,0 +1,10 @@
+[Unit]
+Description=ICT Sniper health check -- shout if anything is wrong
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/ict_sniper
+EnvironmentFile=/root/ict_sniper/.env
+Environment=ICT_PAPER_ONLY=1
+ExecStart=/root/ict_sniper/venv/bin/python -u /root/ict_sniper/hl_healthcheck.py --notify

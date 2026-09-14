@@ -1,0 +1,11 @@
+[Unit]
+# What the book did, pushed to the phone. Runs on the server rather than
+# anywhere else on purpose: the data and the ntfy keys are here, and this must
+# not depend on a laptop being awake.
+Description=TBT daily report -- what the book did, and what stopped the rest
+
+[Service]
+Type=oneshot
+User=tbt
+WorkingDirectory=/home/tbt/bot
+ExecStart=/home/tbt/venv/bin/python -u /home/tbt/bot/tools/dayreport.py 24

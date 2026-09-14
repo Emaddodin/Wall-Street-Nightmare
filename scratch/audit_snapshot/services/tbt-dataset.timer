@@ -1,0 +1,10 @@
+[Unit]
+Description=Rebuild the flow dataset daily, after the trading day turns
+
+[Timer]
+OnCalendar=*-*-* 18:30:00
+RandomizedDelaySec=600
+Persistent=false
+
+[Install]
+WantedBy=timers.target

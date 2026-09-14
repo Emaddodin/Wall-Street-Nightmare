@@ -1,0 +1,10 @@
+[Unit]
+Description=TBT half-hour heartbeat timer for the 12-hour test
+
+[Timer]
+OnCalendar=*:00/30
+Persistent=true
+Unit=tbt-testwatch.service
+
+[Install]
+WantedBy=timers.target

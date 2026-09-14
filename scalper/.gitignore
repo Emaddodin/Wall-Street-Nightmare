@@ -1,0 +1,12 @@
+data/candles/
+data/logs/
+data/reports/
+data/research/
+data/state/
+data/tesla/
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env

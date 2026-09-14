@@ -1,0 +1,13 @@
+[Unit]
+Description=Sample every open trade once a minute
+
+[Timer]
+# A minute is the resolution a fifteen-minute candle deserves: fine enough to
+# see where inside a candle a trade turned, coarse enough that a day of
+# trading is a few hundred lines rather than a log nobody opens.
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
