@@ -224,10 +224,12 @@ class Config:
     session_strict: bool = True      # entries ONLY in prime windows; normal
                                       # hours need a monster structure to
                                       # justify the risk (see below)
-    flat_enabled: bool = True        # day-trader discipline: EVERYTHING is
-                                      # closed at market once this UTC time is
-                                      # reached -- nothing rides into the
-                                      # dead Asian night
+    flat_enabled: bool = False       # TEST (overnight trail): leave open
+                                      # positions to ride their own stop/trail
+                                      # into the night instead of force-closing
+                                      # at market. The dead session still blocks
+                                      # NEW entries (session_ok -> "dead").
+                                      # Flip back to True to restore flat-by.
     flat_by_hm: tuple = (20, 15)     # (hour, minute) UTC = 23:45 Tehran
                                       # (15 min after the NY close)
     macro_normal_min_leg: float = 4.0  # outside prime: impulse leg must be
