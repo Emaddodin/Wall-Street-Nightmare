@@ -628,14 +628,17 @@ function draw(s){
     const slTxt=px6(p.sl);
     const slUsd=usd(p.sl_usd);
     const tiers=(p.tiers||[]).map(t=>{
-      const nm=t.done?`<span class="tname done">${t.name} &#10003;</span>`
-                      :`<span class="tname">${t.name} ${t.share}%</span>`;
-      const px=t.px!=null?px6(t.px):(t.live?'<span class=up>live</span>':'&mdash;');
-      const us=(t.usd!=null?`<span class="tusd ${t.usd>=0?'up':'dn'}">${t.usd>=0?'+':''}${t.usd.toFixed(2)}$</span>`:'');
-      const tot=(!t.done&&t.total_at!=null
-        ?`<span class="tot ${t.total_at>=0?'up':'dn'}">کل ${t.total_at>=0?'+':''}${t.total_at.toFixed(2)}$</span>`
-        :'');
-      return `<div class=tier>${nm}<span class=tpx>${px}</span>${us}${tot}</div>`;
+      const nm=(!t.done&&t.name==='TRAIL')?'رانر':t.name;
+      const nmHtml=t.done?`<span class="tname done">${nm} &#10003;</span>`
+                          :`<span class="tname">${nm}</span>`;
+      const px=t.px!=null?px6(t.px):(t.live?'<span class=up>زنده</span>':'&mdash;');
+      // برای هدف‌های باز، عدد اصلی = کل سودِ معامله اگه قیمت به اون هدف
+      // برسه (نه فقط تیکه‌ی اون تیر). تیکه‌ی قفل‌شونده رو کوچیک کنارش میاریم.
+      const showTot=!t.done&&!t.live&&t.total_at!=null;
+      const big=showTot?t.total_at:t.usd;
+      const us=(big!=null?`<span class="tusd ${big>=0?'up':'dn'}">${big>=0?'+':''}${big.toFixed(2)}$</span>`:'');
+      const sub=(showTot&&t.usd!=null?`<span class="tot">قفل ${t.usd>=0?'+':''}${t.usd.toFixed(2)}$</span>`:'');
+      return `<div class=tier>${nmHtml}<span class=tpx>${px}</span>${us}${sub}</div>`;
     }).join('');
     const tags=[];
     if(p.be)tags.push('<span class="tag on">BE</span>');
