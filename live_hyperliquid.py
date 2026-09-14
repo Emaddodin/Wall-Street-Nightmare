@@ -1761,6 +1761,14 @@ class PaperBook:
         # 1. resting entry limits
         order = self.orders.get(coin)
         if order is not None:
+            if self.risk is not None and \
+                    self.risk.session_state(t_open) == "dead":
+                # the session closed (dead Asian night) -- never let a
+                # resting limit fill into unmanaged overnight risk
+                del self.orders[coin]
+                LOG.info("[ORDER] %s entry limit cancelled (dead session)",
+                         coin)
+                return
             expired = t_open - order.signal_t \
                 >= self.cfg.retest_bars * self.cfg.tf_min * MIN_MS
             if expired:
