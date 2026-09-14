@@ -1,0 +1,37 @@
+# Build output
+build/
+*.class
+
+# Allow the pre-built JAR in dist/
+!dist/CandlestickPatterns.jar
+
+# Backup files
+*.backup
+*~
+
+# Archive files
+*.zip
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# Python virtual environment
+.venv/
+venv/
+*.pyc
+__pycache__/
+
+# MotiveWave SDK documentation and examples (not part of this project)
+docs/
+example/

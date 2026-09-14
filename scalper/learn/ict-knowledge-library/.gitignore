@@ -1,0 +1,41 @@
+# OMC working files
+.omc/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Per-machine vault state
+.obsidian/
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Misc
+*.log
+*.tmp
+.env
+.env.local
+
+# Ingest packets (tools/ingest_video.py): keep transcripts + metadata, drop binaries.
+# Frames and downloaded media are regenerable from the video id in meta.json.
+raw/*/work/frames/
+raw/*/work/download/
+raw/**/*.jpg
+raw/**/*.mp4
+raw/**/*.mp3
+raw/**/*.vtt
+raw/**/*.info.json
