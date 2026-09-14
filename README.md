@@ -157,3 +157,23 @@ broken this system three times by shadowing a real module — `nt.py` took out
 `pathlib`, and `inspect.py` and `platform.py` did the same before it. None of
 these five collide with a standard module name, so nothing was broken, but they
 are off the path now.
+
+---
+
+## Research data (6.2 GB, not in git)
+
+The full research datasets (`quant/data/` ~5.2 GB, `data/` ~95 MB,
+`scalper/data/` ~1 GB) exceed GitHub's limits, so they ship as a compressed
+archive hosted on the project's own VPS:
+
+```
+scp tbt:/root/ict_sniper/data_archive/tbt_data.tar.zst .
+shasum -a 256 -c tbt_data.sha256        # verify integrity
+tar --use-compress-program=unzstd -xf tbt_data.tar.zst
+```
+
+- Archive format: single `tar.zst` (zstd level 3), one file, no split
+- Checksum: `tbt_data.sha256` next to the archive
+- Regenerate the archive on the box: `tar -cf - quant/data data scalper/data | zstd -3 -T0 -o tbt_data.tar.zst`
+- Alternative for GitHub: attach the archive (split into <2 GB parts) to a
+  Release of this repository -- ask for a fine-grained token if you want that.
