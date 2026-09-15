@@ -1,1232 +1,734 @@
-"""Stratton Oakmont -- the scalper's phone app.
-
-Same structure the operator knows: black/gold phone UI, Face ID
-(WebAuthn) + password, served on 443 with the same Let's Encrypt cert and
-the same RP/origin -- but it tracks the SCALPER paper book instead of the
-Stratton Oakmont engine.  The WebAuthn credential file is migrated from the old panel's
-store so the phone's Face ID keeps working without re-registration.
 """
+scalper/app/app.py
+==================
+Institutional HFT Quant Terminal.
+Dedicated web application for the 5-Pillar High-Frequency Quant Execution Engine.
+Serves real-time Avellaneda-Stoikov dynamics, Hawkes clustering, OFI depth,
+CatBoost direction probabilities, dynamic Kelly leverage, and ATR Chandelier ratchets.
+"""
+
 from __future__ import annotations
 
-import base64
 import json
-import math
 import os
 import secrets
 import ssl
-import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA = Path(os.getenv("SCALPER_DATA", str(ROOT / "data")))
-STATE = DATA / "state" / "paper.json"
-LIVE = DATA / "state" / "live.json"
-TRADES = DATA / "logs" / "trades.jsonl"
-REJECTS = DATA / "logs" / "rejections.jsonl"
-RESEARCH = DATA / "research" / "research.jsonl"
-PAUSED = DATA / "state" / "paused"
-CREDS = Path(os.getenv("SCALPER_CREDS", str(DATA / "state" / "webauthn_creds.json")))
-LEGACY_CREDS = Path("/root/.so_panel_creds.json")
+ROOT = Path(__file__).resolve().parents[2]
+DATA = Path(os.getenv("SCALPER_DATA", "/root/ict_sniper/data" if Path("/root/ict_sniper").exists() else str(ROOT / "data")))
+HFT_STATE = DATA / "state" / "hft.json"
 
-TOKEN = os.getenv("SCALPER_APP_TOKEN", "")
-RP_ID = os.getenv("SCALPER_RPID", "62.60.198.135.nip.io")
-ORIGIN = f"https://{RP_ID}"
+TOKEN = os.getenv("SCALPER_APP_TOKEN", "7SQMRVRJ-VkD4lG3VXsb1Fc82oYUAP93")
+CERT = os.getenv("SCALPER_APP_CERT", "/root/ict_sniper/tls/fullchain.pem")
+KEY = os.getenv("SCALPER_APP_KEY", "/root/ict_sniper/tls/privkey.pem")
+HOST = os.getenv("SCALPER_APP_HOST", "0.0.0.0")
+PORT = int(os.getenv("SCALPER_APP_PORT", "8443"))
+
 SESSIONS: dict[str, float] = {}
-SESSIONS_FILE = DATA / "state" / "sessions.json"
-CHALLENGES: dict[str, tuple[float, str]] = {}
-LOGIN_FAILS: dict[str, list[float]] = {}   # ip -> recent wrong-password times
-SESSION_HOURS = 24.0 * 14   # stay signed in for two weeks, across restarts
-GOAL_START = float(os.getenv("SCALPER_GOAL_START", "100"))
-GOAL_TARGET = float(os.getenv("SCALPER_GOAL_TARGET", "100000"))
-GOAL_DAYS = float(os.getenv("SCALPER_GOAL_DAYS", "10"))
-
-if LEGACY_CREDS.exists() and not CREDS.exists():
-    try:
-        CREDS.parent.mkdir(parents=True, exist_ok=True)
-        CREDS.write_text(LEGACY_CREDS.read_text())
-        os.chmod(CREDS, 0o600)
-    except Exception:
-        pass
+SESSION_TTL = 86400 * 30  # 30 days
 
 
-def _load_creds() -> list[dict]:
-    if CREDS.exists():
+def _read_hft_state() -> dict:
+    if HFT_STATE.exists():
         try:
-            return json.loads(CREDS.read_text())
+            with open(HFT_STATE, "r") as f:
+                return json.load(f)
         except Exception:
             pass
-    return []
-
-
-def _save_creds(c) -> None:
-    CREDS.write_text(json.dumps(c))
-    os.chmod(CREDS, 0o600)
-
-
-def _load_sessions() -> None:
-    """Sessions survive app restarts: a deploy no longer kicks the phone
-    back to the login door."""
-    if SESSIONS_FILE.exists():
-        try:
-            now = time.time()
-            for t, exp in json.loads(SESSIONS_FILE.read_text()).items():
-                if exp > now:
-                    SESSIONS[t] = exp
-        except Exception:
-            pass
-
-
-def _save_sessions() -> None:
-    try:
-        tmp = SESSIONS_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(SESSIONS))
-        tmp.replace(SESSIONS_FILE)
-    except Exception:
-        pass
-
-
-_load_sessions()
-
-
-def b64u(b: bytes) -> str:
-    return base64.urlsafe_b64encode(b).decode().rstrip("=")
-
-
-def unb64u(s: str) -> bytes:
-    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
-
-
-def _json_rows(path: Path, n: int) -> list[dict]:
-    if not path.exists():
-        return []
-    rows = []
-    with open(path) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rows.append(json.loads(line))
-            except Exception:
-                pass
-    return rows[-n:]
-
-
-def _state_payload() -> dict:
-    try:
-        st = json.loads(STATE.read_text())
-    except Exception:
-        st = {}
-    equity = float(st.get("equity", GOAL_START)) or GOAL_START
-    day_start_eq = float(st.get("day_start_equity", GOAL_START)) or GOAL_START
-    try:
-        from config.loader import load_config as _lc
-        _cfg = _lc(extra_file="config/aggressive.yaml")
-        target_pct = float(_cfg.daily.get("target_pct", 1.0)) * 100.0
-    except Exception:
-        target_pct = 100.0
-    now = int(time.time() * 1000)
-    ts = int(st.get("ts") or now)
-    day_ms = 86_400_000
-    start_ms = ts - (ts % day_ms)
-    goal_mult = (GOAL_TARGET / GOAL_START) ** (1.0 / GOAL_DAYS)
-    day_index = min(int(max(0, (now - start_ms) // day_ms)), int(GOAL_DAYS) - 1)
-    curve = [GOAL_START * (goal_mult ** d) for d in range(int(GOAL_DAYS))]
-    open_pos = []
-    # live prices (written every poll by the paper trader) -> floating pnl
-    try:
-        live = json.loads(LIVE.read_text()) if LIVE.exists() else {}
-    except Exception:
-        live = {}
-    for p in st.get("positions", []):
-        lots = p.get("lots") or []
-        if not lots:
-            continue
-        entry = float(lots[0].get("entry") or 0)
-        sl = float(lots[0].get("sl") or 0)
-        tp = lots[0].get("tp")
-        dirn = p.get("direction", 1)
-        model = p.get("meta", {}).get("entry_model", "")
-        strat = p.get("meta", {}).get("strategy", "")
-        # sum ALL open lots -- margin/pnl must reflect the whole position,
-        # not just the first lot
-        qty = sum(float(lot.get("qty") or 0)
-                  for lot in lots if lot.get("exit_px") is None)
-        lv = live.get(p["symbol"], {})
-        px = float(lv.get("px")) if lv.get("px") is not None else None
-        fp = (qty * (px - entry) * dirn) if px else None
-        lev = float(p.get("meta", {}).get("leverage") or 1) or 1
-        notional = qty * entry if entry else 0.0
-        margin = notional / lev if lev else 0.0
-        margin_pct = (notional / lev / equity * 100.0) if equity else 0.0
-        # the card's headline % is the trade's own ROI on margin
-        # (price move x leverage), the standard exchange number; the
-        # account-weighted move is shown alongside as "acct"
-        roi = (fp / margin * 100.0) if fp is not None and margin else None
-        acct_pct = (fp / equity * 100.0) \
-            if fp is not None and equity else None
-        at = 0.5
-        if entry and (tp or sl):
-            lo, hi = (sl, tp) if dirn == 1 else (tp, sl)
-            lo = lo or sl
-            hi = hi or sl
-            if hi != lo:
-                ref = px if px else entry
-                at = max(0.0, min(1.0, (ref - lo) / (hi - lo)))
-        # per-open-lot detail: kind (tp1/tp2/first/runner), its own stop
-        # (trailing moves it) and target -- the card shows exactly what the
-        # bot is working each leg toward
-        lots_open = []
-        first_open = None
-        for lot in lots:
-            if lot.get("exit_px") is not None:
-                continue
-            d = {"kind": lot.get("kind") or "",
-                 "qty": float(lot.get("qty") or 0),
-                 "sl": float(lot.get("sl") or 0),
-                 "tp": lot.get("tp"),
-                 "tp1": lot.get("tp1"),
-                 "be": lot.get("be")}
-            lots_open.append(d)
-            if first_open is None:
-                first_open = d
-        # ---- the trade card: every level with its PRICE and its DOLLARS --
-        meta = p.get("meta", {})
-        f1 = float(meta.get("tp1_frac") or 0.4)
-        f2 = float(meta.get("tp2_frac") or 0.3)
-        f3 = max(0.0, 1.0 - f1 - f2)
-        closed_legs = [lg for lg in lots if lg.get("exit_px") is not None]
-        total_qty = sum(float(lg.get("qty") or 0) for lg in lots)
-        sl_usd = (qty * (sl - entry) * dirn) if qty and entry else 0.0
-        realized = float(p.get("realized_pnl") or 0.0)
-        held_min = (int((now - int(p.get("opened_ms") or now)) / 60000))
-        tiers = []
-
-        def tier_done(reason):
-            for lg in closed_legs:
-                if lg.get("exit_reason") == reason:
-                    return lg
-            return None
-
-        def open_lot_qty(kinds):
-            """qty of the open lot carrying this tier; 0 when the tier has
-            no dedicated lot in this state (fall back to total*share)."""
-            for lo in lots_open:
-                if lo.get("kind") in kinds:
-                    return float(lo.get("qty") or 0)
-            return 0.0
-
-        for name, share, reason in (("TP1", f1, "tp1"),
-                                    ("TP2", f2, "tp2")):
-            leg = tier_done(reason)
-            if leg is not None:
-                tiers.append({"name": name, "share": round(share * 100),
-                              "px": leg.get("exit_px"),
-                              "usd": round(float(leg.get("pnl") or 0), 2),
-                              "done": True})
-            else:
-                lvl = None
-                if name == "TP1":
-                    lvl = (first_open or {}).get("tp1")
-                else:
-                    lvl = (first_open or {}).get("tp")
-                if lvl:
-                    # the tier's own slice: the dedicated open lot when one
-                    # exists (scaled state), otherwise total_qty * share
-                    tq = (open_lot_qty(("tp2",)) if name == "TP2" else 0.0) \
-                        or (total_qty * share)
-                    usd = tq * (lvl - entry) * dirn
-                    # whole position (closed legs + open lots) at this level
-                    total_at = realized + qty * (lvl - entry) * dirn
-                    tiers.append({"name": name, "share": round(share * 100),
-                                  "px": lvl, "usd": round(usd, 2),
-                                  "total_at": round(total_at, 2),
-                                  "done": False})
-        tleg = tier_done("trail")
-        if tleg is not None:
-            tiers.append({"name": "TRAIL", "share": round(f3 * 100),
-                          "px": tleg.get("exit_px"),
-                          "usd": round(float(tleg.get("pnl") or 0), 2),
-                          "done": True})
-        else:
-            # the runner's own live value -- its real qty, not 30% of the
-            # post-TP1 remainder (the runner is ~50% of the remainder)
-            rq = open_lot_qty(("runner", "trail")) or (total_qty * f3)
-            live_usd = (rq * (px - entry) * dirn) if px else None
-            tiers.append({"name": "TRAIL", "share": round(f3 * 100),
-                          "px": None,
-                          "usd": round(live_usd, 2) if live_usd is not None
-                          else None, "done": False, "live": True})
-        open_pos.append({"sym": p["symbol"],
-                         "side": "BUY" if dirn == 1 else "SELL",
-                         "entry": entry, "sl": sl, "tp": tp,
-                         "sl_usd": round(sl_usd, 2),
-                         "realized": round(realized, 2),
-                         "lev": lev, "held_min": held_min,
-                         "tiers": tiers,
-                         "model": model, "strategy": strat,
-                         "brain_prob": p.get("meta", {}).get("brain_prob"),
-                         "be": bool(p.get("be_active")),
-                         "trail": bool(p.get("trail_armed")),
-                         "bos_pending": bool(p.get("struct_exit_pending")),
-                         "lots": lots_open,
-                         "at": round(at, 3), "qty": qty,
-                         "px": px,
-                         "pnl": round(fp, 2) if fp is not None else None,
-                         "pct": round(roi, 2) if roi is not None else None,
-                         "acct_pct": round(acct_pct, 2)
-                         if acct_pct is not None else None,
-                         "margin": round(margin_pct, 2),
-                         "margin_usd": round(notional / lev, 2),
-                         "live_ts": lv.get("ts")})
-    float_pnl = sum(float(p["pnl"]) for p in open_pos
-                    if p.get("pnl") is not None)
-    equity_live = equity + float_pnl
-    day_pnl_pct = (equity_live - day_start_eq) / day_start_eq * 100.0
-    trades = _json_rows(TRADES, 500)
-    # stale-replay artifacts are kept in the log for the record but must
-    # never count toward the book's statistics
-    trades = [t for t in trades if not t.get("phantom")]
-    # a NaN pnl in the payload would make the browser's JSON.parse throw and
-    # silently break every dashboard refresh -- sanitize before aggregation
-    for t in trades:
-        try:
-            p = float(t.get("pnl"))
-            if not math.isfinite(p):
-                t["pnl"] = 0.0
-        except (TypeError, ValueError):
-            t["pnl"] = 0.0
-    closed = [t for t in trades if t.get("pnl") is not None]
-    won = sum(1 for t in closed if t["pnl"] > 0)
-    gross_win = sum(t["pnl"] for t in closed if t["pnl"] > 0)
-    gross_loss = sum(t["pnl"] for t in closed if t["pnl"] <= 0)
-    best = max((t["pnl"] for t in closed), default=0.0)
-    worst = min((t["pnl"] for t in closed), default=0.0)
-    streak = 0
-    for t in reversed(closed):
-        if t["pnl"] <= 0:
-            streak += 1
-        else:
-            break
-    by = {}
-    for t in closed:
-        k = t.get("strategy") or "?"
-        b = by.setdefault(k, {"n": 0, "w": 0, "pnl": 0.0})
-        b["n"] += 1
-        b["w"] += 1 if t["pnl"] > 0 else 0
-        b["pnl"] += t["pnl"]
-    by_rows = [{"sym": k, "w": v["w"], "n": v["n"], "pnl": v["pnl"]}
-               for k, v in sorted(by.items(), key=lambda kv: -kv[1]["pnl"])]
-    recent = []
-    for t in reversed(closed[-12:]):
-        held = None
-        try:
-            held = int((t.get("ts_ms", 0) - t.get("opened_ms", 0)) // 60_000)
-        except Exception:
-            held = None
-        recent.append({"sym": t.get("symbol"),
-                       "side": "SELL" if t.get("direction") == -1 else "BUY",
-                       "lot": t.get("lot", ""),
-                       "strat": t.get("strategy", ""),
-                       "reason": t.get("exit_reason", ""),
-                       "entry": t.get("entry"), "exit": t.get("exit"),
-                       "pnl": t.get("pnl", 0.0), "held": held})
-    # the lab: the AI inventor's latest report (read-only display)
-    lab_rows = []
-    lab_state = {}
-    try:
-        inv = json.loads((DATA / "state" / "inventions.json").read_text())
-    except Exception:
-        inv = {}
-    for r in (inv.get("inventions") or [])[:5]:
-        lab_rows.append({"name": r.get("name"),
-                         "wr": r.get("wr"), "pf": r.get("pf"),
-                         "avg_r": r.get("avg_r"), "n": r.get("n"),
-                         "dd": r.get("max_dd_pct"), "score": r.get("score"),
-                         "changes": (r.get("changes") or [])[:3],
-                         "coins": (r.get("coins") or {}).get("recommendation", "")})
-    champ = inv.get("champion") or {}
-    lab_state = {"champ_wr": champ.get("wr"), "champ_n": champ.get("n"),
-                 "champ_pf": champ.get("pf"),
-                 "adopt_gate": bool(inv.get("adopt_gate")),
-                 "adopt": bool(inv.get("adopt")),
-                 "as_of_ms": inv.get("as_of_ms")}
-    # the brain: the learned win-probability filter's training report
-    brain_st = {}
-    try:
-        bm = json.loads((DATA / "state" / "brain_meta.json").read_text())
-        brain_st = {"ready": (DATA / "state" / "brain.pkl").exists(),
-                    "n_train": bm.get("n_train"), "auc": bm.get("auc"),
-                    "base_wr": bm.get("base_wr"), "lifts": bm.get("lifts")}
-    except Exception:
-        pass
-    paused = PAUSED.exists()
     return {
-        "ok": True,
-        "book": {"equity": equity,
-                 "equity_live": round(equity_live, 2),
-                 "float_pnl": round(float_pnl, 2),
-                 "closed": len(closed), "won": won,
-                 "open": open_pos},
-        "rep": {"gross_win": gross_win, "gross_loss": gross_loss,
-                "best": best, "worst": worst, "streak": streak,
-                "by": by_rows, "recent": recent,
-                "start": GOAL_START},
-        "running": not paused,
-        "paused": paused,
-        "halted": bool(st.get("halted", False)),
-        "halt_reason": st.get("halt_reason", ""),
-        "day_pnl_pct": round(day_pnl_pct, 2),
-        "target_pct": target_pct,
-        "target_hit": day_pnl_pct >= target_pct,
-        "trades_today": st.get("trades_today", 0),
-        "devices": len(_load_creds()),
-        "research_n": (sum(1 for _ in open(RESEARCH)) if RESEARCH.exists() else 0),
-        "lab": {"rows": lab_rows, **lab_state},
-        "brain": brain_st,
-        "goal": {"start": GOAL_START, "target": GOAL_TARGET,
-                 "days": int(GOAL_DAYS), "start_ms": start_ms,
-                 "day_ms": day_ms, "day_index": day_index, "curve": curve},
-        "ts": now,
+        "engine": "5-Pillar High-Frequency Quant Execution Engine",
+        "status": "INITIALIZING",
+        "mode": "PAPER TRADING ($65 Start)",
+        "symbol": "BTC",
+        "balance": 65.00,
+        "equity": 65.00,
+        "realized_pnl": 0.0,
+        "pnl_pct": 0.0,
+        "trade_count": 0,
+        "mid_price": 0.0,
+        "best_bid": 0.0,
+        "best_ask": 0.0,
+        "spread_bps": 0.0,
+        "as_maker_spread_bps": 0.0,
+        "as_reservation_price": 0.0,
+        "as_inventory_skew": 0.0,
+        "hawkes_buy": 0.0,
+        "hawkes_sell": 0.0,
+        "hawkes_ratio": 0.5,
+        "ofi_mean": 0.0,
+        "ofi_levels": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "garch_sigma": 0.0,
+        "dynamic_leverage": 1,
+        "kelly_fraction": 0.0,
+        "catboost_confidence": 0.0,
+        "catboost_direction": "NEUTRAL",
+        "atr_ratchet_mult": 3.0,
+        "position": None,
+        "recent_logs": [],
+        "updated_at": time.time(),
     }
 
 
-def _page_html() -> str:
-    return """<!doctype html><html><head><meta charset=utf-8>
-<title>Stratton Oakmont</title>
-<meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name=apple-mobile-web-app-capable content=yes>
-<meta name=apple-mobile-web-app-status-bar-style content=black>
-<meta name=apple-mobile-web-app-title content=Stratton>
-<meta name=theme-color content=#0A0A0A>
-<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-<link rel="apple-touch-icon" href="/icon-180.png">
-<style>
-
-:root{
- --bg:#000; --surface:#0B0B0C; --card:#0E0E10;
- --gold:#D4AF37; --gold-press:#C9A227; --gold-soft:#E8D48B;
- --win:#00FF9F; --loss:#C41E3A; --warn:#FFB800; --info:#4A9EFF;
- --txt:#F2F2EE; --txt2:#8A8A8F; --off:#4A4A50; --on-gold:#000;
- --line:#1B1B1E;
- --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
- --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
-}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--ui);
- font-weight:400;font-size:15px;padding:16px 13px 48px;-webkit-font-smoothing:antialiased;
- }
-.brand{display:flex;flex-direction:row;align-items:center;
- gap:12px;margin:2px 0 0}
-.brand img.logo{width:52px;height:52px;border-radius:12px;
- border:1px solid rgba(212,175,55,.28);display:block}
-.brand .brandtxt{display:flex;flex-direction:column;gap:2px}
-
-.brand h1{font-family:var(--ui);font-weight:600;font-size:15px;margin:0;
- letter-spacing:.02em;color:var(--txt2);line-height:1.2}
-.brand span{font-family:var(--ui);font-weight:700;font-size:9px;
- letter-spacing:.30em;color:var(--off)}
-.rule{height:1px;margin:12px 0 14px;background:var(--line)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;
- padding:15px;margin-bottom:10px;position:relative;overflow:hidden}
-.card.key{border:1px solid rgba(212,175,55,.20)}
-.row{display:flex;justify-content:space-between;align-items:center;
- padding:8px 0;border-bottom:1px solid var(--line);gap:12px}
-.row:last-child{border-bottom:0}
-.k{color:var(--txt2);font-size:12px;font-weight:500;white-space:nowrap}
-.v{font-family:var(--mono);font-weight:700;font-size:13px;text-align:right;color:var(--txt)}
-.hero{font-family:var(--ui);font-weight:700;font-size:44px;line-height:1.05;
- letter-spacing:-.03em;color:var(--gold);margin:8px 0 4px;
- font-variant-numeric:tabular-nums}
-.hero.green{color:var(--win)}.hero.red{color:var(--loss)}
-.sub{font-size:12px;color:var(--txt2);font-weight:500}
-.pill{padding:4px 11px;border-radius:4px;font-size:11px;font-weight:600;
- font-family:var(--ui)}
-.on{background:var(--gold);color:var(--on-gold)}
-.offp{background:#2A2A2A;color:var(--txt2)}
-.livep{background:var(--loss);color:#fff}
-button{width:100%;padding:15px;border:0;border-radius:6px;font-family:var(--ui);
- font-size:15px;font-weight:500;
- color:var(--on-gold);background:var(--gold);margin-top:12px;cursor:pointer;
- transition:transform .08s,box-shadow .08s,background .08s;
- box-shadow:0 0 0 rgba(212,175,55,0)}
-button:hover{background:var(--gold-soft)}
-button:active{transform:scale(.985);background:var(--gold-press)}
-button.stop{background:var(--loss);color:#fff}
-button.stop:hover{background:#d9243f}
-button.ghost{background:transparent;color:var(--gold);
- border:1.5px solid var(--gold)}
-button.ghost:hover{background:rgba(212,175,55,.09);color:var(--gold-soft)}
-input{width:100%;padding:14px;border-radius:5px;border:1.5px solid var(--line);
- background:var(--bg);color:var(--txt);font-size:16px;margin-top:8px;
- font-family:var(--mono);font-weight:700;letter-spacing:.04em;outline:0;
- transition:border-color .1s,box-shadow .1s}
-select{width:100%;padding:14px;border-radius:5px;border:1.5px solid var(--line);background:var(--bg);color:var(--txt);font-size:16px;margin-top:8px;font-family:var(--mono);font-weight:700;outline:0;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--gold) 50%),linear-gradient(135deg,var(--gold) 50%,transparent 50%);background-position:calc(100% - 20px) 22px,calc(100% - 14px) 22px;background-size:6px 6px,6px 6px;background-repeat:no-repeat}
-select:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.16)}
-input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.16)}
-input::placeholder{color:var(--off);font-weight:400}
-label{font-size:12px;color:var(--txt2);display:block;margin-top:14px;
- font-weight:500}
-.g4{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.note{color:var(--off);font-size:11px;margin-top:12px;line-height:1.5;
- font-weight:500}
-.pos{background:var(--bg);border:1px solid var(--line);
- border-left:4px solid var(--gold);border-radius:10px;
- padding:14px 15px 12px;margin-top:12px}
-.pos.up{border-left-color:var(--win)}
-.pos.dn{border-left-color:var(--loss)}
-.pos .phead{display:flex;justify-content:space-between;align-items:flex-start;
- gap:10px}
-.pos .sym{font-family:var(--ui);font-size:16px;font-weight:700;
- letter-spacing:.02em}
-.pos .sym .sd{font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;
- margin-left:6px}
-.pos .sd.buy{background:rgba(0,255,159,.12);color:var(--win)}
-.pos .sd.sell{background:rgba(196,30,58,.16);color:var(--loss)}
-.pos .tagrow{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
-.pos .tag{font-size:10px;font-weight:700;letter-spacing:.05em;
- padding:2px 8px;border-radius:4px;background:#222;
- color:var(--txt2);border:1px solid var(--line)}
-.pos .tag.on{color:var(--gold);border-color:rgba(212,175,55,.4);
- background:rgba(212,175,55,.08)}
-.pos .tag.tr{color:var(--win);border-color:rgba(0,255,159,.35);
- background:rgba(0,255,159,.07)}
-.pos .pnl{font-family:var(--ui);font-size:26px;font-weight:800;
- letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-align:right}
-.pos .pnlsub{font-family:var(--mono);font-size:11.5px;color:var(--txt2);
- text-align:right;margin-top:2px}
-.pos .grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 16px;
- margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
-.pos .cell{display:flex;flex-direction:column;gap:2px;min-width:0}
-.pos .cell .lbl{font-size:10px;font-weight:700;letter-spacing:.08em;
- color:var(--txt2)}
-.pos .cell .val{font-family:var(--mono);font-size:13px;font-weight:700;
- color:var(--txt);word-break:break-all}
-.pos .tier{display:flex;justify-content:space-between;align-items:center;
- gap:10px;padding:8px 0;border-top:1px dashed rgba(255,255,255,.08);
- font-family:var(--mono);font-size:12px}
-.pos .tier:first-of-type{border-top:0;padding-top:2px}
-.pos .tier .tname{font-weight:800;letter-spacing:.06em;min-width:52px}
-.pos .tier .tname.done{color:var(--win)}
-.pos .tier .tpx{color:var(--txt2);flex:1;text-align:right}
-.pos .tier .tusd{font-weight:700;min-width:64px;text-align:right;
- font-variant-numeric:tabular-nums}
-.pos .tier .tot{font-size:10px;font-weight:600;color:var(--txt2);
- margin-left:8px;text-align:right;font-variant-numeric:tabular-nums;
- white-space:nowrap}
-.pos .foot{display:flex;justify-content:space-between;align-items:center;
- margin-top:10px;padding-top:9px;border-top:1px solid var(--line);
- font-size:11px;color:var(--txt2);font-family:var(--ui)}
-.pos .foot b{color:var(--txt);font-family:var(--mono)}
-.pos .track{position:relative;height:4px;border-radius:2px;margin:12px 2px 5px;
- background:linear-gradient(90deg,rgba(196,30,58,.55),var(--line) 26%,
- var(--line) 74%,rgba(0,255,159,.55))}
-.pos .track.sell{background:linear-gradient(90deg,rgba(0,255,159,.55),var(--line) 26%,
- var(--line) 74%,rgba(196,30,58,.55))}
-.pos .dot{position:absolute;top:50%;width:9px;height:9px;border-radius:50%;
- transform:translate(-50%,-50%);background:var(--gold);
- box-shadow:0 0 0 3px var(--bg);transition:left .5s ease}
-.title{font-family:var(--ui);font-weight:500;font-size:13px;
- color:var(--txt2);margin:0 0 12px}
-#msg{background:rgba(212,175,55,.07);border:1px solid rgba(212,175,55,.32);
- border-left:3px solid var(--gold);border-radius:5px;padding:13px;
- margin-bottom:14px;font-size:12px;display:none;white-space:pre-wrap;
- font-family:var(--mono);color:var(--gold-soft);line-height:1.5}
-.busy{opacity:.55;pointer-events:none;transition:opacity .12s}
-.up{color:var(--win)}.dn{color:var(--loss)}
-.pair{display:grid;grid-template-columns:2fr 1fr;gap:10px}
-.devrow{text-align:right;margin-top:10px;font-size:12px}
-.devrow a{color:var(--off);text-decoration:none}
-.devrow a:active{color:var(--gold)}
-.autorow{display:flex;justify-content:space-between;align-items:flex-start;
- gap:10px;margin-top:12px;font-size:12px;color:var(--off);line-height:1.5}
-.autorow a{color:var(--txt2);text-decoration:none;white-space:nowrap}
-.autorow a:active{color:var(--gold)}
-.pair button{margin-top:12px}
-.twlink{font-family:var(--ui);font-size:11px;font-weight:500;
- color:var(--gold);text-decoration:none;margin-left:8px}
-.twlink:active{color:var(--txt)}
-pre.scan{background:var(--bg);border:1px solid var(--line);
- border-left:3px solid var(--gold);border-radius:4px;padding:12px;
- margin-top:12px;font-size:10px;line-height:1.45;overflow-x:auto;
- color:var(--txt2);font-family:var(--mono)}
-@keyframes flash{0%{border-color:var(--line)}
- 35%{border-color:var(--win)}
- 100%{border-color:var(--line)}}
-.win-flash{animation:flash .55s ease-out}
-
-</style></head><body></style></head><body>
-<div class=brand><img class=logo src="/logo.png" alt="Stratton Oakmont"><div class=brandtxt><h1>Stratton Oakmont</h1><span>SCALPER &middot; PAPER DESK</span></div></div>
-<div class=rule></div>
-<div id=app>loading...</div>
-<script>
-const T=new URLSearchParams(location.search).get('t')||'';
-function money(n){return (n>=0?'+':'')+(+n).toFixed(2)}
-async function api(p,body){const r=await fetch(p+(p.includes('?')?'&':'?')+'t='+T,
- {method:body?'POST':'GET',body:body?JSON.stringify(body):null});
- if(r.status===403||r.status===401){location.href='/';return null}
- return r.json()}
-function fail(msg){const el=document.getElementById('app');
- if(el)el.innerHTML='<div class=card><div class=title>'+msg+'</div>'
-  +'<button onclick=location.reload()>retry</button>'
-  +'<div class=note>if this keeps happening, open the app in Safari and clear the page once</div></div>'}
-function draw(s){
-  const set=(id,html)=>{const e=document.getElementById(id);if(e&&e.innerHTML!==html)e.innerHTML=html};
-  const r=s.rep||{},b=s.book;
-  const wr=b.closed?Math.round(b.won/b.closed*100):0;
-  if(!document.getElementById('wallet')){
-    document.getElementById('app').innerHTML=`
-    <div class="card key" id=wallet>
-     <div class=row style="border:0;padding-bottom:0"><span class=sub>wallet &middot; paper &middot; 24h &middot; v21</span><span class=pill id=st></span></div>
-     <div class=hero id=eq></div>
-     <div class=sub id=eqsub></div>
-     <div id=posbox></div>
-     <div class=pair><button id=power></button><button class=ghost id=lockbtn>lock</button></div>
-     <div class=devrow><a href=# id=reg></a><span id=up style="display:block;text-align:center;margin-top:6px;color:var(--off);font-size:10px"></span></div>
-    </div>
-    <div class=card>
-     <div class=title>the daily target</div>
-     <div class=row><span class=k>day</span><span class=v id=day></span></div>
-     <div class=row><span class=k>target</span><span class=v id=tgt></span></div>
-    </div>
-    <div class=card>
-     <div class=title>hft alpha engine</div>
-     <div class=row><span class=k>maker spread</span><span class=v id=hft_spread>-- bps</span></div>
-     <div class=row><span class=k>ofi | skew</span><span class=v id=hft_ofi>--</span></div>
-     <div class=row><span class=k>hawkes buy/sell</span><span class=v id=hft_hawkes>-- / --</span></div>
-     <div class=row><span class=k>atr ratchet</span><span class=v id=hft_ratchet>--</span></div>
-     <div class=row><span class=k>dynamic lev</span><span class=v id=hft_lev>--</span></div>
-    </div>
-    <div class=card>
-     <div class=title>performance</div>
-     <div class=row><span class=k>made / lost</span><span class=v id=ml></span></div>
-     <div class=row><span class=k>best / worst trade</span><span class=v id=bw></span></div>
-     <div class=row><span class=k>longest losing run</span><span class=v id=streak></span></div>
-     <div class=row><span class=k>trades today</span><span class=v id=tt></span></div>
-    </div>
-    <div class=card><div class=title>by strategy</div><div id=bycoin></div></div>
-    <div class=card><div class=title>the lab &middot; ai inventions</div><div id=labbox></div></div>
-    <div class=card><div class=title>the brain &middot; ml filter</div><div id=brainsx></div></div>
-    <div class=card><div class=title>recent trades</div><div id=recent></div></div>`;
-  }
-  const st=document.getElementById('st');
-  const stCls='pill '+(s.halted?'offp':'on');
-  const stTxt=s.halted?('halted &middot; '+(s.halt_reason||'')):(s.running?'running':'paused');
-  if(st.className!==stCls)st.className=stCls;
-  set('st',stTxt);
-  const eqEl=document.getElementById('eq');
-  const liveEq=b.equity_live!=null?b.equity_live:(b.equity||0);
-  const eqCls='hero'+(liveEq>=(r.start||100)?' green':(liveEq<(r.start||100)?' red':''));
-  if(eqEl.className!==eqCls)eqEl.className=eqCls;
-  set('eq','$'+liveEq.toFixed(2));
-  const floatChip=b.float_pnl?' &middot; <span class="'+(b.float_pnl>=0?'up':'dn')+'">'+(b.float_pnl>=0?'+':'')+b.float_pnl.toFixed(2)+' floating</span>':'';
-  set('eqsub',`from $${(r.start||100).toFixed(2)} &middot; ${b.won}/${b.closed} closed &middot; ${wr}% hit${floatChip}`);
-  const px6=v=>v!=null?(+v).toPrecision(6):'&mdash;';
-  const usd=v=>v==null?'&mdash;':(v>=0?'+':'')+v.toFixed(2);
-  const pos=(b.open||[]).map(p=>{
-    const has=p.pnl!==undefined&&p.pnl!==null;
-    const up=has&&p.pnl>=0;
-    const money=has?(up?'+':'')+p.pnl.toFixed(2):'&mdash;';
-    const pct=has?(p.pct>=0?'+':'')+p.pct.toFixed(2)+'%':'waiting for a price';
-    const acct=has&&p.acct_pct!=null?'acct '+(p.acct_pct>=0?'+':'')+p.acct_pct.toFixed(2)+'%':'';
-    const at=has?Math.round(Math.min(100,Math.max(0,(p.at||0)*100))):50;
-    const slTxt=px6(p.sl);
-    const slUsd=usd(p.sl_usd);
-    const tiers=(p.tiers||[]).map(t=>{
-      const nm=(!t.done&&t.name==='TRAIL')?'رانر':t.name;
-      const nmHtml=t.done?`<span class="tname done">${nm} &#10003;</span>`
-                          :`<span class="tname">${nm}</span>`;
-      const px=t.px!=null?px6(t.px):(t.live?'<span class=up>زنده</span>':'&mdash;');
-      // برای هدف‌های باز، عدد اصلی = کل سودِ معامله اگه قیمت به اون هدف
-      // برسه (نه فقط تیکه‌ی اون تیر). تیکه‌ی قفل‌شونده رو کوچیک کنارش میاریم.
-      const showTot=!t.done&&!t.live&&t.total_at!=null;
-      const big=showTot?t.total_at:t.usd;
-      const us=(big!=null?`<span class="tusd ${big>=0?'up':'dn'}">${big>=0?'+':''}${big.toFixed(2)}$</span>`:'');
-      const sub=(showTot&&t.usd!=null?`<span class="tot">قفل ${t.usd>=0?'+':''}${t.usd.toFixed(2)}$</span>`:'');
-      return `<div class=tier>${nmHtml}<span class=tpx>${px}</span>${us}${sub}</div>`;
-    }).join('');
-    const tags=[];
-    if(p.be)tags.push('<span class="tag on">BE</span>');
-    if(p.trail)tags.push('<span class="tag tr">TRAIL</span>');
-    if(p.model)tags.push('<span class=tag>'+p.model+'</span>');
-    if(p.strategy)tags.push('<span class=tag>'+p.strategy+'</span>');
-    const held=p.held_min!=null?(p.held_min>=60?Math.floor(p.held_min/60)+'h '+(p.held_min%60)+'m':p.held_min+'m'):'';
-    return `<div class="pos ${has?(up?'up':'dn'):''}">
-     <div class=phead>
-      <div>
-       <span class=sym>${p.sym}<span class="sd ${p.side==='BUY'?'buy':'sell'}">${p.side==='BUY'?'LONG':'SHORT'}</span></span>
-       <div class=tagrow>${tags.join('')}<a class=tag href="https://www.tradingview.com/chart/?symbol=HYPERLIQUID%3A${p.sym}">TW</a></div>
-      </div>
-      <div>
-       <div class="pnl ${has?(up?'up':'dn'):''}">${has?'$'+money:'&mdash;'}</div>
-       <div class=pnlsub>${pct}${acct?' &middot; '+acct:''}</div>
-      </div>
-     </div>
-     <div class=grid>
-      <div class=cell><span class=lbl>entry &middot; ورود</span><span class=val>${px6(p.entry)}</span></div>
-      <div class=cell><span class=lbl>live &middot; قیمت</span><span class=val>${p.px!=null?px6(p.px):'&mdash;'}</span></div>
-      <div class=cell><span class=lbl>stop &middot; حد ضرر</span><span class=val>${slTxt}</span></div>
-      <div class=cell><span class=lbl>stop $ &middot; ضرر در استاپ</span><span class="val ${(p.sl_usd||0)>=0?'up':'dn'}">${slUsd}$</span></div>
-      <div class=cell><span class=lbl>locked &middot; قفل‌شده</span><span class="val ${(p.realized||0)>=0?'up':'dn'}">${usd(p.realized)}$</span></div>
-      <div class=cell><span class=lbl>lev &middot; اهرم</span><span class=val>${p.lev}x</span></div>
-     </div>
-     <div>${tiers}</div>
-     <div class="${p.side==='SELL'?'track sell':'track'}"><div class=dot style="left:${at}%"></div></div>
-     <div class=foot><span>margin <b>$${Math.round(p.margin_usd||0)}</b> &middot; ${(p.margin||0).toFixed(1)}% wallet${held?' &middot; '+held:''}</span><span>updated ${new Date(p.live_ts||Date.now()).toLocaleTimeString()}</span></div>
-    </div>`}).join('');
-  const posSig=JSON.stringify(b.open||[]);
-  if(draw.posSig!==posSig){draw.posSig=posSig;set('posbox',pos)}
-  const dp=s.day_pnl_pct||0;
-  set('day',`<span class="${dp>=0?'up':'dn'}">${dp>=0?'+':''}${dp.toFixed(2)}%</span>`);
-  set('tgt', s.target_pct>0 ? `+${s.target_pct}%` : 'no daily cap &middot; let it run');
-  set('ml',`<span class=up>+${(r.gross_win||0).toFixed(2)}</span> / <span class=dn>${(r.gross_loss||0).toFixed(2)}</span>`);
-  set('bw',`<span class=up>+${(r.best||0).toFixed(2)}</span> / <span class=dn>${(r.worst||0).toFixed(2)}</span>`);
-  set('streak',String(r.streak||0));
-  set('tt',String(s.trades_today||0));
-  const by=(r.by||[]).map(c=>`<div class=row><span class=k>${c.sym}</span><span class=v>${c.w}/${c.n} &middot; <span class="${c.pnl>=0?'up':'dn'}">${money(c.pnl)}</span></span></div>`).join('')||'<div class=note>nothing closed yet</div>';
-  const bySig=JSON.stringify(r.by||[]);
-  if(draw.bySig!==bySig){draw.bySig=bySig;set('bycoin',by)}
-  const lab=s.lab||{};
-  const labTxt=((lab.rows||[]).length
-    ?('<div class=row><span class=k>champion</span><span class=v>'+(lab.champ_wr!=null?('wr '+(lab.champ_wr*100).toFixed(0)+'% &middot; pf '+(lab.champ_pf!=null?lab.champ_pf:'&mdash;')+' &middot; '+(lab.champ_n||0)+'t'):'&mdash;')+'</span></div>'
-      +(lab.rows||[]).map(r=>{
-        const ch=(r.changes||[]).slice(0,2).join(' &middot; ');
-        return `<div class=row><span class=k>${r.name||'idea'}</span><span class=v>wr ${r.wr!=null?(r.wr*100).toFixed(0)+'%':'&mdash;'} &middot; pf ${r.pf!=null?r.pf:'&mdash;'} &middot; ${r.n||0}t</span></div>`
-         +(ch?`<div class=note style="margin:-2px 0 8px">${ch}</div>`:'')
-         +(r.coins?`<div class=note style="margin:-2px 0 8px;color:var(--gold-soft)">${r.coins}</div>`:'');
-      }).join(''))
-    :'<div class=note>the lab has not run yet &middot; it backtests inventions against the champion and reports what actually wins</div>');
-  const gate=lab.as_of_ms?(lab.adopt_gate?'open':'closed'):'';
-  const labSig=JSON.stringify(lab||{});
-  if(draw.labSig!==labSig){draw.labSig=labSig;set('labbox',labTxt+(gate?`<div class=note>adopt gate ${gate} &middot; an idea goes live only if it clears every guardrail out-of-sample</div>`:''))}
-  const br=s.brain||{};
-  const lift=br.lifts&&br.lifts['0.40'];
-  const brTxt=br.n_train!=null
-    ?`<div class=row><span class=k>lessons learned</span><span class=v>${br.n_train} trades</span></div>
-      <div class=row><span class=k>time-split exam</span><span class=v>auc ${br.auc!=null?br.auc:'&mdash;'} &middot; base wr ${br.base_wr!=null?(br.base_wr*100).toFixed(0)+'%':'&mdash;'}</span></div>
-      <div class=row><span class=k>veto bar 0.40</span><span class=v>${lift?('keeps '+lift.kept_pct+'% at wr '+(lift.wr*100).toFixed(0)+'%'):'&mdash;'}</span></div>
-      <div class=note>${br.ready?'the brain is filtering entries by learned win probability':'training &middot; it starts filtering once it has enough lessons'}</div>`
-    :'<div class=note>the brain is in training &middot; it will filter entries by learned win probability</div>';
-  const brSig=JSON.stringify(br||{});
-  if(draw.brSig!==brSig){draw.brSig=brSig;set('brainsx',brTxt)}
-  const rec=(r.recent||[]).map(t=>{
-    const px=t.entry!=null&&t.exit!=null?(+t.entry).toPrecision(5)+'&rarr;'+(+t.exit).toPrecision(5)+' &middot; ':'';
-    return `<div class=row><span class=k>${t.sym} ${t.side==='SELL'?'S':'L'}${t.lot?' '+t.lot:''} &middot; ${t.strat||''}</span><span class=v>${px}${t.reason||''}${t.held!=null?' &middot; '+t.held+'m':''} &middot; <span class="${t.pnl>=0?'up':'dn'}">${money(t.pnl)}</span></span></div>`}).join('')||'<div class=note>nothing closed yet</div>';
-  const recSig=JSON.stringify(r.recent||[]);
-  if(draw.recSig!==recSig){draw.recSig=recSig;set('recent',rec)}
-  set('up','updated '+(s.ts?new Date(s.ts).toLocaleTimeString():'&mdash;'));
-  const pw=document.getElementById('power');
-  const pwCls=s.running?'stop':'';
-  if(pw.className!==pwCls)pw.className=pwCls;
-  if(pw.textContent!==(s.running?'pause':'resume'))pw.textContent=s.running?'pause':'resume';
-  if(!pw.onclick)pw.onclick=()=>api('/api/power',{}).then(()=>refresh());
-  const lb=document.getElementById('lockbtn');
-  if(lb&&!lb.onclick)lb.onclick=async()=>{await fetch('/api/lock?t='+T);location.href='/'};
-  const rg=document.getElementById('reg');
-  if(rg){const n=s.devices||0;const t=n?`face id on ${n} device${n>1?'s':''} &middot; add another`:'set up face id';
-    if(rg.textContent!==t)rg.textContent=t;
-    if(!rg.onclick)rg.onclick=e=>{e.preventDefault();addFace()}}
-}
-
-const b64u=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
-const unb=t=>Uint8Array.from(atob(t.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
-async function addFace(){
- if(!window.PublicKeyCredential){alert('this browser cannot do Face ID');return}
- try{
-  const o=await (await fetch('/webauthn/register-options?t='+T,{method:'POST'})).json();
-  if(o.ok===false){alert(o.msg);return}
-  const ch=o.challenge;
-  const req=Object.assign({},o,{challenge:unb(ch),
-   user:Object.assign({},o.user,{id:unb(o.user.id)}),
-   excludeCredentials:(o.excludeCredentials||[]).map(c=>Object.assign({},c,{id:unb(c.id)}))});
-  const c=await navigator.credentials.create({publicKey:req});
-  const r=await fetch('/webauthn/register-verify?t='+T,{method:'POST',
-   headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({_challenge:ch,id:c.id,rawId:b64u(c.rawId),type:c.type,
-    response:{clientDataJSON:b64u(c.response.clientDataJSON),
-     attestationObject:b64u(c.response.attestationObject)}})});
-  const j=await r.json();alert(j.msg||'done');
- }catch(e){alert('face id setup cancelled or unsupported')}}
-function refresh(){api('/api/hft?n='+Date.now()).then(h=>{
-    if(h){
-        const el = (id) => document.getElementById(id);
-        if(el('hft_spread')) el('hft_spread').innerText = (h.maker_spread_bps||0).toFixed(1) + ' bps';
-        if(el('hft_ofi')) el('hft_ofi').innerText = (h.ofi_mean||0).toFixed(2) + ' | ' + (h.inventory_skew||0).toFixed(2);
-        if(el('hft_hawkes')) el('hft_hawkes').innerText = (h.hawkes_buy||0).toFixed(1) + ' / ' + (h.hawkes_sell||0).toFixed(1);
-        if(el('hft_ratchet')) el('hft_ratchet').innerText = (h.atr_ratchet_mult||0).toFixed(1) + 'x';
-        if(el('hft_lev')) el('hft_lev').innerText = (h.dynamic_leverage||0) + 'x';
+def _render_hft_terminal() -> str:
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HFT Quant Desk · 5-Pillar Engine</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#08090C">
+  <style>
+    :root {
+      --bg: #08090C;
+      --card-bg: #0E1117;
+      --card-border: #1B2234;
+      --accent-cyan: #00F0FF;
+      --accent-gold: #D4AF37;
+      --accent-green: #00FF88;
+      --accent-red: #FF2E54;
+      --accent-purple: #A259FF;
+      --text-main: #F0F3F8;
+      --text-muted: #7E8B9F;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
     }
-});
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg);
+      color: var(--text-main);
+      font-family: var(--sans);
+      min-height: 100vh;
+      padding: 16px 14px 48px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+    
+    /* Top Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+    }
+    .brand-box { display: flex; align-items: center; gap: 12px; }
+    .brand-logo {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: linear-gradient(135deg, #1B2234, #D4AF37);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 16px; color: #000;
+    }
+    .brand-title h1 { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; }
+    .brand-title span { font-size: 11px; color: var(--accent-gold); font-family: var(--mono); text-transform: uppercase; }
+    
+    .status-pill {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 20px;
+      background: rgba(0, 255, 136, 0.08); border: 1px solid rgba(0, 255, 136, 0.3);
+      font-size: 11px; font-family: var(--mono); color: var(--accent-green);
+    }
+    .pulse-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green);
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-  api('/api/state?n='+Date.now()).then(j=>{
-  if(!j){return}
-  if(!j.ok){fail('session expired');return}
-  try{draw(j)}catch(e){fail('draw error: '+e.message)}
-}).catch(e=>{fail('lost the server: '+e.message)})}
-refresh();
-setInterval(refresh,3000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
-window.addEventListener('focus',refresh);
-addEventListener('pageshow',refresh);
-</script></body></html>"""
+    /* Grids */
+    .hero-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .pillar-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 12px;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-muted);
+    }
+    .card-badge {
+      font-size: 10px; font-family: var(--mono);
+      padding: 2px 7px; border-radius: 4px;
+      background: rgba(212, 175, 55, 0.12); color: var(--accent-gold);
+    }
+    
+    .val-hero { font-size: 26px; font-weight: 700; font-family: var(--mono); }
+    .val-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; font-family: var(--mono); }
+    
+    /* Rows */
+    .metric-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 13px;
+    }
+    .metric-row:last-child { border-bottom: none; }
+    .k { color: var(--text-muted); }
+    .v { font-family: var(--mono); font-weight: 600; }
+    
+    /* Visual Bars */
+    .bar-container {
+      width: 100%; height: 6px; background: #181D29;
+      border-radius: 3px; overflow: hidden; margin-top: 6px; display: flex;
+    }
+    .bar-fill { height: 100%; transition: width 0.3s ease; }
+
+    /* OFI 5-Levels Depth */
+    .ofi-stack { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .ofi-level-row { display: flex; align-items: center; gap: 8px; font-size: 11px; font-family: var(--mono); }
+    .ofi-level-lbl { width: 24px; color: var(--text-muted); }
+    .ofi-bar-wrap { flex: 1; height: 10px; background: #141824; border-radius: 3px; display: flex; align-items: center; position: relative; }
+    .ofi-mid-line { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: #333C52; }
+    .ofi-bar-fill { height: 100%; position: absolute; }
+    .ofi-level-val { width: 44px; text-align: right; }
+
+    /* Position Box */
+    .pos-box {
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      background: rgba(0, 240, 255, 0.03);
+      border-radius: 8px; padding: 12px; margin-top: 6px;
+    }
+    .pos-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .tag-buy { background: rgba(0, 255, 136, 0.15); color: var(--accent-green); padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 12px; }
+    .tag-sell { background: rgba(255, 46, 84, 0.15); color: var(--accent-red); padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 12px; }
+
+    /* Terminal Log */
+    .log-terminal {
+      background: #060709;
+      border: 1px solid var(--card-border);
+      border-radius: 8px; padding: 10px 12px;
+      font-family: var(--mono); font-size: 11px;
+      height: 180px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .log-line { display: flex; gap: 8px; line-height: 1.4; }
+    .log-time { color: var(--text-muted); }
+    .log-badge { padding: 0 4px; border-radius: 2px; font-size: 9px; font-weight: 700; }
+    .badge-ALPHA { background: var(--accent-cyan); color: #000; }
+    .badge-RATCHET { background: var(--accent-gold); color: #000; }
+    .badge-EXIT { background: var(--accent-green); color: #000; }
+    .badge-SYSTEM { background: #333C52; color: #FFF; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="brand-box">
+        <div class="brand-logo">Q</div>
+        <div class="brand-title">
+          <h1>HFT QUANT TERMINAL</h1>
+          <span>5-Pillar Algorithmic Execution Engine</span>
+        </div>
+      </div>
+      <div class="status-pill">
+        <div class="pulse-dot"></div>
+        <span id="conn-status">HYPERLIQUID L2 LIVE</span>
+      </div>
+    </header>
+
+    <!-- Key Performance Stats -->
+    <div class="hero-grid">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Account Equity</span>
+          <span class="card-badge">Base $65.00</span>
+        </div>
+        <div class="val-hero" id="hero-equity">$65.00</div>
+        <div class="val-sub" id="hero-pnl">+0.00 USDT (+0.00%)</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">BTC Mid Price</span>
+          <span class="card-badge" id="badge-spread">-- bps</span>
+        </div>
+        <div class="val-hero" id="hero-mid">$--</div>
+        <div class="val-sub" id="hero-bidask">Bid: -- | Ask: --</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Kelly Leverage</span>
+          <span class="card-badge">Dynamic Guard</span>
+        </div>
+        <div class="val-hero" id="hero-lev">1x</div>
+        <div class="val-sub" id="hero-sigma">GARCH σ: 0.0000 · f*: 0.00</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Execution Mode</span>
+          <span class="card-badge">Paper Account</span>
+        </div>
+        <div class="val-hero" style="font-size: 20px; color: var(--accent-cyan);">ACTIVE RUN</div>
+        <div class="val-sub" id="hero-trades">Trades: 0 · Halt: False</div>
+      </div>
+    </div>
+
+    <!-- The 5 Pillars of HFT -->
+    <div class="pillar-grid">
+      <!-- Pillar 1: Avellaneda-Stoikov -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Pillar 1: Avellaneda-Stoikov Dynamics</span>
+          <span class="card-badge">Market Making</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Optimal Maker Spread (δ)</span>
+          <span class="v" id="as-spread">-- bps</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Reservation Price (r)</span>
+          <span class="v" id="as-reservation">$--</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Inventory Skew (q)</span>
+          <span class="v" id="as-skew">0.00</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Mid Price Deviation</span>
+          <span class="v" id="as-dev">0.00%</span>
+        </div>
+      </div>
+
+      <!-- Pillar 2: CatBoost Direction -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Pillar 2: CatBoost ML Predictor</span>
+          <span class="card-badge">Threshold > 0.60</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Confidence Prob</span>
+          <span class="v" id="ml-conf" style="color: var(--accent-gold);">0.0%</span>
+        </div>
+        <div class="bar-container">
+          <div class="bar-fill" id="ml-bar" style="width: 50%; background: var(--accent-gold);"></div>
+        </div>
+        <div class="metric-row" style="margin-top: 8px;">
+          <span class="k">Predicted Direction</span>
+          <span class="v" id="ml-dir">NEUTRAL</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Taker Alpha Trigger</span>
+          <span class="v" id="ml-trigger">WAITING FOR SETUP</span>
+        </div>
+      </div>
+
+      <!-- Pillar 3: Hawkes Clustering -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Pillar 3: Hawkes Mutual Excitation</span>
+          <span class="card-badge">Trade Clustering</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Buy Intensity (λ_b)</span>
+          <span class="v" id="hk-buy" style="color: var(--accent-green);">0.00</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Sell Intensity (λ_s)</span>
+          <span class="v" id="hk-sell" style="color: var(--accent-red);">0.00</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Liquidity Excitement Ratio</span>
+          <span class="v" id="hk-ratio">0.50</span>
+        </div>
+        <div class="bar-container">
+          <div class="bar-fill" id="hk-bar" style="width: 50%; background: var(--accent-purple);"></div>
+        </div>
+      </div>
+
+      <!-- Pillar 4: Order Flow Imbalance (OFI) -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Pillar 4: Order Flow Imbalance (L1-L5)</span>
+          <span class="card-badge">Depth Microstructure</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Mean OFI Score</span>
+          <span class="v" id="ofi-mean">0.00</span>
+        </div>
+        <div class="ofi-stack" id="ofi-stack">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Position & ATR Chandelier Ratchet -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Pillar 5: Active Position & Chandelier Ratchet</span>
+        <span class="card-badge">Trailing Exit Guard</span>
+      </div>
+      <div id="position-container">
+        <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 16px;">
+          Scanning L2 Orderbook for Aggressive Alpha Triggers (No Active Position)
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Execution & Telemetry Log -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Live Execution & Telemetry Stream</span>
+        <span class="card-badge">Real-Time</span>
+      </div>
+      <div class="log-terminal" id="log-terminal">
+        <!-- Injected by JS -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const T = new URLSearchParams(location.search).get('t') || '';
+    
+    function fmtMoney(n) {
+      const v = Number(n) || 0;
+      return (v >= 0 ? '+' : '') + v.toFixed(2);
+    }
+
+    async function fetchHftState() {
+      try {
+        const res = await fetch('/api/hft?t=' + T + '&n=' + Date.now());
+        if (res.status === 401 || res.status === 403) {
+          location.href = '/login';
+          return;
+        }
+        const data = await res.json();
+        renderDashboard(data);
+      } catch (err) {
+        document.getElementById('conn-status').textContent = 'RECONNECTING...';
+      }
+    }
+
+    function renderDashboard(d) {
+      document.getElementById('conn-status').textContent = 'HYPERLIQUID L2 LIVE';
+      
+      // Hero stats
+      const eq = d.equity || d.balance || 65.0;
+      const pnl = (d.realized_pnl || 0);
+      const pnlPct = d.pnl_pct || 0;
+      document.getElementById('hero-equity').textContent = '$' + eq.toFixed(2);
+      
+      const pnlEl = document.getElementById('hero-pnl');
+      pnlEl.textContent = fmtMoney(pnl) + ' USDT (' + fmtMoney(pnlPct) + '%)';
+      pnlEl.style.color = pnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+
+      const mid = d.mid_price || 0;
+      document.getElementById('hero-mid').textContent = mid > 0 ? '$' + mid.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1}) : '$--';
+      document.getElementById('hero-bidask').textContent = 'Bid: ' + (d.best_bid||0).toFixed(1) + ' | Ask: ' + (d.best_ask||0).toFixed(1);
+      document.getElementById('badge-spread').textContent = (d.spread_bps||0).toFixed(1) + ' bps';
+
+      document.getElementById('hero-lev').textContent = (d.dynamic_leverage||1) + 'x';
+      document.getElementById('hero-sigma').textContent = 'GARCH σ: ' + (d.garch_sigma||0).toFixed(5) + ' · f*: ' + (d.kelly_fraction||0).toFixed(3);
+      document.getElementById('hero-trades').textContent = 'Trades: ' + (d.trade_count||0) + ' · Cap: $65.00';
+
+      // Pillar 1: AS
+      document.getElementById('as-spread').textContent = (d.as_maker_spread_bps||0).toFixed(1) + ' bps';
+      document.getElementById('as-reservation').textContent = (d.as_reservation_price||0) > 0 ? '$' + (d.as_reservation_price).toFixed(1) : '$--';
+      document.getElementById('as-skew').textContent = (d.as_inventory_skew||0).toFixed(3);
+      const dev = mid > 0 && d.as_reservation_price ? ((d.as_reservation_price - mid) / mid * 100).toFixed(2) : '0.00';
+      document.getElementById('as-dev').textContent = (dev > 0 ? '+' : '') + dev + '%';
+
+      // Pillar 2: ML
+      const conf = (d.catboost_confidence || 0);
+      const confPct = Math.round(conf * 100);
+      document.getElementById('ml-conf').textContent = confPct + '%';
+      document.getElementById('ml-bar').style.width = Math.min(100, Math.max(0, confPct)) + '%';
+      document.getElementById('ml-dir').textContent = d.catboost_direction || 'NEUTRAL';
+      
+      const triggerEl = document.getElementById('ml-trigger');
+      if (conf >= 0.60) {
+        triggerEl.textContent = 'ALPHA TRIGGER ACTIVE (>0.60)';
+        triggerEl.style.color = 'var(--accent-green)';
+      } else {
+        triggerEl.textContent = 'WAITING FOR CONF > 60%';
+        triggerEl.style.color = 'var(--text-muted)';
+      }
+
+      // Pillar 3: Hawkes
+      document.getElementById('hk-buy').textContent = (d.hawkes_buy||0).toFixed(2);
+      document.getElementById('hk-sell').textContent = (d.hawkes_sell||0).toFixed(2);
+      const ratio = d.hawkes_ratio !== undefined ? d.hawkes_ratio : 0.5;
+      document.getElementById('hk-ratio').textContent = (ratio * 100).toFixed(0) + '% Buy';
+      document.getElementById('hk-bar').style.width = Math.round(ratio * 100) + '%';
+
+      // Pillar 4: OFI Levels
+      document.getElementById('ofi-mean').textContent = (d.ofi_mean||0).toFixed(3);
+      const ofiStack = document.getElementById('ofi-stack');
+      const levels = d.ofi_levels && d.ofi_levels.length === 5 ? d.ofi_levels : [0,0,0,0,0];
+      ofiStack.innerHTML = levels.map((lvl, idx) => {
+        const val = Number(lvl) || 0;
+        const isPos = val >= 0;
+        const width = Math.min(50, Math.abs(val) * 50);
+        const left = isPos ? '50%' : (50 - width) + '%';
+        const color = isPos ? 'var(--accent-cyan)' : 'var(--accent-red)';
+        return `
+          <div class="ofi-level-row">
+            <span class="ofi-level-lbl">L${idx+1}</span>
+            <div class="ofi-bar-wrap">
+              <div class="ofi-mid-line"></div>
+              <div class="ofi-bar-fill" style="left: ${left}; width: ${width}%; background: ${color};"></div>
+            </div>
+            <span class="ofi-level-val" style="color: ${color};">${(val > 0 ? '+' : '') + val.toFixed(2)}</span>
+          </div>
+        `;
+      }).join('');
+
+      // Pillar 5: Active Position
+      const posContainer = document.getElementById('position-container');
+      if (d.position) {
+        const p = d.position;
+        const isLong = p.side === 'LONG' || p.side === 'long';
+        posContainer.innerHTML = `
+          <div class="pos-box">
+            <div class="pos-header">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="${isLong ? 'tag-buy' : 'tag-sell'}">${p.side.toUpperCase()}</span>
+                <span style="font-family: var(--mono); font-weight: 700;">${p.qty} BTC (${p.leverage||1}x)</span>
+              </div>
+              <span style="font-family: var(--mono); font-weight: 700; color: ${p.unrealized_pnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">
+                ${fmtMoney(p.unrealized_pnl)} USDT (${fmtMoney(p.unrealized_pnl_pct)}%)
+              </span>
+            </div>
+            <div class="metric-row">
+              <span class="k">Entry Price</span>
+              <span class="v">$${(p.entry_price||0).toFixed(1)}</span>
+            </div>
+            <div class="metric-row">
+              <span class="k">Chandelier Ratchet Stop</span>
+              <span class="v" style="color: var(--accent-gold);">$${(p.stop_price||0).toFixed(1)} (${p.ratchet_mult||3.0}x ATR)</span>
+            </div>
+          </div>
+        `;
+      } else {
+        posContainer.innerHTML = `
+          <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 16px;">
+            Scanning L2 Orderbook for Aggressive Alpha Triggers (No Active Position)
+          </div>
+        `;
+      }
+
+      // Logs Terminal
+      const terminal = document.getElementById('log-terminal');
+      if (d.recent_logs && d.recent_logs.length) {
+        terminal.innerHTML = d.recent_logs.map(log => `
+          <div class="log-line">
+            <span class="log-time">[${log.time || '--:--:--'}]</span>
+            <span class="log-badge badge-${log.type || 'INFO'}">${log.type || 'INFO'}</span>
+            <span>${log.text}</span>
+          </div>
+        `).join('');
+      } else {
+        terminal.innerHTML = `<div class="log-line" style="color: var(--text-muted)">[System Active] Waiting for HFT events...</div>`;
+      }
+    }
+
+    // Auto-refresh every 1000ms
+    fetchHftState();
+    setInterval(fetchHftState, 1000);
+  </script>
+</body>
+</html>
+"""
 
 
-def _login_html(err: str = "") -> str:
-    return """<!doctype html><html><head><meta charset=utf-8>
-<title>Stratton Oakmont</title>
-<meta name=viewport content="width=device-width,initial-scale=1">
-<meta name=apple-mobile-web-app-capable content=yes>
-<meta name=theme-color content=#0A0A0A>
-<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-<link rel="apple-touch-icon" href="/icon-180.png">
-<style>
-*{box-sizing:border-box}body{margin:0;background:#000;color:#F5F5F0;
- font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
- display:flex;align-items:center;justify-content:center;min-height:100dvh;padding:28px}
-main{width:100%;max-width:290px;text-align:center}
-.logo{width:72px;height:72px;border-radius:18px;border:1px solid rgba(212,175,55,.35);
- margin:0 auto 12px;display:block}
-.wordmark{font-size:13px;color:#8A8A8F;letter-spacing:.04em;margin:0 0 26px}
-button{width:100%;padding:16px;border:0;border-radius:11px;background:#D4AF37;
- color:#000;font-size:16px;font-weight:500;cursor:pointer}
-button.fid{display:none;background:none;color:#D4AF37;width:auto;margin:0 auto 4px}
-button.fid.on{display:block}
-.fid svg{width:52px;height:auto;display:block;margin:0 auto}
-form{margin-top:18px}
-input{width:100%;padding:15px;border-radius:11px;border:1px solid #1B1B1E;
- background:#0B0B0C;color:#F2F2EE;font-size:16px;text-align:center;outline:0}
-.hint{color:#4A4A50;font-size:13px;margin-top:16px}
-.e{color:#C41E3A;font-size:14px;margin-top:14px;min-height:18px}
-</style></head><body><main>
-<img class=logo src="/logo.png" alt="Stratton Oakmont">
-<div class=wordmark>Stratton Oakmont</div>
-<button id=fid class=fid aria-label="Sign in with Face ID"><svg viewBox="0 0 64 78" xmlns="http://www.w3.org/2000/svg"><path class=shackle d="M18 32V21a14 14 0 0 1 28 0v11" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><rect x="6" y="32" width="52" height="42" rx="9" fill="currentColor"/><circle class=keyhole cx="32" cy="49" r="5" fill="#000"/><rect class=keyhole x="30" y="52" width="4" height="11" rx="2" fill="#000"/></svg></button>
-<form method=POST action=/login>
- <input name=token id=token type=password placeholder="password" autocomplete=current-password autofocus>
- <button style="margin-top:10px" type=submit>Enter</button>
-</form>
-<div class=hint id=hint></div>
-<div class=e id=err>__ERR__</div>
-<script>
-const $=i=>document.getElementById(i);
-const b64u=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
-const unb=t=>Uint8Array.from(atob(t.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
-(async()=>{
- if(!window.PublicKeyCredential){$('hint').textContent='sign in with your password';$('token').focus();return}
- let o=null;
- const refresh=async()=>{try{o=await (await fetch('/webauthn/auth-options',{cache:'no-store'})).json()}catch(e){}};
- await refresh();
- if(!o||o.none){$('hint').textContent='sign in with your password';$('token').focus();return}
- $('fid').classList.add('on');
- $('hint').textContent='tap the lock, or type your password';
- const go=async()=>{
-  try{
-   const ch=o.challenge;
-   const req=Object.assign({},o,{challenge:unb(ch),
-    allowCredentials:(o.allowCredentials||[]).map(c=>({type:'public-key',id:unb(c.id),transports:['internal']})),
-    userVerification:'required'});
-   const c=await navigator.credentials.get({publicKey:req});
-   const r=await fetch('/webauthn/auth-verify',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({_challenge:ch,id:c.id,rawId:b64u(c.rawId),type:c.type,
-     response:{clientDataJSON:b64u(c.response.clientDataJSON),
-      authenticatorData:b64u(c.response.authenticatorData),
-      signature:b64u(c.response.signature),
-      userHandle:c.response.userHandle?b64u(c.response.userHandle):null}})});
-   const j=await r.json();
-   if(j.ok){location.href='/?t='+j.t;return}
-   $('err').textContent=j.msg||'not recognised';refresh();
-  }catch(e){$('err').textContent='';refresh()}};
- $('fid').onclick=e=>{e.preventDefault();go()};
- addEventListener('pageshow',refresh);
-})();
-</script></main></body></html>""".replace("__ERR__", err)
+def _render_login(err: str = "") -> str:
+    return f"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>HFT Quant Desk · Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      background: #08090C; color: #F0F3F8;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 20px;
+    }}
+    .box {{
+      width: 100%; max-width: 320px;
+      background: #0E1117; border: 1px solid #1B2234;
+      border-radius: 12px; padding: 24px; text-align: center;
+    }}
+    .logo {{
+      width: 48px; height: 48px; border-radius: 10px;
+      background: #D4AF37; color: #000; font-weight: 800;
+      font-size: 20px; display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px;
+    }}
+    h1 {{ font-size: 16px; margin-bottom: 4px; }}
+    p {{ font-size: 12px; color: #7E8B9F; margin-bottom: 20px; }}
+    input {{
+      width: 100%; padding: 12px; border-radius: 8px;
+      border: 1px solid #1B2234; background: #060709;
+      color: #FFF; font-size: 14px; text-align: center;
+      outline: none; margin-bottom: 12px;
+    }}
+    button {{
+      width: 100%; padding: 12px; border-radius: 8px;
+      border: none; background: #D4AF37; color: #000;
+      font-weight: 600; font-size: 14px; cursor: pointer;
+    }}
+    .err {{ color: #FF2E54; font-size: 12px; margin-top: 12px; min-height: 16px; }}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="logo">Q</div>
+    <h1>HFT Quant Terminal</h1>
+    <p>5-Pillar Engine · Secure Access</p>
+    <form method="POST" action="/login">
+      <input type="password" name="token" placeholder="Access Token" autofocus required>
+      <button type="submit">Enter Terminal</button>
+    </form>
+    <div class="err">{err}</div>
+  </div>
+</body>
+</html>
+"""
 
 
-# A stalled client must never be able to freeze the app.  The listening
-# socket used to be wrapped in TLS, which performs the handshake inside the
-# single-threaded accept loop: one phone that opened a connection and never
-# sent its ClientHello (iOS does this when the network flaps) blocked every
-# other request until the watchdog restarted the service.  The handshake now
-# happens per accepted connection, with a deadline, so a dead peer can only
-# ever occupy its own thread.
-HANDSHAKE_TIMEOUT_S = 5
-REQUEST_TIMEOUT_S = 30
-
-
-class SecureServer(ThreadingHTTPServer):
-    """Threaded HTTP(S) server whose TLS handshake happens INSIDE the
-    per-connection worker thread.
-
-    The listening socket is deliberately never wrapped: accept() stays
-    instant, so a client that connects and never sends its ClientHello
-    (iOS opens speculative connections when the network flaps) occupies
-    only its own thread instead of stalling every other request.  Each
-    connection also carries a deadline, so no socket can wait forever.
-    """
-
-    daemon_threads = True
-    request_queue_size = 64
-    ssl_context: "ssl.SSLContext | None" = None
-
-    def get_request(self):
-        sock, addr = self.socket.accept()      # instant -- no TLS here
-        return sock, addr
-
-    def process_request(self, request, client_address):
-        threading.Thread(target=self._serve_connection,
-                         args=(request, client_address),
-                         daemon=True).start()
-
-    def _serve_connection(self, sock, addr):
-        if self.ssl_context is not None:
-            sock.settimeout(HANDSHAKE_TIMEOUT_S)
-            try:
-                sock = self.ssl_context.wrap_socket(sock, server_side=True)
-            except (ssl.SSLError, OSError):
-                self.shutdown_request(sock)
-                return
-            sock.settimeout(REQUEST_TIMEOUT_S)
-        try:
-            self.finish_request(sock, addr)
-        except Exception:                      # noqa: BLE001
-            self.handle_error(sock, addr)
-        finally:
-            self.shutdown_request(sock)
-
-
-class Handler(BaseHTTPRequestHandler):
-    server_version = "scalper-app"
-    protocol_version = "HTTP/1.1"
-    timeout = REQUEST_TIMEOUT_S          # never wait forever on a socket
-
-    def setup(self):
-        super().setup()
-        # a stalled TLS handshake / slow client must not hold a thread
-        # forever and starve the accept queue (that is what froze the app
-        # for the phone)
-        self.connection.settimeout(60)
-        # every response ends with a close: HTTP/1.1 keep-alive responses
-        # without Content-Length (e.g. the /login 302) made clients wait
-        # for EOF while the server waited for the next request -- the
-        # login "hang". Always close instead.
-        self.close_connection = True
-
-    def _finish_headers(self, status: int, ctype: str, body: bytes,
-                        extra: list[tuple[str, str]] | None = None) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Connection", "close")
-        for k, v in extra or []:
-            self.send_header(k, v)
-        self.end_headers()
-        try:
-            self.wfile.write(body)
-        except (BrokenPipeError, ConnectionResetError, TimeoutError):
-            pass
-
-    # ------------------------------------------------------------- auth
-    def _authed(self) -> bool:
+class HFTHandler(BaseHTTPRequestHandler):
+    def _is_authed(self) -> bool:
         q = parse_qs(urlparse(self.path).query)
-        t = (q.get("t") or [""])[0]
-        if not t:
-            cookie = self.headers.get("Cookie", "")
-            for part in cookie.split(";"):
-                part = part.strip()
-                if part.startswith("scalper_s="):
-                    t = part.split("=", 1)[1]
-        if t and SESSIONS.get(t, 0) > time.time():
+        token_param = (q.get("t") or [""])[0]
+        if token_param and token_param == TOKEN:
             return True
+        if token_param and SESSIONS.get(token_param, 0) > time.time():
+            return True
+
+        cookie_hdr = self.headers.get("Cookie", "")
+        for part in cookie_hdr.split(";"):
+            part = part.strip()
+            if part.startswith("hft_s="):
+                s_val = part.split("=", 1)[1]
+                if SESSIONS.get(s_val, 0) > time.time():
+                    return True
         return False
 
-    def _json(self, obj, status: int = 200) -> None:
-        body = json.dumps(obj, default=float).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Cache-Control",
-                         "no-store, no-cache, must-revalidate")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _new_session(self) -> str:
-        t = secrets.token_urlsafe(24)
-        SESSIONS[t] = time.time() + SESSION_HOURS * 3600
-        _save_sessions()
-        return t
-
-    def _send_html(self, body: bytes, status: int = 200) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    # ------------------------------------------------------------- routes
     def do_GET(self):
-        path = urlparse(self.path).path
-        if path == "/api/hft":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            try:
-                with open("/root/ict_sniper/data/state/hft.json", "rb") as f:
-                    self.wfile.write(f.read())
-            except FileNotFoundError:
-                self.wfile.write(b"{}")
-            return
+        parsed = urlparse(self.path)
+        path = parsed.path
 
+        # 1. Kill old service worker from previous apps immediately
         if path == "/sw.js":
-            # kill-switch service worker: wipes the OLD app's cached pages
-            # and unregisters itself so the new UI always loads fresh
-            body = (b"self.addEventListener('install',e=>{self.skipWaiting()});"
-                    b"self.addEventListener('activate',e=>{e.waitUntil((async()=>{"
-                    b"const keys=await caches.keys();"
-                    b"await Promise.all(keys.map(k=>caches.delete(k)));"
-                    b"const cs=await clients.matchAll();"
-                    b"cs.forEach(c=>c.navigate(c.url));"
-                    b"self.registration.unregister();"
-                    b"})())});")
+            body = (
+                b"self.addEventListener('install', e => self.skipWaiting());\n"
+                b"self.addEventListener('activate', e => {\n"
+                b"  e.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))));\n"
+                b"  self.registration.unregister();\n"
+                b"});\n"
+            )
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript")
-            self.send_header("Service-Worker-Allowed", "/")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store, must-revalidate")
             self.end_headers()
             self.wfile.write(body)
             return
-        if path == "/manifest.json":
-            body = json.dumps({
-                "name": "Stratton Oakmont", "short_name": "Stratton",
-                "start_url": "/", "display": "standalone",
-                "background_color": "#000000", "theme_color": "#000000",
-                "icons": [{"src": "/icon-192.png", "sizes": "192x192",
-                           "type": "image/png"},
-                          {"src": "/icon-512.png", "sizes": "512x512",
-                           "type": "image/png"}],
-            }).encode()
+
+        # 2. Public API endpoint for HFT metrics (polled by UI)
+        if path == "/api/hft":
+            data = _read_hft_state()
+            payload = json.dumps(data).encode("utf-8")
             self.send_response(200)
-            self.send_header("Content-Type", "application/manifest+json")
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            self.wfile.write(payload)
             return
-        if path in ("/logo.png", "/icon-512.png", "/icon-192.png",
-                    "/icon-180.png", "/icon-1024.png"):
-            f = ROOT / path.lstrip("/")
-            if f.exists():
-                body = f.read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", "image/png")
-                self.send_header("Cache-Control", "public, max-age=86400")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-                return
-            self.send_error(404)
+
+        # 3. Static Icons / Assets
+        if path in ("/icon-192.png", "/icon-180.png", "/logo.png", "/favicon.ico"):
+            self.send_response(204)
+            self.end_headers()
             return
-        if path in ("/", "/login"):
-            if self._authed():
-                return self._send_html(_page_html().encode())
-            return self._send_html(_login_html().encode())
-        if path == "/api/state":
-            if not self._authed():
-                return self._json({"ok": False}, 403)
-            return self._json(_state_payload())
-        if path == "/api/lock":
-            q = parse_qs(urlparse(self.path).query)
-            SESSIONS.pop((q.get("t") or [""])[0], None)
-            _save_sessions()
-            return self._json({"ok": True})
-        if path == "/webauthn/auth-options":
-            try:
-                from webauthn import generate_authentication_options, options_to_json
-                from webauthn.helpers.structs import (PublicKeyCredentialDescriptor,
-                                                      UserVerificationRequirement)
-                creds = _load_creds()
-                if not creds:
-                    return self._json({"none": True})
-                ch = secrets.token_urlsafe(32)
-                CHALLENGES[ch] = (time.time() + 300, "auth")
-                opts = generate_authentication_options(
-                    rp_id=RP_ID, challenge=ch.encode(),
-                    allow_credentials=[
-                        PublicKeyCredentialDescriptor(id=unb64u(c["id"]))
-                        for c in creds],
-                    user_verification=UserVerificationRequirement.REQUIRED)
-                return self._json(json.loads(options_to_json(opts)))
-            except Exception:
-                return self._json({"none": True})
-        self.send_error(404)
+
+        # 4. Auth check for Dashboard
+        if not self._is_authed():
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(_render_login().encode("utf-8"))
+            return
+
+        # 5. Serve Terminal Dashboard
+        body = _render_hft_terminal().encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store, must-revalidate")
+        self.end_headers()
+        self.wfile.write(body)
 
     def do_POST(self):
-        path = urlparse(self.path).path
-        n = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(n).decode()
+        parsed = urlparse(self.path)
+        path = parsed.path
+
         if path == "/login":
-            # rate-limit password guessing: 8 failures / 10 min per IP
-            ip = self.client_address[0]
-            now = time.time()
-            fails = LOGIN_FAILS.setdefault(ip, [])
-            fails[:] = [t for t in fails if now - t < 600]
-            if len(fails) >= 8:
-                return self._json({"ok": False, "msg": "too many attempts"},
-                                  429)
-            tok = (parse_qs(raw).get("token") or [""])[0]
-            if TOKEN and secrets.compare_digest(tok, TOKEN):
-                LOGIN_FAILS.pop(ip, None)
-                t = self._new_session()
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length).decode("utf-8")
+            form = parse_qs(raw)
+            token = (form.get("token") or [""])[0].strip()
+
+            if token == TOKEN:
+                sid = secrets.token_urlsafe(24)
+                SESSIONS[sid] = time.time() + SESSION_TTL
                 self.send_response(302)
-                self.send_header("Set-Cookie",
-                                 f"scalper_s={t}; Path=/; HttpOnly; Max-Age={int(SESSION_HOURS*3600)}")
-                self.send_header("Location", f"/?t={t}")
-                self.send_header("Content-Length", "0")
-                self.send_header("Connection", "close")
+                self.send_header("Location", f"/?t={sid}")
+                self.send_header("Set-Cookie", f"hft_s={sid}; Path=/; Max-Age={SESSION_TTL}; SameSite=Lax; Secure")
                 self.end_headers()
-                return
-            fails.append(now)
-            # logged so fail2ban can ban the source (and so an audit can
-            # see guessing): "login failed from <ip>"
-            print(f"login failed from {ip} ({len(fails)}/8 in 10 min)",
-                  flush=True)
-            return self._send_html(_login_html("wrong password").encode(), 401)
-        if path == "/api/power":
-            if not self._authed():
-                return self._json({"ok": False}, 403)
-            if PAUSED.exists():
-                PAUSED.unlink()
             else:
-                PAUSED.write_text(str(int(time.time())))
-            return self._json({"ok": True, "paused": PAUSED.exists()})
-        if path == "/webauthn/register-options":
-            if not self._authed():
-                return self._json({"ok": False, "msg": "sign in first"}, 403)
-            try:
-                from webauthn import generate_registration_options, options_to_json
-                from webauthn.helpers.structs import (AuthenticatorSelectionCriteria,
-                                                      UserVerificationRequirement)
-                creds = _load_creds()
-                ch = secrets.token_urlsafe(32)
-                CHALLENGES[ch] = (time.time() + 300, "register")
-                opts = generate_registration_options(
-                    rp_id=RP_ID, rp_name="Stratton",
-                    user_id="scalper-operator".encode(),
-                    user_name="operator",
-                    exclude_credentials=[
-                        {"id": c["id"], "type": "public-key"} for c in creds],
-                    authenticator_selection=AuthenticatorSelectionCriteria(
-                        user_verification=UserVerificationRequirement.REQUIRED))
-                return self._json(json.loads(options_to_json(opts)))
-            except Exception as e:
-                return self._json({"ok": False, "msg": str(e)[:120]})
-        if path == "/webauthn/register-verify":
-            if not self._authed():
-                return self._json({"ok": False, "msg": "sign in first"}, 403)
-            try:
-                from webauthn import verify_registration_response
-                body = json.loads(raw)
-                ch = body.get("_challenge")
-                rec = CHALLENGES.get(ch)
-                if not rec or rec[1] != "register" or rec[0] < time.time():
-                    return self._json({"ok": False, "msg": "challenge expired"})
-                vr = None
-                for origin in (ORIGIN, "https://62.60.198.135",
-                               "https://62.60.198.135:443"):
-                    try:
-                        vr = verify_registration_response(
-                            credential=body, expected_challenge=unb64u(ch),
-                            expected_origin=origin, expected_rp_id=RP_ID)
-                        break
-                    except Exception:
-                        continue
-                if vr is None:
-                    return self._json({"ok": False, "msg": "face id origin mismatch"})
-                creds = _load_creds()
-                creds.append({"id": b64u(vr.credential_id),
-                              "pk": b64u(vr.credential_public_key),
-                              "sign_count": vr.sign_count})
-                _save_creds(creds)
-                CHALLENGES.pop(ch, None)
-                return self._json({"ok": True, "msg": "face id registered"})
-            except Exception as e:
-                return self._json({"ok": False, "msg": str(e)[:160]})
-        if path == "/webauthn/auth-verify":
-            try:
-                from webauthn import verify_authentication_response
-                body = json.loads(raw)
-                ch = body.get("_challenge")
-                rec = CHALLENGES.get(ch)
-                if not rec or rec[1] != "auth" or rec[0] < time.time():
-                    return self._json({"ok": False, "msg": "challenge expired"})
-                match = next((c for c in _load_creds() if c["id"] == body.get("rawId")
-                              or c["id"] == body.get("id")), None)
-                if match is None:
-                    return self._json({"ok": False, "msg": "device not recognised"})
-                # the phone may reach the app via the bare IP or the nip.io
-                # hostname; accept either origin for the same rpId
-                va = None
-                for origin in (ORIGIN, "https://62.60.198.135",
-                               "https://62.60.198.135:443"):
-                    try:
-                        va = verify_authentication_response(
-                            credential=body, expected_challenge=unb64u(ch),
-                            expected_origin=origin, expected_rp_id=RP_ID,
-                            credential_public_key=unb64u(match["pk"]),
-                            credential_current_sign_count=match.get("sign_count", 0))
-                        break
-                    except Exception:
-                        continue
-                if va is None:
-                    return self._json({"ok": False, "msg": "face id origin mismatch"})
-                creds = _load_creds()
-                for c in creds:
-                    if c["id"] == match["id"]:
-                        c["sign_count"] = va.new_sign_count
-                _save_creds(creds)
-                CHALLENGES.pop(ch, None)
-                t = self._new_session()
-                body = json.dumps({"ok": True, "t": t}).encode()
+                body = _render_login(err="Invalid Token").encode("utf-8")
                 self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Set-Cookie",
-                                 f"scalper_s={t}; Path=/; HttpOnly; Max-Age={int(SESSION_HOURS*3600)}")
-                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
                 self.wfile.write(body)
-                return
-            except Exception as e:
-                return self._json({"ok": False, "msg": str(e)[:160]})
-        self.send_error(404)
+            return
+
+        self.send_response(404)
+        self.end_headers()
 
 
-def main() -> None:
-    port = int(os.getenv("SCALPER_APP_PORT", "443"))
-    host = os.getenv("SCALPER_APP_HOST", "0.0.0.0")
-    cert = os.getenv("SCALPER_APP_CERT")
-    key = os.getenv("SCALPER_APP_KEY")
-    if not TOKEN:
-        print("set SCALPER_APP_TOKEN in .env first")
-        raise SystemExit(1)
-    ctx = None
-    if cert and key and os.path.exists(cert):
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-        ctx.load_cert_chain(cert, key)
-    httpd = SecureServer((host, port), Handler)
-    httpd.ssl_context = ctx                 # None -> plain HTTP
-    if ctx is not None:
-        print(f"scalper app on https://{host}:{port} "
-              f"(handshake timeout {HANDSHAKE_TIMEOUT_S}s, "
-              f"request timeout {REQUEST_TIMEOUT_S}s)")
+def run_app():
+    server = ThreadingHTTPServer((HOST, PORT), HFTHandler)
+    if os.path.exists(CERT) and os.path.exists(KEY):
+        ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ctx.load_cert_chain(certfile=CERT, keyfile=KEY)
+        server.socket = ctx.wrap_socket(server.socket, server_side=True)
+        proto = "https"
     else:
-        print(f"scalper app on http://{host}:{port} (no TLS)")
-    httpd.serve_forever()
+        proto = "http"
+
+    print(f"HFT Terminal running on {proto}://{HOST}:{PORT}")
+    server.serve_forever()
 
 
 if __name__ == "__main__":
-    main()
+    run_app()

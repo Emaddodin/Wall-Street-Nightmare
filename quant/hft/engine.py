@@ -1,30 +1,30 @@
 """
 quant/hft/engine.py
-====================
-Main HFT Orchestrator — ties together all five pillars:
+===================
+Master event-loop orchestrator for the 5-pillar quantitative HFT system.
 
-  1. Data Feed      → HyperliquidFeed (L2 WebSocket)
-  2. Alpha          → MultiHawkes + SignalEngine (OFI + CatBoost)
-  3. Execution      → AvellanadaStoikov + SquareRootSplitter
-  4. Risk           → FractionalKelly + Isolated Margin math
-  5. Exit           → ChandelierExit with ATR Ratchet
-     Volatility     → GARCH(1,1) with Merton jump detection
-
-Entry loop (per symbol, every tick):
-  book_update → GARCH → Hawkes → SignalEngine → Kelly → AS quotes → Chandelier
+Pillars integrated:
+  1. Order Flow Imbalance (OFI) L1-L5 feature extraction
+  2. Mutually Exciting Hawkes Process trade intensity tracking
+  3. CatBoost microsecond direction prediction
+  4. Avellaneda-Stoikov inventory-aware market making
+  5. Fractional Kelly dynamic leverage sizing & ATR Chandelier trailing ratchets
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Optional
+
+import numpy as np
 
 from .alpha import MultiHawkes, SignalEngine, SignalResult
 from .data_feed import HyperliquidFeed, OrderBook
-from .execution import AvellanadaStoikov, SquareRootSplitter
+from .execution import AvellanedaStoikov, SquareRootSplitter
 from .exits import ChandelierExit, ExitState
 from .models import GARCH11, VolatilityState
 from .risk import FractionalKelly, PositionSpec
@@ -34,33 +34,33 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Open position tracker
+# State containers
 # ---------------------------------------------------------------------------
 
 @dataclass
 class OpenPosition:
     spec: PositionSpec
-    open_time: float = field(default_factory=time.time)
-    chandelier: ChandelierExit = field(default_factory=ChandelierExit)
-    peak_pnl_pct: float = 0.0
-
-    def __post_init__(self) -> None:
-        self.chandelier.init_position(self.spec.side, self.spec.entry_price)
-
-    def current_pnl_pct(self, price: float) -> float:
-        if self.spec.side == "long":
-            return (price - self.spec.entry_price) / self.spec.entry_price
-        return (self.spec.entry_price - price) / self.spec.entry_price
+    chandelier: ChandelierExit
+    highest_price: float
+    lowest_price: float
+    entry_ts: float = field(default_factory=time.time)
 
     def update_peak(self, price: float) -> None:
-        pnl = self.current_pnl_pct(price)
-        if pnl > self.peak_pnl_pct:
-            self.peak_pnl_pct = pnl
+        if price > self.highest_price:
+            self.highest_price = price
+        if price < self.lowest_price:
+            self.lowest_price = price
 
+    def unrealized_pnl(self, current_price: float) -> float:
+        if self.spec.side == "long":
+            return (current_price - self.spec.entry_price) * self.spec.qty_base
+        else:
+            return (self.spec.entry_price - current_price) * self.spec.qty_base
 
-# ---------------------------------------------------------------------------
-# Per-symbol state
-# ---------------------------------------------------------------------------
+    def current_pnl_pct(self, current_price: float) -> float:
+        ret = (current_price - self.spec.entry_price) / self.spec.entry_price
+        return ret if self.spec.side == "long" else -ret
+
 
 @dataclass
 class SymbolState:
@@ -68,13 +68,17 @@ class SymbolState:
     garch: GARCH11 = field(default_factory=GARCH11)
     hawkes: MultiHawkes = field(default_factory=MultiHawkes)
     signal_engine: SignalEngine = field(default_factory=SignalEngine)
-    as_model: AvellanadaStoikov = field(default_factory=AvellanadaStoikov)
+    as_model: AvellanedaStoikov = field(default_factory=AvellanedaStoikov)
     splitter: SquareRootSplitter = field(default_factory=SquareRootSplitter)
     position: Optional[OpenPosition] = None
     last_vol: VolatilityState = field(default_factory=lambda: VolatilityState(
         sigma=0.01, sigma_annual=0.5, is_jump=False, jump_rate=0.0, cluster_active=False
     ))
-    prev_snapshot: object = None  # OFISnapshot
+    _last_telemetry_ts: float = 0.0
+    _last_conf: float = 0.0
+    _last_dir: str = "NEUTRAL"
+    _last_lev: int = 1
+    _last_kelly: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -82,73 +86,51 @@ class SymbolState:
 # ---------------------------------------------------------------------------
 
 @dataclass
-class EngineConfig:
-    symbols: list[str]
-    balance_usdt: float = 1_000.0
-    kelly_fraction: float = 0.25          # Quarter-Kelly
-    max_leverage: int = 20
-    mmr: float = 0.005                    # BTC maintenance margin rate
-    safety_factor: float = 2.0
-    max_risk_pct: float = 0.10
-    min_confidence: float = 0.60
-    min_hawkes_ratio: float = 1.5
-    max_spread_bps: float = 20.0
+class HFTEngineConfig:
+    symbols: list[str] = field(default_factory=lambda: ["BTC"])
+    balance_usdt: float = 65.0
+    dry_run: bool = True
     model_path: Optional[str] = None
-    dry_run: bool = True                  # paper mode — no real orders
+    kelly_fraction: float = 0.25
+    max_leverage: int = 20
+    max_spread_bps: float = 8.0
+    min_hawkes_ratio: float = 1.3
+    ofi_levels: int = 5
+    ofi_window: int = 50
 
 
 # ---------------------------------------------------------------------------
-# Main engine
+# Main Engine
 # ---------------------------------------------------------------------------
 
 class HFTEngine:
-    """
-    Async main loop orchestrator.
+    def __init__(self, config: Optional[HFTEngineConfig] = None) -> None:
+        self.config = config or HFTEngineConfig()
+        self._states: dict[str, SymbolState] = {}
+        for s in self.config.symbols:
+            st = SymbolState(symbol=s)
+            if self.config.model_path:
+                st.signal_engine = SignalEngine(
+                    model_path=self.config.model_path,
+                    ofi_levels=self.config.ofi_levels,
+                    window_ticks=self.config.ofi_window,
+                )
+            self._states[s] = st
 
-    Usage
-    -----
-    cfg = EngineConfig(symbols=["BTC", "ETH"], balance_usdt=500.0, dry_run=True)
-    engine = HFTEngine(cfg)
-    await engine.run()
-    """
-
-    def __init__(self, config: EngineConfig) -> None:
-        self.config = config
-        self._states: Dict[str, SymbolState] = {
-            s: SymbolState(
-                symbol=s,
-                signal_engine=SignalEngine(model_path=config.model_path),
-                as_model=AvellanadaStoikov(
-                    gamma=0.1,
-                    kappa=1.5,
-                    sigma=0.02,
-                    epoch_sec=300.0,
-                    max_inventory=5.0,
-                ),
-            )
-            for s in config.symbols
-        }
         self._kelly = FractionalKelly(
-            fraction=config.kelly_fraction,
-            max_leverage=config.max_leverage,
-            mmr=config.mmr,
-            safety_factor=config.safety_factor,
-            max_risk_pct=config.max_risk_pct,
+            fraction=self.config.kelly_fraction,
+            max_leverage=self.config.max_leverage,
         )
         self._feed = HyperliquidFeed(
-            symbols=config.symbols,
+            symbols=self.config.symbols,
             on_book_update=self._on_book_update,
             on_trade=self._on_trade,
         )
         self._running = False
-        self._balance = config.balance_usdt
+        self._balance = self.config.balance_usdt
         self._trade_count = 0
         self._pnl_total = 0.0
         self.monitor = LiveMonitorAgent()
-
-    # ------------------------------------------------------------------
-    # Public
-    # ------------------------------------------------------------------
 
     async def run(self) -> None:
         self._running = True
@@ -174,7 +156,7 @@ class HFTEngine:
             return
 
         mid = book.mid_price
-        if mid != mid:  # NaN guard
+        if mid is None or mid != mid:  # NaN guard
             return
 
         bids, asks = book.get_levels(5)
@@ -184,26 +166,105 @@ class HFTEngine:
         bids_t = [(l.price, l.qty) for l in bids]
         asks_t = [(l.price, l.qty) for l in asks]
 
-        # --- 1. Volatility (GARCH + jump detection) ---
+        # 1. Volatility update
         vol = st.garch.update(mid)
         st.last_vol = vol
 
-        # Update AS model and splitter with live sigma
         sigma_per_bar = vol.sigma
         st.as_model.update_sigma(sigma_per_bar)
-        st.splitter.update_sigma(sigma_per_bar * 16)  # scale to ~daily
+        st.splitter.update_sigma(sigma_per_bar * 16)
 
-        # --- 2. Chandelier on open position ---
+        # 2. Warm up signal engine feature buffer
+        st.signal_engine.feature_eng.update(bids_t, asks_t, mid)
+        ofi_vec = st.signal_engine.feature_eng.compute_ofi_vector()
+        ofi_mean = float(np.mean(ofi_vec)) if len(ofi_vec) else 0.0
+
+        quote = st.as_model.compute_quotes(mid)
+
+        # CatBoost inference preview for telemetry
+        if st.signal_engine.feature_eng.is_ready():
+            feat = st.signal_engine.feature_eng.get_feature_vector(
+                bids_t, asks_t, st.hawkes.buy_intensity, st.hawkes.sell_intensity
+            )
+            p_up, p_down = st.signal_engine.predictor.predict_proba(feat)
+            if p_up > p_down:
+                st._last_dir = "LONG"
+                st._last_conf = p_up
+            else:
+                st._last_dir = "SHORT"
+                st._last_conf = p_down
+
+            # Kelly preview
+            k_spec = self._kelly.compute_position(
+                symbol=symbol,
+                side="long" if st._last_dir == "LONG" else "short",
+                balance_usdt=self._balance,
+                entry_price=mid,
+                win_prob=st._last_conf,
+                win_loss_ratio=1.5,
+                predicted_vol_pct=vol.sigma,
+                atr_price=vol.sigma * mid,
+            )
+            if k_spec:
+                st._last_lev = k_spec.leverage
+                st._last_kelly = k_spec.margin_usdt / self._balance if self._balance > 0 else 0.0
+
+        # 3. Telemetry broadcast (every 1 second)
+        now_ts = time.time()
+        if now_ts - st._last_telemetry_ts >= 1.0:
+            st._last_telemetry_ts = now_ts
+            pos_dict = None
+            if st.position is not None:
+                pos = st.position
+                pnl_u = pos.unrealized_pnl(mid)
+                pnl_pct_u = pos.current_pnl_pct(mid)
+                pos_dict = {
+                    "side": pos.spec.side.upper(),
+                    "entry_price": round(pos.spec.entry_price, 2),
+                    "current_price": round(mid, 2),
+                    "qty": round(pos.spec.qty_base, 4),
+                    "notional": round(pos.spec.notional_usdt, 2),
+                    "unrealized_pnl": round(pnl_u, 2),
+                    "unrealized_pnl_pct": round(pnl_pct_u * 100, 2),
+                    "stop_price": round(pos.chandelier.evaluate(mid).stop_price, 2),
+                    "ratchet_mult": round(pos.chandelier.current_multiplier, 1),
+                    "leverage": pos.spec.leverage,
+                }
+
+            asyncio.create_task(self.monitor.update_tick(
+                mid=mid,
+                bid=bids_t[0][0],
+                ask=asks_t[0][0],
+                spread_bps=book.spread_bps,
+                as_spread=quote.spread,
+                as_res=quote.reservation_price,
+                as_inv=st.as_model.inventory,
+                h_buy=st.hawkes.buy_intensity,
+                h_sell=st.hawkes.sell_intensity,
+                ofi_mean=ofi_mean,
+                ofi_levels=list(ofi_vec),
+                sigma=vol.sigma,
+                balance=self._balance,
+                realized_pnl=self._pnl_total,
+                trade_count=self._trade_count,
+                position=pos_dict,
+                catboost_conf=st._last_conf,
+                catboost_dir=st._last_dir,
+                leverage=st._last_lev,
+                kelly_f=st._last_kelly,
+            ))
+
+        # 4. Chandelier on open position
         if st.position is not None:
             await self._manage_open_position(st, mid, bids_t[0][0], asks_t[0][0], vol)
-            return  # no new signal while in trade
+            return
 
-        # --- 3. Hawkes intensity check ---
+        # 5. Hawkes clustering check
         excited, hk_dir = st.hawkes.net_imbalance_excited(self.config.min_hawkes_ratio)
         if not excited:
-            return  # wait for liquidity cluster
+            return
 
-        # --- 4. Alpha / signal generation ---
+        # 6. Signal evaluation
         signal: SignalResult = await st.signal_engine.generate_signal(
             bids=bids_t,
             asks=asks_t,
@@ -215,16 +276,13 @@ class HFTEngine:
         )
 
         if not signal.is_valid:
-            logger.debug("[%s] Signal invalid: %s", symbol, signal.reason)
             return
 
-        # Direction alignment check: Hawkes direction must agree with ML
         ml_dir = "long" if signal.direction == 1 else "short"
         if hk_dir != "neutral" and ml_dir != hk_dir:
-            logger.debug("[%s] Hawkes/ML direction conflict — skip.", symbol)
             return
 
-        # --- 5. Kelly position sizing ---
+        # 7. Kelly position sizing
         side = "long" if signal.direction == 1 else "short"
         spec = self._kelly.compute_position(
             symbol=symbol,
@@ -232,39 +290,24 @@ class HFTEngine:
             balance_usdt=self._balance,
             entry_price=mid,
             win_prob=signal.confidence,
-            win_loss_ratio=1.5,          # target R:R
+            win_loss_ratio=1.5,
             predicted_vol_pct=vol.sigma,
             atr_price=vol.sigma * mid,
         )
 
         if spec is None:
-            logger.debug("[%s] Kelly rejected trade.", symbol)
             return
 
-        # --- 6. Avellaneda-Stoikov quote check ---
-        quote = st.as_model.compute_quotes(mid)
-        await self.monitor.log_as_dynamics(quote.spread, st.as_model.inventory)
+        # 8. Spread check
         spread_bps = book.spread_bps
         if spread_bps > self.config.max_spread_bps:
-            logger.debug("[%s] Spread %.1f bps > limit.", symbol, spread_bps)
             return
 
-        # --- 7. Square-Root Law split check ---
-        qty = spec.qty_base
-        impact = st.splitter.estimate_impact(qty)
-        if impact > 0.002:  # >0.2% impact
-            chunks = st.splitter.split(qty)
-            logger.info(
-                "[%s] Large order: splitting into %d TWAP chunks (impact=%.4f%%)",
-                symbol, len(chunks), impact * 100,
-            )
-        else:
-            chunks = [None]  # single market order
-
-        await self._open_position(st, spec, signal, quote, symbol)
+        # 9. Open position
+        await self._open_position(st, symbol, spec, signal, mid)
 
     # ------------------------------------------------------------------
-    # Trade callback (updates Hawkes process)
+    # Trade callback
     # ------------------------------------------------------------------
 
     async def _on_trade(self, symbol: str, trade: dict) -> None:
@@ -285,26 +328,33 @@ class HFTEngine:
     async def _open_position(
         self,
         st: SymbolState,
+        symbol: str,
         spec: PositionSpec,
         signal: SignalResult,
-        quote,
-        symbol: str,
+        mid: float,
     ) -> None:
-        pos = OpenPosition(spec=spec)
-        # Feed current ATR into chandelier
-        atr_price = st.last_vol.sigma * spec.entry_price
-        for _ in range(22):  # seed ATR buffer
-            pos.chandelier.update_bar(
-                high=spec.entry_price * (1 + st.last_vol.sigma),
-                low=spec.entry_price * (1 - st.last_vol.sigma),
-                close=spec.entry_price,
-            )
+        pos = OpenPosition(
+            spec=spec,
+            chandelier=ChandelierExit(
+                initial_multiplier=3.0,
+                step=0.5,
+                floor_multiplier=1.5,
+                ratchet_threshold_r=0.75,
+            ),
+            highest_price=spec.entry_price,
+            lowest_price=spec.entry_price,
+        )
+        pos.chandelier.update_bar(
+            high=spec.entry_price,
+            low=spec.entry_price,
+            close=spec.entry_price,
+        )
         pos.chandelier.init_position(spec.side, spec.entry_price)
         st.position = pos
 
         mode = "[DRY RUN]" if self.config.dry_run else "[LIVE]"
         logger.info(
-            "%s OPEN %s %s | entry=%.4f liq=%.4f stop=%.4f "
+            "%s OPEN %s %s | entry=%.2f liq=%.2f stop=%.2f "
             "margin=%.2f USDT lev=%dx OFI_mean=%.3f conf=%.2f",
             mode, spec.side.upper(), symbol,
             spec.entry_price, spec.liq_price, spec.stop_price,
@@ -318,7 +368,8 @@ class HFTEngine:
             st.hawkes.sell_intensity, 
             float(signal.ofi_vector.mean()), 
             spec.leverage, 
-            spec.entry_price
+            spec.entry_price,
+            direction=spec.side.upper()
         )
 
     async def _manage_open_position(
@@ -342,7 +393,6 @@ class HFTEngine:
 
         pnl_pct = pos.current_pnl_pct(price)
 
-        # Hard stop: price hit liquidation zone
         liq_breach = (
             (pos.spec.side == "long" and price <= pos.spec.liq_price * 1.02) or
             (pos.spec.side == "short" and price >= pos.spec.liq_price * 0.98)
@@ -357,8 +407,8 @@ class HFTEngine:
             self._balance += pnl_usdt
             mode = "[DRY RUN]" if self.config.dry_run else "[LIVE]"
             logger.info(
-                "%s CLOSE %s %s | exit=%.4f pnl=%.2f%% pnl_usdt=%.2f "
-                "stop=%.4f mult=%.1f ATR=%.4f reason=%s",
+                "%s CLOSE %s %s | exit=%.2f pnl=%.2f%% pnl_usdt=%.2f "
+                "stop=%.2f mult=%.1f ATR=%.2f reason=%s",
                 mode, pos.spec.side.upper(), pos.spec.symbol,
                 price, pnl_pct * 100, pnl_usdt,
                 exit_state.stop_price, exit_state.multiplier,
@@ -368,17 +418,12 @@ class HFTEngine:
             st.as_model.reset_epoch()
             await self.monitor.log_exit(pos.spec.side, price, pnl_usdt, pnl_pct, reason)
 
-    # ------------------------------------------------------------------
-    # Stats
-    # ------------------------------------------------------------------
-
     def stats(self) -> dict:
         return {
             "balance_usdt": self._balance,
             "total_pnl_usdt": self._pnl_total,
             "trade_count": self._trade_count,
-            "open_positions": {
-                s: st.position.spec.side if st.position else None
-                for s, st in self._states.items()
-            },
+            "open_positions": {s: bool(st.position) for s, st in self._states.items()},
         }
+
+EngineConfig = HFTEngineConfig
