@@ -1982,13 +1982,16 @@ class PaperBook:
                 if pos.side > 0:
                     ref = min(float(b["l"]) for b in seg)
                     pos.trail_ref = max(pos.trail_ref, ref)
-                    pos.sl_px = max(pos.sl_px,
-                                    self._trail_stop(1, pos.trail_ref, atr))
+                    stop = self._trail_stop(1, pos.trail_ref, atr)
+                    if stop > 0:
+                        pos.sl_px = max(pos.sl_px, stop)
                 else:
                     ref = max(float(b["h"]) for b in seg)
-                    pos.trail_ref = min(pos.trail_ref, ref)
-                    pos.sl_px = min(pos.sl_px,
-                                    self._trail_stop(-1, pos.trail_ref, atr))
+                    pos.trail_ref = min(pos.trail_ref, ref) \
+                        if pos.trail_ref > 0 else ref
+                    stop = self._trail_stop(-1, pos.trail_ref, atr)
+                    if stop > 0:
+                        pos.sl_px = min(pos.sl_px, stop)
         # 3. stop (conservative: SL wins over TP2 when both touched).
         #    The FILL bar's own low filled the entry, so it cannot also
         #    stop the position in the same evaluation -- its low predates
@@ -2441,6 +2444,11 @@ class SniperEngine:
         loop = asyncio.get_running_loop()
         now = int(time.time() * 1000)
         last = self.last_bar_t.get(coin, 0)
+        if last == 0:
+            # never replay from epoch: backfill owns the initial load, and a
+            # zero anchor means candles_snapshot(0, now) would dump the whole
+            # history through on_candle (the Sep-15 $700 phantom-balance bug)
+            return
         start = max(0, last - self.cfg.tf_min * MIN_MS)
         candles = await loop.run_in_executor(
             None, self.info.candles_snapshot, coin, self._interval(),
@@ -2629,6 +2637,11 @@ class SniperEngine:
                 await self._backfill(coin)
                 if self.cfg.data_pace_s > 0:
                     await asyncio.sleep(self.cfg.data_pace_s)
+        # resumed positions must also have bars before they are polled --
+        # otherwise _poll_one would see last_bar_t==0 and replay history
+        for coin in list(self.book.positions):
+            if coin not in self.bars:
+                await self._backfill(coin)
         for coin in list(self.bars):
             if coin not in universe and coin not in self.book.positions \
                     and coin not in self.book.orders:
