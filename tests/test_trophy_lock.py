@@ -14,7 +14,8 @@ from live_hyperliquid import Config, PaperBook, Position, RiskEngine
 
 
 def _mk():
-    cfg = Config(paper_equity=100.0)
+    # pin the target: the mechanism must not depend on the day's live value
+    cfg = Config(paper_equity=100.0, daily_target_pct=100.0)
     book = PaperBook(cfg)
     book.realized_pnl = 20.0
     book.positions["X"] = Position(

@@ -278,6 +278,9 @@ class Config:
     live_publish_s: float = 3.0     # while a position is open, push the
                                     # mids-driven snapshot this often so the
                                     # phone card's PnL ticks like an exchange
+    live_alerts_enabled: bool = True  # instant "price reached the level"
+                                      # pings from the live mids (the book
+                                      # itself still decides on bar close)
     data_dir: str = ""              # SCALPER_DATA / --data-dir
     ntfy_topic: str = ""            # NTFY_TOPIC / --ntfy-topic
     notify: bool = True             # push to ntfy.sh
@@ -850,9 +853,10 @@ class Notifier:
     """ntfy.sh push -- the operator's phone alerts.  Never fatal and never
     blocks the trading loop: a failed push is a warning in the log."""
 
-    def __init__(self, topic: str, enabled: bool = True):
+    def __init__(self, topic: str, enabled: bool = True, tries: int = 3):
         self.topic = (topic or "").strip()
         self.enabled = bool(enabled and self.topic)
+        self.cfg_tries = max(1, int(tries))     # transient failures get retried
         self.sent = 0
         self.failed = 0
         self._last: Dict[str, float] = {}
@@ -867,25 +871,33 @@ class Notifier:
         if throttle_s and throttle_key:
             now = time.time()
             if now - self._last.get(throttle_key, 0.0) < throttle_s:
+                # surface the drop: a silently swallowed alert looks like a
+                # missed one on the phone
+                LOG.info("[NTFY:throttled] %s | %s", title,
+                         msg.replace("\n", " | ")[:80])
                 return False
             self._last[throttle_key] = now
-        try:
-            ascii_title = title.encode("ascii", "ignore").decode() or "ICT Sniper"
-            req = urllib.request.Request(
-                f"https://ntfy.sh/{self.topic}", data=msg.encode("utf-8"),
-                headers={"Title": ascii_title, "Priority": priority,
-                         "Tags": tags})
-            with urllib.request.urlopen(req, timeout=10) as r:
-                ok = 200 <= r.status < 300
-            if ok:
-                self.sent += 1
-            else:
-                self.failed += 1
-            return ok
-        except Exception as e:                      # noqa: BLE001
-            self.failed += 1
-            LOG.warning("[NTFY] push failed: %s", e)
-            return False
+        ascii_title = title.encode("ascii", "ignore").decode() or "ICT Sniper"
+        last_err = None
+        for attempt in range(self.cfg_tries):
+            try:
+                req = urllib.request.Request(
+                    f"https://ntfy.sh/{self.topic}", data=msg.encode("utf-8"),
+                    headers={"Title": ascii_title, "Priority": priority,
+                             "Tags": tags})
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    if 200 <= r.status < 300:
+                        self.sent += 1
+                        return True
+                    last_err = "HTTP %d" % r.status
+            except Exception as e:                  # noqa: BLE001
+                last_err = e
+            if attempt + 1 < self.cfg_tries:
+                time.sleep(0.4 * (attempt + 1))     # transient -> retry
+        self.failed += 1
+        LOG.warning("[NTFY] push failed after %d tries: %s", self.cfg_tries,
+                    last_err)
+        return False
 
 
 class AppState:
@@ -2695,11 +2707,62 @@ class SniperEngine:
     async def _live_price_loop(self):
         """Exchange-app feel: with an open position, refresh the app
         state every live_publish_s so the card's floating PnL, the ROI%
-        and the trail stop all tick in near-real time."""
+        and the trail stop all tick in near-real time.
+
+        It also watches the LIVE mids for level touches. The book only
+        DECIDES on closed 15m candles, so an official alert can be up to
+        15 minutes behind the tape -- this pings the phone the moment price
+        actually reaches a resting limit or an open position's TP/SL."""
+        seen: set = set()
         while not self._shutdown:
             await asyncio.sleep(self.cfg.live_publish_s)
             if self.book.positions:
                 self.pub.refresh()
+            if not self.cfg.live_alerts_enabled:
+                continue
+            try:
+                for coin, o in list(self.book.orders.items()):
+                    mid = self.mids.get(coin)
+                    if not mid:
+                        continue
+                    key = ("order", coin, o.signal_t)
+                    hit = (o.side > 0 and mid <= o.limit_px) or \
+                          (o.side < 0 and mid >= o.limit_px)
+                    if hit and key not in seen:
+                        seen.add(key)
+                        self.notifier.send(
+                            f"live {mid:.6g} reached the entry limit "
+                            f"{o.limit_px:.6g} -- the fill books at the 15m "
+                            f"close", title=f"LIVE TOUCH {coin}",
+                            tags="eyes")
+                for coin, p in list(self.book.positions.items()):
+                    mid = self.mids.get(coin)
+                    if not mid:
+                        continue
+                    lv = [("TP1", p.tp1_px, True), ("TP2", p.tp2_px, True),
+                          ("SL", p.sl_px, False)]
+                    for nm, lvl, is_tp in lv:
+                        if not lvl:
+                            continue
+                        if nm == "TP1" and p.scaled:
+                            continue        # that tier is already banked
+                        if nm == "TP2" and not p.tp2_qty:
+                            continue        # tier consumed by the trail
+                        if is_tp:
+                            hit = (p.side > 0 and mid >= lvl) or \
+                                  (p.side < 0 and mid <= lvl)
+                        else:
+                            hit = (p.side > 0 and mid <= lvl) or \
+                                  (p.side < 0 and mid >= lvl)
+                        key = ("pos", coin, nm, round(lvl, 10))
+                        if hit and key not in seen:
+                            seen.add(key)
+                            self.notifier.send(
+                                f"live {mid:.6g} reached {nm} {lvl:.6g} -- "
+                                f"books at the 15m close",
+                                title=f"LIVE {nm} {coin}", tags="eyes")
+            except Exception as e:                  # noqa: BLE001
+                LOG.debug("[LIVE] alert watch: %s", e)
 
     async def _status_loop(self):
         while not self._shutdown:
