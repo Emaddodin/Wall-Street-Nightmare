@@ -221,6 +221,14 @@ class Config:
     fc_persist_bars: int = 6          # directional persistence window
     fc_mom_bars: int = 12             # momentum lookback (bars)
     fc_counter_floor: float = 2.0     # reject when signed raw <= -this
+    # ---- real Kronos-mini gate (local forecast microservice) --------------
+    # When the service answers, its forward forecast REPLACES the lightweight
+    # forecast_bias; when it is down the book silently falls back to the lite
+    # gate.  The service runs in its own venv (kronos-forecast.service).
+    kronos_gate_enabled: bool = True
+    kronos_url: str = "http://127.0.0.1:8699/forecast"
+    kronos_timeout_s: float = 6.0
+    kronos_lookback: int = 200        # bars sent to the model
     # ---- v3 module 2: volume/delta confirmation at FVG mitigation --------
     vol_confirm_enabled: bool = True
     vol_look: int = 20                # baseline window for the trigger bar
@@ -1441,6 +1449,35 @@ class RiskEngine:
         direction = 1 if raw > 0 else (-1 if raw < 0 else 0)
         return direction, min(1.0, abs(raw) / 3.0)
 
+    def kronos_forecast(self, coin: str) -> Tuple[int, float]:
+        """Real Kronos-mini forward forecast via the local microservice.
+
+        Returns (direction, confidence); direction = sign of the model's
+        forecast drift over the next bars, confidence = |drift| scaled to
+        [0,1].  (0, 0.0) means "unavailable" -- the caller keeps the
+        lightweight forecast_bias gate.  Never raises."""
+        if not self.cfg.kronos_gate_enabled:
+            return 0, 0.0
+        bars = self._bars(coin) or []
+        if len(bars) < 60:
+            return 0, 0.0
+        tail = bars[-self.cfg.kronos_lookback:]
+        payload = {"bars": [[int(b["t"]), float(b["o"]), float(b["h"]),
+                             float(b["l"]), float(b["c"])] for b in tail]}
+        try:
+            req = urllib.request.Request(
+                self.cfg.kronos_url, data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req,
+                                        timeout=self.cfg.kronos_timeout_s) as r:
+                out = json.loads(r.read().decode())
+            if not out.get("ok"):
+                return 0, 0.0
+            return int(out.get("direction", 0)), \
+                min(1.0, float(out.get("confidence", 0.0)))
+        except Exception:
+            return 0, 0.0
+
     # ---- v3 module 2: volume / expansion confirmation ---------------------
     def vol_ok(self, coin: str) -> bool:
         """The bar that fills the FVG retest must show participation:
@@ -1771,13 +1808,17 @@ class PaperBook:
                          {1: "bullish", -1: "bearish"}.get(bias, "neutral"),
                          "LONG" if side > 0 else "SHORT")
                 return False
-            fdir, fconf = self.risk.forecast_bias(coin)
+            fdir, fconf = self.risk.kronos_forecast(coin)
+            src = "Kronos-mini"
+            if fdir == 0:
+                fdir, fconf = self.risk.forecast_bias(coin)
+                src = "Kronos-lite"
             if fdir != 0 and fdir != side and \
                     fconf >= self.cfg.fc_counter_floor / 3.0:
                 LOG.info("[SIGNAL] %s rejected: forecast %s (conf %.2f) vs "
-                         "%s setup (Kronos-lite gate)", coin,
+                         "%s setup (%s gate)", coin,
                          {1: "bullish", -1: "bearish"}.get(fdir, "flat"),
-                         fconf, "LONG" if side > 0 else "SHORT")
+                         fconf, "LONG" if side > 0 else "SHORT", src)
                 return False
         lev = self.risk.leverage_for(sl_bps) if self.risk is not None \
             else self.cfg.lev
