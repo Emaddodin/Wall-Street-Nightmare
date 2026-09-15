@@ -68,7 +68,15 @@ class ChandelierExit:
         initial_mult: float = 3.0,
         min_mult: float = 1.0,
         ratchet_steps: list[tuple[float, float]] | None = None,
+        initial_multiplier: float | None = None,
+        floor_multiplier: float | None = None,
+        step: float | None = None,
+        ratchet_threshold_r: float | None = None,
     ) -> None:
+        if initial_multiplier is not None:
+            initial_mult = initial_multiplier
+        if floor_multiplier is not None:
+            min_mult = floor_multiplier
         self.atr_period = atr_period
         self.initial_mult = initial_mult
         self.min_mult = min_mult

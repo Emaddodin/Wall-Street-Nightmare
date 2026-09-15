@@ -187,7 +187,9 @@ class MultiHawkes:
     def sell_intensity(self) -> float:
         return self.sell.intensity
 
-    def net_imbalance_excited(self, ratio_threshold: float = 1.5) -> tuple[bool, str]:
+    def net_imbalance_excited(self, ratio_threshold: float = 1.5, min_ratio: float | None = None) -> tuple[bool, str]:
+        if min_ratio is not None:
+            ratio_threshold = min_ratio
         """
         Returns (True, direction) if one side dominates beyond ratio_threshold.
         direction: 'long' or 'short'

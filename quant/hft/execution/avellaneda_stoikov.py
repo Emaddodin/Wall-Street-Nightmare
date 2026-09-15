@@ -128,7 +128,9 @@ class AvellanadaStoikov:
         term2 = (2.0 / self.gamma) * np.log(1.0 + self.gamma / (self.kappa + _EPS))
         return term1 + term2
 
-    def compute_quotes(self, mid: float) -> ReservationQuote:
+    def compute_quotes(self, mid: float = None, mid_price: float = None) -> ReservationQuote:
+        if mid is None and mid_price is not None:
+            mid = mid_price
         """
         Compute the full reservation quote from current state.
         Skews bid/ask symmetrically around reservation price.
