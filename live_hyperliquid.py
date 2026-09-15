@@ -236,10 +236,13 @@ class Config:
     vol_range_mult: float = 1.3       # OR range >= mult x its average
     # ---- v3 module 4: session / liquidity timing (v4 macro windows) -----
     session_filter_enabled: bool = True
-    # stand down after the NY close (20:15) until the London open
-    session_dead_utc: tuple = ((20 * 60 + 15, 24 * 60), (0, 6 * 60))
-    # prime: London open 06:00-10:00 and the FULL NY session 12:00-20:00
-    session_prime_utc: tuple = ((6 * 60, 10 * 60), (12 * 60, 20 * 60))
+    # KILLZONE CONFIG (from the 2-day stop-loss audit): only the NY session
+    # pays (+53.6R in 19:30-23:30 Tehran). London morning is a coin flip and
+    # the 10:00-12:00 UTC London->NY gap is where POLYX/PONS/CHIP all died.
+    # dead: 20:00-12:00 UTC (Asia + London + the gap)
+    session_dead_utc: tuple = ((20 * 60, 24 * 60), (0, 12 * 60))
+    # prime: the FULL NY session 12:00-20:00 UTC (15:30-23:30 Tehran)
+    session_prime_utc: tuple = ((12 * 60, 20 * 60),)
     prime_vol_relax: float = 0.8      # prime hours: easier vol confirmation
     prime_warmup_min: int = 30        # slot hygiene: no NEW entries in the
                                       # N minutes before a prime window so
