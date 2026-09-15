@@ -3,12 +3,12 @@ quant/hft/monitor.py
 ====================
 Observability & Telemetry sidecar for the 5-pillar HFT Engine.
 Publishes live metrics to JSON state for the HFT dashboard and sends
-real-time push notifications via ntfy.sh.
+institutional-grade push notifications via ntfy.sh with emojis and
+structured telemetry.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -26,7 +26,6 @@ class LiveMonitorAgent:
         self.ntfy_topic = os.getenv("NTFY_TOPIC", ntfy_topic)
         self.ntfy_url = f"https://ntfy.sh/{self.ntfy_topic}"
 
-        # State path aligns with VPS environment
         vps_state = Path("/root/ict_sniper/data/state/hft.json")
         local_state = Path(__file__).resolve().parents[2] / "data" / "state" / "hft.json"
         self.state_file = vps_state if Path("/root/ict_sniper").exists() else local_state
@@ -62,9 +61,14 @@ class LiveMonitorAgent:
             "atr_ratchet_mult": 3.0,
             "position": None,
             "recent_logs": [
-                {"time": time.strftime("%H:%M:%S", time.gmtime()), "text": "HFT Engine Initialized with $65.00 Paper Allocation", "type": "SYSTEM", "ts": time.time()}
+                {
+                    "time": time.strftime("%H:%M:%S", time.gmtime()),
+                    "text": "HFT Engine Initialized with $65.00 Paper Allocation",
+                    "type": "SYSTEM",
+                    "ts": time.time(),
+                }
             ],
-            "updated_at": time.time()
+            "updated_at": time.time(),
         }
         self._flush_state()
 
@@ -89,18 +93,27 @@ class LiveMonitorAgent:
             "time": time.strftime("%H:%M:%S", time.gmtime()),
             "text": text,
             "type": log_type,
-            "ts": time.time()
+            "ts": time.time(),
         }
         self.metrics["recent_logs"] = [entry] + self.metrics["recent_logs"][:25]
         self._flush_state()
 
     def push_ntfy(self, title: str, message: str, tags: str = "chart_with_upwards_trend", priority: str = "default"):
+        """
+        Dispatches push notification via Ntfy.
+        Title is ASCII-safe to prevent latin-1 HTTP header encoding crashes.
+        Emojis are mapped into tags and the UTF-8 message body.
+        """
         try:
             requests.post(
                 self.ntfy_url,
                 data=message.encode("utf-8"),
-                headers={"Title": title, "Tags": tags, "Priority": priority},
-                timeout=5
+                headers={
+                    "Title": title,
+                    "Tags": tags,
+                    "Priority": priority,
+                },
+                timeout=5,
             )
         except Exception as e:
             logger.error(f"Ntfy push error: {e}")
@@ -126,7 +139,7 @@ class LiveMonitorAgent:
         catboost_conf: float = 0.0,
         catboost_dir: str = "NEUTRAL",
         leverage: int = 1,
-        kelly_f: float = 0.0
+        kelly_f: float = 0.0,
     ):
         unrealized = position["unrealized_pnl"] if position else 0.0
         equity = balance + unrealized
@@ -144,7 +157,7 @@ class LiveMonitorAgent:
             "hawkes_sell": round(h_sell, 2),
             "hawkes_ratio": round(h_buy / (h_buy + h_sell) if (h_buy + h_sell) > 0 else 0.5, 3),
             "ofi_mean": round(ofi_mean, 3),
-            "ofi_levels": [round(float(x), 2) for x in ofi_levels[:5]] if ofi_levels else [0.0]*5,
+            "ofi_levels": [round(float(x), 2) for x in ofi_levels[:5]] if ofi_levels else [0.0] * 5,
             "garch_sigma": round(sigma, 6),
             "balance": round(balance, 2),
             "equity": round(equity, 2),
@@ -164,37 +177,125 @@ class LiveMonitorAgent:
         self.metrics["as_inventory_skew"] = round(inv_skew, 3)
         self._flush_state()
 
-    async def log_alpha_trigger(self, conf, h_buy, h_sell, ofi, lev, price, direction="BUY"):
-        self.metrics["catboost_confidence"] = round(conf, 3)
-        self.metrics["catboost_direction"] = direction
-        self.metrics["hawkes_buy"] = round(h_buy, 2)
-        self.metrics["hawkes_sell"] = round(h_sell, 2)
-        self.metrics["ofi_mean"] = round(ofi, 3)
-        self.metrics["dynamic_leverage"] = lev
+    # ------------------------------------------------------------------
+    # Granular Step-by-Step Trade Lifecycle Notifications
+    # ------------------------------------------------------------------
 
-        self.add_log(f"Alpha Trigger ({direction}) | Conf: {conf*100:.1f}% | Lev: {lev}x @ ${price:.1f}", "ALPHA")
-        self.push_ntfy(
-            f"Alpha Trigger: {direction} @ ${price:.1f}",
-            f"Confidence: {conf*100:.1f}%\nHawkes B/S: {h_buy:.1f}/{h_sell:.1f}\nOFI: {ofi:+.2f} | Lev: {lev}x",
-            "rocket",
-            "high"
+    async def notify_entry(
+        self,
+        symbol: str,
+        side: str,
+        entry_price: float,
+        qty: float,
+        margin: float,
+        leverage: int,
+        stop_price: float,
+        confidence: float,
+        hawkes_buy: float,
+        hawkes_sell: float,
+        ofi: float,
+    ):
+        """Dispatched immediately upon order execution."""
+        side_upper = side.upper()
+        is_long = side_upper == "LONG" or side_upper == "BUY"
+        icon = "🟢" if is_long else "🔴"
+        tag = "green_circle" if is_long else "red_circle"
+        sl_pct = abs((stop_price - entry_price) / entry_price) * 100.0
+
+        self.metrics["catboost_confidence"] = round(confidence, 3)
+        self.metrics["catboost_direction"] = "LONG" if is_long else "SHORT"
+        self.metrics["dynamic_leverage"] = leverage
+
+        self.add_log(f"Alpha Entry ({side_upper}) | Conf: {confidence*100:.1f}% | Lev: {leverage}x @ ${entry_price:.1f}", "ALPHA")
+
+        title = f"HFT ENTRY: {side_upper} {symbol} ({leverage}x)"
+        body = (
+            f"{icon} [POSITION OPENED: {side_upper}]\n\n"
+            f"🪙 Asset: {symbol} @ ${entry_price:,.1f}\n"
+            f"⚡ Leverage: {leverage}x (Fractional Kelly)\n"
+            f"💵 Margin: ${margin:.2f} USDT (Size: {qty:.4f} {symbol})\n"
+            f"🛑 Initial Stop: ${stop_price:,.1f} (-{sl_pct:.2f}%)\n\n"
+            f"🧠 Alpha Telemetry:\n"
+            f"• CatBoost Confidence: {confidence*100:.1f}%\n"
+            f"• Hawkes Intensities: {hawkes_buy:.1f} Buy / {hawkes_sell:.1f} Sell\n"
+            f"• 5-Tier OFI Score: {ofi:+.3f}\n\n"
+            f"🎯 Target: Chandelier Ratchet Trailing Active"
         )
+        self.push_ntfy(title, body, tags=f"{tag},rocket,dart", priority="high")
 
-    async def log_ratchet_shift(self, old_mult, new_mult, pnl_pct):
+    async def log_ratchet_shift(self, old_mult: float, new_mult: float, pnl_pct: float, new_stop: float = 0.0):
+        """Dispatched when Chandelier ratchet tightens the trailing stop."""
         self.metrics["atr_ratchet_mult"] = round(new_mult, 1)
         self.add_log(f"Chandelier Ratchet Tightened: {old_mult:.1f}x -> {new_mult:.1f}x (PnL: {pnl_pct*100:+.1f}%)", "RATCHET")
-        self.push_ntfy(
-            "Chandelier Ratchet Tightened",
-            f"Multiplier shifted: {old_mult:.1f}x -> {new_mult:.1f}x\nUnrealized Gain: {pnl_pct*100:+.2f}%",
-            "lock"
-        )
 
-    async def log_exit(self, side, price, pnl_usdt, pnl_pct, reason):
-        self.add_log(f"Exit {side.upper()} @ ${price:.1f} | PnL: {pnl_usdt:+.2f} USDT ({pnl_pct*100:+.2f}%) [{reason}]", "EXIT")
-        tags = "moneybag" if pnl_usdt > 0 else "rotating_light"
-        self.push_ntfy(
-            f"Position Closed ({side.upper()}): {pnl_usdt:+.2f} USDT",
-            f"Exit: ${price:.1f} | ROI: {pnl_pct*100:+.2f}%\nReason: {reason}",
-            tags,
-            "high" if abs(pnl_usdt) > 1.0 else "default"
+        stop_str = f"🛡️ New Trailing Stop: ${new_stop:,.1f}\n" if new_stop > 0 else ""
+        title = f"RATCHET TIGHTENED: {new_mult:.1f}x ATR"
+        body = (
+            f"🔒 [TRAILING STOP TIGHTENED]\n\n"
+            f"📊 Unrealized Gain: {pnl_pct*100:+.2f}%\n"
+            f"📐 Ratchet Contraction: {old_mult:.1f}x ➔ {new_mult:.1f}x ATR\n"
+            f"{stop_str}\n"
+            f"⚡ Stop-loss advanced to protect open floating profit."
         )
+        self.push_ntfy(title, body, tags="lock,arrow_up,gem", priority="default")
+
+    async def notify_tp_scale(self, symbol: str, side: str, exit_px: float, pnl_usdt: float, pnl_pct: float, tier: str, remaining_qty: float):
+        """Dispatched on TP scale-out fill."""
+        self.add_log(f"Scale-Out ({tier}) | PnL: {pnl_usdt:+.2f} USDT (+{pnl_pct*100:.1f}%) @ ${exit_px:.1f}", "EXIT")
+
+        title = f"TAKE PROFIT: {tier} FILL"
+        body = (
+            f"💰 [TAKE PROFIT HIT: {tier}]\n\n"
+            f"🪙 Asset: {symbol} ({side.upper()})\n"
+            f"🎯 Execution Price: ${exit_px:,.1f}\n"
+            f"💵 Realized Gain: +${pnl_usdt:.2f} USDT (+{pnl_pct*100:.2f}%)\n"
+            f"📦 Remaining Size: {remaining_qty:.4f} {symbol}\n\n"
+            f"🔒 Runner trailing with locked-in profit."
+        )
+        self.push_ntfy(title, body, tags="moneybag,chart_with_upwards_trend", priority="high")
+
+    async def log_exit(self, side: str, price: float, pnl_usdt: float, pnl_pct: float, reason: str, balance: float = 65.0):
+        """Dispatched when a trade fully closes."""
+        is_win = pnl_usdt >= 0
+        icon = "🎉" if is_win else "🛑"
+        tag = "moneybag" if is_win else "rotating_light"
+        pnl_sign = "+" if is_win else ""
+
+        self.add_log(f"Exit {side.upper()} @ ${price:.1f} | PnL: {pnl_sign}{pnl_usdt:.2f} USDT ({pnl_sign}{pnl_pct*100:.2f}%) [{reason}]", "EXIT")
+
+        title = f"POSITION CLOSED: {pnl_sign}${pnl_usdt:.2f} USDT ({side.upper()})"
+        body = (
+            f"{icon} [TRADE COMPLETED: {reason.upper()}]\n\n"
+            f"🪙 Position: {side.upper()} BTC-PERP\n"
+            f"🎯 Exit Price: ${price:,.1f}\n"
+            f"💵 Net Trade PnL: {pnl_sign}${pnl_usdt:.2f} USDT ({pnl_sign}{pnl_pct*100:.2f}%)\n\n"
+            f"💼 Session Update:\n"
+            f"• Current Account Equity: ${balance:.2f} USDT\n"
+            f"• Realized Total PnL: {pnl_sign}${self.metrics['realized_pnl']:.2f} USDT\n"
+            f"• Total Trades: {self.metrics['trade_count']}\n\n"
+            f"📡 Scanner resumed looking for next microstructure setup."
+        )
+        self.push_ntfy(title, body, tags=f"{tag},checkered_flag", priority="high" if is_win else "default")
+
+    async def notify_daily_target_hit(self, balance: float, target_pct: float = 100.0):
+        """Dispatched when the +100% daily target is reached."""
+        title = "DAILY TARGET ACHIEVED: +100% FLIP"
+        body = (
+            f"🏆 [DAILY TARGET HIT: +{target_pct:.0f}%]\n\n"
+            f"💰 Account Balance: ${balance:.2f} USDT\n"
+            f"🎯 Milestone: Capital Doubled (Account Flipped)\n"
+            f"🛡️ Target Circuit Breaker: Engine safely halted for the rest of the UTC day.\n\n"
+            f"Enjoy your profits! Resume scheduled for next UTC 00:00."
+        )
+        self.push_ntfy(title, body, tags="trophy,partying_face,star2", priority="urgent")
+
+    async def notify_drawdown_halt(self, balance: float, max_loss: float = 32.50):
+        """Dispatched if daily loss limit is hit."""
+        title = "CIRCUIT BREAKER: DAILY DRAWDOWN HALT"
+        body = (
+            f"🛑 [CIRCUIT BREAKER TRIGGERED]\n\n"
+            f"⚠️ Max daily loss limit of -50% reached.\n"
+            f"💼 Current Balance: ${balance:.2f} USDT\n"
+            f"🔒 Capital preservation lock engaged until next UTC day."
+        )
+        self.push_ntfy(title, body, tags="octagonal_sign,warning,rotating_light", priority="urgent")

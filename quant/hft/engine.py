@@ -362,14 +362,18 @@ class HFTEngine:
             float(signal.ofi_vector.mean()), signal.confidence,
         )
         self._trade_count += 1
-        await self.monitor.log_alpha_trigger(
-            signal.confidence, 
-            st.hawkes.buy_intensity, 
-            st.hawkes.sell_intensity, 
-            float(signal.ofi_vector.mean()), 
-            spec.leverage, 
-            spec.entry_price,
-            direction=spec.side.upper()
+        await self.monitor.notify_entry(
+            symbol=symbol,
+            side=spec.side,
+            entry_price=spec.entry_price,
+            qty=spec.qty_base,
+            margin=spec.margin_usdt,
+            leverage=spec.leverage,
+            stop_price=spec.stop_price,
+            confidence=signal.confidence,
+            hawkes_buy=st.hawkes.buy_intensity,
+            hawkes_sell=st.hawkes.sell_intensity,
+            ofi=float(signal.ofi_vector.mean()),
         )
 
     async def _manage_open_position(
@@ -387,7 +391,9 @@ class HFTEngine:
         old_mult = pos.chandelier.current_multiplier
         pos.chandelier.update_bar(high=high, low=low, close=price)
         if pos.chandelier.current_multiplier < old_mult:
-            await self.monitor.log_ratchet_shift(old_mult, pos.chandelier.current_multiplier, pos.current_pnl_pct(price))
+            new_mult = pos.chandelier.current_multiplier
+            stop_px = pos.chandelier.evaluate(price).stop_price
+            await self.monitor.log_ratchet_shift(old_mult, new_mult, pos.current_pnl_pct(price), new_stop=stop_px)
         pos.update_peak(price)
         exit_state: ExitState = pos.chandelier.evaluate(price)
 
@@ -416,7 +422,13 @@ class HFTEngine:
             )
             st.position = None
             st.as_model.reset_epoch()
-            await self.monitor.log_exit(pos.spec.side, price, pnl_usdt, pnl_pct, reason)
+            await self.monitor.log_exit(pos.spec.side, price, pnl_usdt, pnl_pct, reason, balance=self._balance)
+            if self._balance >= 130.0:
+                await self.monitor.notify_daily_target_hit(self._balance)
+                self._running = False
+            elif self._balance <= 32.50:
+                await self.monitor.notify_drawdown_halt(self._balance)
+                self._running = False
 
     def stats(self) -> dict:
         return {
