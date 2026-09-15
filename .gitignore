@@ -33,3 +33,4 @@ old/
 
 # corrupted by an old editor crash (duplicated blocks); kept on disk only
 scalper/tools/walkforward.py
+open-antigravity-patcher/
