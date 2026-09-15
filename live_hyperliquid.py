@@ -238,7 +238,12 @@ class Config:
     # When the service answers, its forward forecast REPLACES the lightweight
     # forecast_bias; when it is down the book silently falls back to the lite
     # gate.  The service runs in its own venv (kronos-forecast.service).
-    kronos_gate_enabled: bool = True
+    kronos_gate_enabled: bool = False  # OFF (Sep 15): its first live session
+                                       # allowed 3/3 losers, mis-rejected a
+                                       # winner (ARB) and flip-flopped CASHCAT
+                                       # bearish 1.00 -> bullish 1.00 in 15m.
+                                       # Confidence saturates at 1% drift --
+                                       # validate in a backtest before re-arming.
     kronos_url: str = "http://127.0.0.1:8699/forecast"
     kronos_timeout_s: float = 6.0
     kronos_lookback: int = 200        # bars sent to the model
