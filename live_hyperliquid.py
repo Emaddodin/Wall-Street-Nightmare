@@ -1816,6 +1816,12 @@ class PaperBook:
             if fdir == 0:
                 fdir, fconf = self.risk.forecast_bias(coin)
                 src = "Kronos-lite"
+            # track the forecast read on EVERY candidate (first live Kronos
+            # run -- we want a full trail, allow or reject)
+            LOG.info("[FORECAST] %s %s -> %s (conf %.2f) via %s", coin,
+                     "LONG" if side > 0 else "SHORT",
+                     {1: "bullish", -1: "bearish"}.get(fdir, "flat"),
+                     fconf, src)
             if fdir != 0 and fdir != side and \
                     fconf >= self.cfg.fc_counter_floor / 3.0:
                 LOG.info("[SIGNAL] %s rejected: forecast %s (conf %.2f) vs "
