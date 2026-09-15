@@ -210,6 +210,17 @@ class Config:
     htf_minutes: int = 60             # macro TF built from the 5m series
     htf_ema: int = 20                 # EMA period on HTF closes
     htf_slope_bars: int = 3           # EMA slope measured over N HTF bars
+    # ---- forecast gate (Kronos-lite: forward direction + uncertainty) -----
+    # The Kronos foundation model's job distilled to three agreeing signals
+    # over the asset's own K-lines; gates entries that fight the forward
+    # read.  A counter-signal forecast of fc_counter_floor+ (raw units)
+    # refuses the setup.  Swap in real Kronos via kronos_brain.py later.
+    forecast_gate_enabled: bool = True
+    fc_ema_fast: int = 5              # EMA slope fast period (bars)
+    fc_ema_slow: int = 20             # EMA slope slow period (bars)
+    fc_persist_bars: int = 6          # directional persistence window
+    fc_mom_bars: int = 12             # momentum lookback (bars)
+    fc_counter_floor: float = 2.0     # reject when signed raw <= -this
     # ---- v3 module 2: volume/delta confirmation at FVG mitigation --------
     vol_confirm_enabled: bool = True
     vol_look: int = 20                # baseline window for the trigger bar
@@ -1394,6 +1405,42 @@ class RiskEngine:
             return -1
         return 0
 
+    def forecast_bias(self, coin: str) -> Tuple[int, float]:
+        """Kronos-lite forward read: (direction, confidence).
+
+        Distills the Kronos foundation model's job -- a probabilistic
+        forward direction read from K-lines -- into three agreeing signals
+        over the asset's own bars: EMA slope, directional persistence, and
+        momentum (in ATR units).  raw = signed sum in [-3, +3]; confidence
+        = |raw|/3.  A strongly counter raw (<= -fc_counter_floor vs the
+        trade side) refuses the entry.  (0, 0.0) when history is short."""
+        if not self.cfg.forecast_gate_enabled:
+            return 0, 0.0
+        bars = self._bars(coin) or []
+        n = len(bars)
+        if n < self.cfg.fc_mom_bars + self.cfg.fc_ema_slow + 2:
+            return 0, 0.0
+        closes = [float(b["c"]) for b in bars]
+        # 1. EMA slope
+        ef = _ema(closes, self.cfg.fc_ema_fast)[-1]
+        es = _ema(closes, self.cfg.fc_ema_slow)[-1]
+        sig_slope = 1.0 if ef > es else -1.0
+        # 2. directional persistence over the last K bars
+        k = self.cfg.fc_persist_bars
+        ups = sum(1 for i in range(n - k, n - 1) if closes[i + 1] > closes[i])
+        downs = k - ups
+        sig_persist = (ups - downs) / k          # [-1, +1]
+        # 3. momentum vs ATR
+        trs = self._true_ranges(bars[-self.cfg.fc_mom_bars - 2:])
+        atr = sum(trs) / len(trs) if trs else 0.0
+        mom = 0.0
+        if atr > 0:
+            mom = (closes[-1] - closes[-1 - self.cfg.fc_mom_bars]) / atr
+        sig_mom = 1.0 if mom >= 0 else -1.0
+        raw = sig_slope + sig_persist + sig_mom
+        direction = 1 if raw > 0 else (-1 if raw < 0 else 0)
+        return direction, min(1.0, abs(raw) / 3.0)
+
     # ---- v3 module 2: volume / expansion confirmation ---------------------
     def vol_ok(self, coin: str) -> bool:
         """The bar that fills the FVG retest must show participation:
@@ -1723,6 +1770,14 @@ class PaperBook:
                          "(no counter-trend fading, module 1)", coin,
                          {1: "bullish", -1: "bearish"}.get(bias, "neutral"),
                          "LONG" if side > 0 else "SHORT")
+                return False
+            fdir, fconf = self.risk.forecast_bias(coin)
+            if fdir != 0 and fdir != side and \
+                    fconf >= self.cfg.fc_counter_floor / 3.0:
+                LOG.info("[SIGNAL] %s rejected: forecast %s (conf %.2f) vs "
+                         "%s setup (Kronos-lite gate)", coin,
+                         {1: "bullish", -1: "bearish"}.get(fdir, "flat"),
+                         fconf, "LONG" if side > 0 else "SHORT")
                 return False
         lev = self.risk.leverage_for(sl_bps) if self.risk is not None \
             else self.cfg.lev
