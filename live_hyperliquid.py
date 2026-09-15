@@ -166,6 +166,10 @@ class Config:
                                     # refuses live even if flags are passed
     # ---- risk & execution modules (wrap the phase-7 core) ---------------
     daily_target_pct: float = 100.0   # halt the day once equity = 2x start
+    close_on_target: bool = True      # trophy lock: when LIVE equity crosses
+                                      # the daily target, close every open
+                                      # position at market (not just stop
+                                      # scanning) -- bank the day, don't ride
     goal_win_frac: float = 0.25       # legacy v1 goal term (superseded by
                                       # the v2 front-loaded ladder below)
     risk_pct_per_stop: float = 0.10   # taper/secure per-stop loss budget
@@ -1164,6 +1168,25 @@ class RiskEngine:
     def target_equity(self) -> float:
         return self.day_start_eq * (1.0 + self.cfg.daily_target_pct / 100.0)
 
+    def live_equity(self) -> float:
+        """Realized equity + unrealized PnL of open positions (marked to the
+        allMids feed). This is the number the phone app shows as the big
+        hero -- and the one the trophy lock should key off, so a floating
+        +100% day is banked the moment it prints, not after it rounds-trips."""
+        book = self._book()
+        mids = self._mids() or {}
+        fp = 0.0
+        for p in book.positions.values():
+            px = mids.get(p.coin)
+            if px:
+                fp += p.qty * (px - p.entry_px) * p.side
+        return self.equity() + fp
+
+    def trophy_hit(self, now_ms: int) -> bool:
+        """LIVE equity crossed the daily target (idempotent per day)."""
+        self.roll_day(now_ms)
+        return self.live_equity() >= self.target_equity()
+
     def roll_day(self, now_ms: int) -> None:
         """Anchor/roll the UTC trading day -- HARDENED (v3).
 
@@ -1220,17 +1243,18 @@ class RiskEngine:
                         title="SNIPER DD-HALT", tags="rotating_light",
                         priority="high")
             return True
-        if eq < self.target_equity():
+        live = self.live_equity()
+        if live < self.target_equity():
             return False
         if self._hit_notified_day != self.day_start_ms:
             self._hit_notified_day = self.day_start_ms
-            LOG.info("[TARGET] +%.0f%% daily target hit (equity %.2f) -- "
+            LOG.info("[TARGET] +%.0f%% daily target hit (live equity %.2f) -- "
                      "scanning halted until the next UTC day",
-                     self.cfg.daily_target_pct, eq)
+                     self.cfg.daily_target_pct, live)
             if self.notifier is not None:
                 self.notifier.send(
                     f"+{self.cfg.daily_target_pct:.0f}% daily target hit "
-                    f"(equity {eq:.2f}). Bot halted for the day -- no "
+                    f"(live equity {live:.2f}). Bot halted for the day -- no "
                     f"revenge trading.", title="SNIPER TARGET",
                     tags="trophy", priority="high")
         return True
@@ -2084,6 +2108,17 @@ class PaperBook:
                        (coin, day_key(t_open)), 0.0))
         del self.positions[coin]
 
+    def close_all(self, mids: Dict[str, float], reason: str, t_open: int):
+        """Bank every open position at market (live mids). Used by the
+        trophy lock: when the day's +target prints on LIVE equity, close the
+        whole book instead of letting winners round-trip through the night."""
+        for coin in list(self.positions):
+            pos = self.positions[coin]
+            px = mids.get(coin) or pos.entry_px
+            LOG.info("[TROPHY] closing %s @ market %.6g (%s)", coin, px,
+                     reason)
+            self._close_remainder(coin, pos, px, reason, t_open)
+
 
 # ----------------------------------------------------------------------
 # Universe scanner (atrscan.py doctrine on Hyperliquid).
@@ -2327,11 +2362,15 @@ class SniperEngine:
         self.risk.roll_day(t)
         if self.risk.check_halt(t):
             # module 1: +100% for the day -> cancel every resting order and
-            # stop scanning; open positions ride their existing stops
+            # stop scanning
             for c in list(self.book.orders):
                 del self.book.orders[c]
                 LOG.info("[HALT] %s entry limit cancelled (daily target)",
                          c)
+            if self.cfg.close_on_target and self.risk.trophy_hit(t):
+                # trophy lock: bank the whole book at market instead of
+                # letting open winners round-trip back under the target
+                self.book.close_all(self.mids, "target", t)
             self.book.on_candle(coin, bar, self._eligible_now)
             self.pub.refresh()
             return
