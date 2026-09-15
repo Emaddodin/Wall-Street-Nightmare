@@ -130,17 +130,19 @@ class Config:
     tp1_frac: float = 0.40          # v4 tri-tier: 40% at TP1
     tp2_frac: float = 0.30          # v4 tri-tier: 30% at TP2
     tp2_bps: float = 400.0          # the final 30% rides the macro trail
-    be_after_r: float = 1.0         # pre-scale breakeven after 1R
+    be_after_r: float = 0.5         # breakeven as soon as +0.5R prints -- a
+                                    # +0.75R peak must never round-trip into a
+                                    # full stop (CASHCAT, Sep 15: +$23 -> -$31)
     time_exit_bars: int = 40        # 40 x 15m = 10h (a day-trade horizon)
     scratch_after_bars: int = 3     # no-follow-through: if an entry never
                                     # shows follow-through within this many
                                     # closed bars, cut it early
     scratch_min_mfe_r: float = 0.5  # ... where "follow-through" = this much
                                     # favorable excursion (R) at least once
-    # ---- profit ratchet: a strong floating peak must not round-trip -------
-    # (yesterday's HEMI: +$42 floating -> closed at +$10 on the give-back)
+    # ---- profit ratchet: a floating peak must not round-trip --------------
     ratchet_enabled: bool = True
-    ratchet_arm_r: float = 1.5      # arm once the peak reached this many R
+    ratchet_arm_r: float = 0.8      # arm from +0.8R (was 1.5 -- far too high:
+                                    # the CASHCAT peak at 0.75R was unprotected)
     ratchet_keep: float = 0.5       # exit if it gives back past this fraction
     retest_bars: int = 8
     # ---- universe (coin finder) ----------------------------------------
@@ -176,6 +178,11 @@ class Config:
                                       # the daily target, close every open
                                       # position at market (not just stop
                                       # scanning) -- bank the day, don't ride
+    close_on_dd: bool = True          # DD lock: when the daily drawdown floor
+                                      # is hit, CLOSE the book too -- otherwise
+                                      # the "-25%" guard turns into a -47% day
+                                      # (Sep 15: halt at -25%, then CASHCAT's
+                                      # open stop rode it to -47%)
     goal_win_frac: float = 0.25       # legacy v1 goal term (superseded by
                                       # the v2 front-loaded ladder below)
     risk_pct_per_stop: float = 0.10   # taper/secure per-stop loss budget
@@ -1226,6 +1233,12 @@ class RiskEngine:
         """LIVE equity crossed the daily target (idempotent per day)."""
         self.roll_day(now_ms)
         return self.live_equity() >= self.target_equity()
+
+    def dd_halt_hit(self, now_ms: int) -> bool:
+        """Realized equity fell through the day's drawdown floor."""
+        self.roll_day(now_ms)
+        floor = self.day_start_eq * (1.0 - self.cfg.max_daily_dd_pct / 100.0)
+        return self.equity() <= floor
 
     def roll_day(self, now_ms: int) -> None:
         """Anchor/roll the UTC trading day -- HARDENED (v3).
@@ -2517,6 +2530,11 @@ class SniperEngine:
                 # trophy lock: bank the whole book at market instead of
                 # letting open winners round-trip back under the target
                 self.book.close_all(self.mids, "target", t)
+            elif self.cfg.close_on_dd and self.risk.dd_halt_hit(t):
+                # DD lock: the daily floor is a guarantee, not a suggestion --
+                # close the book so the guard cannot be overshot by an open
+                # position riding into its stop
+                self.book.close_all(self.mids, "dd", t)
             self.book.on_candle(coin, bar, self._eligible_now)
             self.pub.refresh()
             return
