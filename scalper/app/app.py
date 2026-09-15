@@ -593,6 +593,14 @@ function draw(s){
      <div class=row><span class=k>target</span><span class=v id=tgt></span></div>
     </div>
     <div class=card>
+     <div class=title>hft alpha engine</div>
+     <div class=row><span class=k>maker spread</span><span class=v id=hft_spread>-- bps</span></div>
+     <div class=row><span class=k>ofi | skew</span><span class=v id=hft_ofi>--</span></div>
+     <div class=row><span class=k>hawkes buy/sell</span><span class=v id=hft_hawkes>-- / --</span></div>
+     <div class=row><span class=k>atr ratchet</span><span class=v id=hft_ratchet>--</span></div>
+     <div class=row><span class=k>dynamic lev</span><span class=v id=hft_lev>--</span></div>
+    </div>
+    <div class=card>
      <div class=title>performance</div>
      <div class=row><span class=k>made / lost</span><span class=v id=ml></span></div>
      <div class=row><span class=k>best / worst trade</span><span class=v id=bw></span></div>
@@ -742,7 +750,18 @@ async function addFace(){
      attestationObject:b64u(c.response.attestationObject)}})});
   const j=await r.json();alert(j.msg||'done');
  }catch(e){alert('face id setup cancelled or unsupported')}}
-function refresh(){api('/api/state?n='+Date.now()).then(j=>{
+function refresh(){api('/api/hft?n='+Date.now()).then(h=>{
+    if(h){
+        const el = (id) => document.getElementById(id);
+        if(el('hft_spread')) el('hft_spread').innerText = (h.maker_spread_bps||0).toFixed(1) + ' bps';
+        if(el('hft_ofi')) el('hft_ofi').innerText = (h.ofi_mean||0).toFixed(2) + ' | ' + (h.inventory_skew||0).toFixed(2);
+        if(el('hft_hawkes')) el('hft_hawkes').innerText = (h.hawkes_buy||0).toFixed(1) + ' / ' + (h.hawkes_sell||0).toFixed(1);
+        if(el('hft_ratchet')) el('hft_ratchet').innerText = (h.atr_ratchet_mult||0).toFixed(1) + 'x';
+        if(el('hft_lev')) el('hft_lev').innerText = (h.dynamic_leverage||0) + 'x';
+    }
+});
+
+  api('/api/state?n='+Date.now()).then(j=>{
   if(!j){return}
   if(!j.ok){fail('session expired');return}
   try{draw(j)}catch(e){fail('draw error: '+e.message)}
@@ -950,6 +969,17 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------- routes
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == "/api/hft":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            try:
+                with open("/root/ict_sniper/data/state/hft.json", "rb") as f:
+                    self.wfile.write(f.read())
+            except FileNotFoundError:
+                self.wfile.write(b"{}")
+            return
+
         if path == "/sw.js":
             # kill-switch service worker: wipes the OLD app's cached pages
             # and unregisters itself so the new UI always loads fresh

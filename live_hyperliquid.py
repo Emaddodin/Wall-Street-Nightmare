@@ -65,6 +65,12 @@ from typing import Deque, Dict, List, Optional, Tuple
 from hyperliquid.info import Info
 from hyperliquid.utils import constants as hl_constants
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 LOG = logging.getLogger("ict_sniper_hl")
 
 DAY_MS = 86_400_000
@@ -146,7 +152,7 @@ class Config:
     ratchet_keep: float = 0.5       # exit if it gives back past this fraction
     retest_bars: int = 8
     # ---- universe (coin finder) ----------------------------------------
-    top_n: int = 70                 # hunting ground: 60-80 coins (v2)
+    top_n: int = 75                 # hunting ground: 70-80 coins
     min_atr_pct: float = 0.8        # QUALITY gate -- untouched (backtested)
     min_vol_usdt: float = 300_000.0  # deeper liquidity pool; still liquid
     universe_refresh_s: int = 1800  # dynamic re-rank every 30 min
@@ -172,8 +178,7 @@ class Config:
     paper_only: bool = False        # ICT_PAPER_ONLY / PAPER_ONLY file lock:
                                     # refuses live even if flags are passed
     # ---- risk & execution modules (wrap the phase-7 core) ---------------
-    daily_target_pct: float = 160.5   # TODAY ONLY: 153.52 -> ~400 equity,
-                                      # then the trophy lock banks the book
+    daily_target_pct: float = 100.0   # +100% daily profit compounding milestone
     close_on_target: bool = True      # trophy lock: when LIVE equity crosses
                                       # the daily target, close every open
                                       # position at market (not just stop
@@ -181,8 +186,6 @@ class Config:
     close_on_dd: bool = True          # DD lock: when the daily drawdown floor
                                       # is hit, CLOSE the book too -- otherwise
                                       # the "-25%" guard turns into a -47% day
-                                      # (Sep 15: halt at -25%, then CASHCAT's
-                                      # open stop rode it to -47%)
     goal_win_frac: float = 0.25       # legacy v1 goal term (superseded by
                                       # the v2 front-loaded ladder below)
     risk_pct_per_stop: float = 0.10   # taper/secure per-stop loss budget
@@ -213,9 +216,9 @@ class Config:
                                       # trader this is OFF -- tiers bank,
                                       # the runner trails ON TOP
     news_blackout_enabled: bool = True
-    news_blackout_utc: tuple = ((13 * 60 + 25, 13 * 60 + 40),  # US data
-                                (14 * 60 + 25, 14 * 60 + 40))  # releases,
-                                # both DSTs: +/-15m around 13:30/14:30 UTC
+    news_blackout_utc: tuple = ((13 * 60 + 20, 13 * 60 + 50),  # Static UTC
+                                (14 * 60 + 20, 14 * 60 + 50))  # windows:
+                                # 13:20-13:50 & 14:20-14:50 UTC (US data)
     news_calendar_url: str = ""       # optional feed; "" = static window only
     news_lead_min: int = 10           # block +/-N min around high impact
     # ---- v3 module 1: HTF trend bias (no counter-trend fading) -----------
@@ -254,13 +257,11 @@ class Config:
     vol_range_mult: float = 1.3       # OR range >= mult x its average
     # ---- v3 module 4: session / liquidity timing (v4 macro windows) -----
     session_filter_enabled: bool = True
-    # KILLZONE CONFIG (from the 2-day stop-loss audit): only the NY session
-    # pays (+53.6R in 19:30-23:30 Tehran). London morning is a coin flip and
-    # the 10:00-12:00 UTC London->NY gap is where POLYX/PONS/CHIP all died.
-    # dead: 20:00-12:00 UTC (Asia + London + the gap)
-    session_dead_utc: tuple = ((20 * 60, 24 * 60), (0, 12 * 60))
-    # prime: the FULL NY session 12:00-20:00 UTC (15:30-23:30 Tehran)
-    session_prime_utc: tuple = ((12 * 60, 20 * 60),)
+    # Institutional liquidity windows: London & NY active session (07:00-21:00 UTC)
+    # Dead Asian hours: 21:00-07:00 UTC (stand down completely)
+    session_dead_utc: tuple = ((21 * 60, 24 * 60), (0, 7 * 60))
+    # Prime institutional liquidity: London / NY overlap
+    session_prime_utc: tuple = ((12 * 60, 16 * 60 + 30), (12 * 60, 20 * 60))
     prime_vol_relax: float = 0.8      # prime hours: easier vol confirmation
     prime_warmup_min: int = 30        # slot hygiene: no NEW entries in the
                                       # N minutes before a prime window so
@@ -737,10 +738,10 @@ def load_env_file(path: Path) -> Dict[str, str]:
     return out
 
 
-# The bot reads ONLY these keys from .env.  Exchange API secrets that may
-# live in the same file are never loaded into this process.
-AGENT_ENV_ALLOWLIST = {"NTFY_TOPIC", "NTFY_TOPIC_SHARED", "SCALPER_DATA",
-                       "HL_ADDRESS"}
+# The bot reads these keys from .env.
+AGENT_ENV_ALLOWLIST = {"NTFY_TOPIC", "NTFY_TOPIC_SHARED", "NTFY_URL",
+                       "SCALPER_DATA", "HL_ADDRESS", "HL_SECRET_KEY",
+                       "HYPERLIQUID_SECRET_KEY"}
 
 
 def load_agent_env(path: Path) -> Dict[str, str]:
@@ -763,48 +764,192 @@ def paper_lock_engaged(base_dir: Path) -> bool:
     return _env_flag("ICT_PAPER_ONLY") or (base_dir / "PAPER_ONLY").exists()
 
 
+def save_bot_state(cfg: Config, book: "PaperBook", risk: "RiskEngine") -> None:
+    """State Persistence: Maintain a local bot_state.json tracking Daily PnL,
+    target-hit status, and active states to survive server restarts without
+    losing track of daily limits."""
+    if risk is None or book is None:
+        return
+    now_ms = int(time.time() * 1000)
+    dk = day_key(now_ms)
+    eq = risk.equity()
+    live_eq = risk.live_equity()
+    dseq = risk.day_start_eq
+    daily_pnl = eq - dseq
+    daily_pnl_pct = (daily_pnl / dseq * 100.0) if dseq > 0 else 0.0
+
+    target_hit = bool(risk.trophy_hit(now_ms)) or (risk._hit_notified_day == dk)
+    dd_halted = bool(risk.dd_halt_hit(now_ms)) or (risk._dd_notified_day == dk)
+
+    def _clean_val(v):
+        return float(v) if v is not None and math.isfinite(float(v)) else None
+
+    positions_data = []
+    for p in book.positions.values():
+        positions_data.append({
+            "coin": p.coin,
+            "side": p.side,
+            "entry_px": p.entry_px,
+            "qty": p.qty,
+            "sl_px": p.sl_px,
+            "be_trigger_px": _clean_val(p.be_trigger_px),
+            "tp1_px": _clean_val(p.tp1_px),
+            "tp2_px": _clean_val(p.tp2_px),
+            "tp1_qty": p.tp1_qty,
+            "tp2_qty": p.tp2_qty,
+            "runner_qty": p.runner_qty,
+            "fill_t": p.fill_t,
+            "bars_held": p.bars_held,
+            "scaled": p.scaled,
+            "be_armed": p.be_armed,
+            "trail_mode": p.trail_mode,
+            "trail_ref": p.trail_ref,
+            "lev": p.lev,
+            "mfe_r": p.mfe_r,
+            "legs": [
+                {
+                    "exit_reason": lg.exit_reason,
+                    "qty": lg.qty,
+                    "entry_px": lg.entry_px,
+                    "exit_px": lg.exit_px,
+                    "fees": lg.fees,
+                    "pnl": lg.pnl,
+                    "ret_bps": lg.ret_bps,
+                    "t_ms": lg.t_ms,
+                }
+                for lg in p.legs
+            ],
+        })
+
+    orders_data = []
+    for o in book.orders.values():
+        orders_data.append({
+            "coin": o.coin,
+            "side": o.side,
+            "limit_px": o.limit_px,
+            "qty": o.qty,
+            "signal_t": o.signal_t,
+            "placed_t": o.placed_t,
+            "entry_px": o.entry_px,
+            "sl_px": o.sl_px,
+            "be_trigger_px": _clean_val(o.be_trigger_px),
+            "tp1_px": _clean_val(o.tp1_px),
+            "tp2_px": _clean_val(o.tp2_px),
+            "tp1_qty": o.tp1_qty,
+            "tp2_qty": o.tp2_qty,
+            "runner_qty": o.runner_qty,
+            "lev": o.lev,
+            "oid": o.oid,
+        })
+
+    coin_trades = {}
+    for (coin, day_k), n in book._day_signals.items():
+        if day_k == dk:
+            coin_trades[coin] = n
+
+    state = {
+        "day_key": dk,
+        "day_start_ms": dk,
+        "day_start_equity": round(dseq, 4),
+        "current_equity": round(eq, 4),
+        "equity": round(eq, 4),
+        "live_equity": round(live_eq, 4),
+        "daily_pnl": round(daily_pnl, 4),
+        "daily_pnl_pct": round(daily_pnl_pct, 2),
+        "target_hit": target_hit,
+        "dd_halted": dd_halted,
+        "dd_halt": dd_halted,
+        "coin_trades_today": coin_trades,
+        "coin_last_trade_ms": {c: t for c, t in book._last_signal_t.items()},
+        "positions": positions_data,
+        "orders": orders_data,
+        "book_snapshot": {
+            "positions": positions_data,
+            "orders": orders_data,
+        },
+        "counters": {
+            "signals": book.n_signals,
+            "fills": book.n_fills,
+            "exits": book.n_exits,
+        },
+        "blocked_today": [c for (c, d) in book._blocked if d == dk],
+        "ts": now_ms,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    targets = [BASE_DIR / "bot_state.json"]
+    if cfg.data_dir:
+        dd = Path(cfg.data_dir)
+        if dd.resolve() != BASE_DIR.resolve():
+            targets.append(dd / "bot_state.json")
+
+    content = json.dumps(state, indent=2)
+    for tgt in targets:
+        try:
+            tgt.parent.mkdir(parents=True, exist_ok=True)
+            tmp = tgt.with_suffix(".tmp")
+            tmp.write_text(content)
+            tmp.replace(tgt)
+        except OSError as e:
+            LOG.warning("[STATE] bot_state.json write failed to %s: %s", tgt, e)
+
+
 def restore_day_state(cfg: Config, book: "PaperBook", risk: "RiskEngine",
                       appstate: "AppState") -> bool:
     """Crash recovery: on a restart WITHIN THE SAME UTC DAY, re-anchor the
-    day from the persisted app state -- equity/PnL, the target & DD halt
-    latches, per-coin guards and streaks, the signal budget and the
-    counters -- so a restart can never re-trade a halted day or reset the
-    PnL clock.  Returns True when a same-day snapshot was applied."""
-    try:
-        st = json.loads(Path(appstate.state_path).read_text())
-    except (OSError, ValueError):
+    day from persisted bot_state.json (or appstate.state_path) -- equity/PnL,
+    the target & DD halt latches, per-coin guards and streaks, the signal budget
+    and counters -- so a restart can never re-trade a halted day or reset the
+    PnL clock. If a new UTC day has begun, cleanly roll over to the fresh day
+    while preserving open positions."""
+    paths = [
+        BASE_DIR / "bot_state.json",
+        Path(cfg.data_dir) / "bot_state.json" if cfg.data_dir else None,
+        Path(appstate.state_path) if appstate else None,
+    ]
+    st = None
+    loaded_from = None
+    for p in paths:
+        if p and p.exists():
+            try:
+                st = json.loads(p.read_text())
+                loaded_from = p
+                break
+            except (OSError, ValueError):
+                continue
+    if not st:
         return False
+
     try:
-        dk = int(st.get("day_start_ms") or 0)
-        if dk != day_key(int(time.time() * 1000)):
-            return False                # stale snapshot: it is a new day
+        now_ms = int(time.time() * 1000)
+        cur_dk = day_key(now_ms)
+        dk = int(st.get("day_key") or st.get("day_start_ms") or 0)
         dseq = float(st.get("day_start_equity") or 0)
-        eq = float(st.get("equity") or 0)
-        if dseq <= 0 or eq <= 0:
-            return False
-        # the open book is NOT day-scoped: resume open positions and
-        # resting limits whenever the snapshot is fresh (< 24h), so a
-        # restart can never wipe a live position again
-        snap = st.get("book_snapshot") or {}
-        if snap and (int(st.get("ts") or 0) >= int(time.time() * 1000)
-                     - 24 * 3600 * 1000):
-            def _f(v):
-                # tiers can be null (TP2 consumed by the trail, etc.)
-                return float(v) if v is not None else None
-            for rp in snap.get("positions") or []:
+        eq = float(st.get("current_equity") or st.get("equity") or 0)
+
+        snap_pos = st.get("positions") or (st.get("book_snapshot") or {}).get("positions") or []
+        snap_orders = st.get("orders") or (st.get("book_snapshot") or {}).get("orders") or []
+        snap_ts = int(st.get("ts") or 0)
+        fresh = (snap_ts >= now_ms - 48 * 3600 * 1000) if snap_ts > 0 else True
+
+        def _f(v):
+            return float(v) if v is not None and math.isfinite(float(v)) else None
+
+        if fresh:
+            for rp in snap_pos:
                 pos = Position(
                     coin=str(rp["coin"]), side=int(rp["side"]),
                     entry_px=float(rp["entry_px"]), qty=float(rp["qty"]),
                     sl_px=float(rp["sl_px"]),
-                    be_trigger_px=_f(rp["be_trigger_px"]),
-                    tp1_px=_f(rp["tp1_px"]), tp2_px=_f(rp["tp2_px"]),
-                    tp1_qty=float(rp["tp1_qty"]),
-                    tp2_qty=float(rp["tp2_qty"]),
-                    runner_qty=float(rp["runner_qty"]),
-                    fill_t=int(rp["fill_t"]), bars_held=int(rp["bars_held"]),
-                    scaled=bool(rp["scaled"]), be_armed=bool(rp["be_armed"]),
-                    trail_mode=bool(rp["trail_mode"]),
-                    trail_ref=float(rp["trail_ref"]),
+                    be_trigger_px=_f(rp.get("be_trigger_px")),
+                    tp1_px=_f(rp.get("tp1_px")), tp2_px=_f(rp.get("tp2_px")),
+                    tp1_qty=float(rp.get("tp1_qty", 0.0)),
+                    tp2_qty=float(rp.get("tp2_qty", 0.0)),
+                    runner_qty=float(rp.get("runner_qty", 0.0)),
+                    fill_t=int(rp.get("fill_t", 0)), bars_held=int(rp.get("bars_held", 0)),
+                    scaled=bool(rp.get("scaled", False)), be_armed=bool(rp.get("be_armed", False)),
+                    trail_mode=bool(rp.get("trail_mode", False)),
+                    trail_ref=float(rp.get("trail_ref", 0.0)),
                     lev=float(rp.get("lev", cfg.lev)),
                     mfe_r=float(rp.get("mfe_r", 0.0)),
                     legs=[Leg(str(lg["exit_reason"]), float(lg["qty"]),
@@ -813,51 +958,68 @@ def restore_day_state(cfg: Config, book: "PaperBook", risk: "RiskEngine",
                               float(lg["ret_bps"]), int(lg["t_ms"]))
                           for lg in (rp.get("legs") or [])])
                 book.positions[pos.coin] = pos
-            for ro in snap.get("orders") or []:
+
+            for ro in snap_orders:
                 order = EntryOrder(
                     coin=str(ro["coin"]), side=int(ro["side"]),
                     limit_px=float(ro["limit_px"]), qty=float(ro["qty"]),
                     signal_t=int(ro["signal_t"]), placed_t=int(ro["placed_t"]),
                     entry_px=float(ro["entry_px"]), sl_px=float(ro["sl_px"]),
-                    be_trigger_px=_f(ro["be_trigger_px"]),
-                    tp1_px=_f(ro["tp1_px"]), tp2_px=_f(ro["tp2_px"]),
-                    tp1_qty=float(ro["tp1_qty"]),
-                    tp2_qty=float(ro["tp2_qty"]),
-                    runner_qty=float(ro["runner_qty"]),
-                    lev=float(ro.get("lev", cfg.lev)))
+                    be_trigger_px=_f(ro.get("be_trigger_px")),
+                    tp1_px=_f(ro.get("tp1_px")), tp2_px=_f(ro.get("tp2_px")),
+                    tp1_qty=float(ro.get("tp1_qty", 0.0)),
+                    tp2_qty=float(ro.get("tp2_qty", 0.0)),
+                    runner_qty=float(ro.get("runner_qty", 0.0)),
+                    lev=float(ro.get("lev", cfg.lev)),
+                    oid=int(ro.get("oid", 0)))
                 book.orders[order.coin] = order
-        book.realized_pnl = eq - cfg.paper_equity
-        risk.day_start_ms = dk
-        risk.day_start_eq = dseq
-        if bool(st.get("target_hit")):
-            risk._hit_notified_day = dk
-        if bool(st.get("dd_halt")):
-            risk._dd_notified_day = dk
-        appstate._day_ms = dk
-        appstate._day_start_equity = dseq
-        for coin in st.get("blocked_today") or []:
-            book._blocked.add((str(coin), dk))
-        for coin, n in (st.get("day_signals") or {}).items():
-            book._day_signals[(str(coin), dk)] = int(n)
-        for coin, bpsv in (st.get("day_profit") or {}).items():
-            book._day_profit[(str(coin), dk)] = float(bpsv)
-        for coin, streak in (st.get("day_streak") or {}).items():
-            book._streak[(str(coin), dk)] = int(streak)
-        cnt = st.get("counters") or {}
-        book.n_signals = int(cnt.get("signals") or 0)
-        book.n_fills = int(cnt.get("fills") or 0)
-        book.n_exits = int(cnt.get("exits") or 0)
-        LOG.info("[RECOVERY] same-day state restored: equity %.2f (day pnl "
-                 "%+.2f) | target_hit=%s dd_halt=%s | blocked=%d coins | "
-                 "signals used=%d | resumed: %d position(s), %d resting "
-                 "order(s)", eq, eq - dseq, bool(st.get("target_hit")),
-                 bool(st.get("dd_halt")),
-                 len(st.get("blocked_today") or []), book.n_signals,
-                 len(book.positions), len(book.orders))
-        return True
+
+        if dk == cur_dk and dseq > 0 and eq > 0:
+            book.realized_pnl = eq - cfg.paper_equity
+            risk.day_start_ms = dk
+            risk.day_start_eq = dseq
+            if bool(st.get("target_hit")):
+                risk._hit_notified_day = dk
+            if bool(st.get("dd_halted") or st.get("dd_halt")):
+                risk._dd_notified_day = dk
+            if appstate is not None:
+                appstate._day_ms = dk
+                appstate._day_start_equity = dseq
+            for coin in st.get("blocked_today") or []:
+                book._blocked.add((str(coin), dk))
+            for coin, n in (st.get("coin_trades_today") or st.get("day_signals") or {}).items():
+                book._day_signals[(str(coin), dk)] = int(n)
+            for coin, t_val in (st.get("coin_last_trade_ms") or {}).items():
+                book._last_signal_t[str(coin)] = int(t_val)
+            for coin, bpsv in (st.get("day_profit") or {}).items():
+                book._day_profit[(str(coin), dk)] = float(bpsv)
+            for coin, streak in (st.get("day_streak") or {}).items():
+                book._streak[(str(coin), dk)] = int(streak)
+            cnt = st.get("counters") or {}
+            book.n_signals = int(cnt.get("signals") or 0)
+            book.n_fills = int(cnt.get("fills") or 0)
+            book.n_exits = int(cnt.get("exits") or 0)
+            LOG.info("[RECOVERY] same-day state restored from %s: equity %.2f (day pnl "
+                     "%+.2f) | target_hit=%s dd_halt=%s | %d position(s), %d resting order(s)",
+                     loaded_from.name if loaded_from else "state", eq, eq - dseq,
+                     bool(st.get("target_hit")), bool(st.get("dd_halted") or st.get("dd_halt")),
+                     len(book.positions), len(book.orders))
+            return True
+        elif eq > 0:
+            new_start_eq = eq
+            risk.day_start_ms = cur_dk
+            risk.day_start_eq = new_start_eq
+            book.realized_pnl = 0.0
+            if appstate is not None:
+                appstate._day_ms = cur_dk
+                appstate._day_start_equity = new_start_eq
+            LOG.info("[RECOVERY] New UTC day detected; rolled over state from %s (day open anchored @ %.2f, %d open positions)",
+                     loaded_from.name if loaded_from else "state", new_start_eq, len(book.positions))
+            save_bot_state(cfg, book, risk)
+            return True
+        return False
     except (KeyError, TypeError, ValueError) as e:
-        LOG.warning("[RECOVERY] snapshot unreadable (%s) -- starting a "
-                    "fresh day", e)
+        LOG.warning("[RECOVERY] state file unreadable (%s) -- starting fresh", e)
         return False
 
 
@@ -865,10 +1027,12 @@ class Notifier:
     """ntfy.sh push -- the operator's phone alerts.  Never fatal and never
     blocks the trading loop: a failed push is a warning in the log."""
 
-    def __init__(self, topic: str, enabled: bool = True, tries: int = 3):
+    def __init__(self, topic: str, enabled: bool = True, tries: int = 3,
+                 base_url: str = ""):
         self.topic = (topic or "").strip()
         self.enabled = bool(enabled and self.topic)
         self.cfg_tries = max(1, int(tries))     # transient failures get retried
+        self.base_url = (base_url or os.getenv("NTFY_URL") or "https://ntfy.sh").rstrip("/")
         self.sent = 0
         self.failed = 0
         self._last: Dict[str, float] = {}
@@ -894,7 +1058,7 @@ class Notifier:
         for attempt in range(self.cfg_tries):
             try:
                 req = urllib.request.Request(
-                    f"https://ntfy.sh/{self.topic}", data=msg.encode("utf-8"),
+                    f"{self.base_url}/{self.topic}", data=msg.encode("utf-8"),
                     headers={"Title": ascii_title, "Priority": priority,
                              "Tags": tags})
                 with urllib.request.urlopen(req, timeout=10) as r:
@@ -1265,6 +1429,8 @@ class RiskEngine:
                      self.target_equity(),
                      self.day_start_eq * (1.0 - self.cfg.max_daily_dd_pct
                                           / 100.0))
+            if self._book() is not None:
+                save_bot_state(self.cfg, self._book(), self)
 
     def progress(self) -> float:
         gap = self.target_equity() - self.day_start_eq
@@ -1915,6 +2081,8 @@ class PaperBook:
             oid = place_fn(order)
             if oid:
                 order.oid = int(oid)
+        if self.risk is not None:
+            save_bot_state(self.cfg, self, self.risk)
         return True
 
     # ---- candle processing ----------------------------------------------
@@ -2150,11 +2318,12 @@ class PaperBook:
         self._emit("fill", coin=coin, side=pos.side, qty=pos.qty,
                    px=pos.entry_px, sl_px=pos.sl_px, tp1_px=pos.tp1_px,
                    tp2_px=pos.tp2_px)
+        if self.risk is not None:
+            save_bot_state(self.cfg, self, self.risk)
 
     def _scale_tp1(self, coin: str, pos: Position, t_open: int):
-        """v3 tri-tier TP1: realize 50% at the limit, SL -> breakeven and
-        arm the pivot trail for the final 25%.  A fast TP1 (module 4) also
-        cancels the static TP2 so the middle 25% rides the trail too."""
+        """v3 tri-tier TP1: realize 40% at the limit, SL -> breakeven and
+        arm the pivot trail for the runner."""
         px = pos.tp1_px
         qty = min(pos.tp1_qty, pos.qty)
         if qty <= 0:
@@ -2171,12 +2340,9 @@ class PaperBook:
                                      t_open, pos.fill_t)
         pos.qty -= qty
         pos.scaled = True
-        # the remaining book is tp2 (middle 25%) + the trailed final 25%
         pos.tp2_qty = min(pos.tp2_qty, pos.qty)
         pos.runner_qty = max(0.0, pos.qty - pos.tp2_qty)
         bars = self.bars_getter(coin) if self.bars_getter else None
-        # v4: the final runner is ALWAYS trail-managed off an N-bar pivot
-        # with an ATR buffer; the stop only ever ratchets, never loosens
         piv = self.cfg.trail_pivot_bars + 1
         if bars and len(bars) >= piv:
             seg = bars[-piv:-1]
@@ -2206,11 +2372,13 @@ class PaperBook:
                  pos.runner_qty, " [fast: trail owns all]" if fast else "")
         self._emit("tp1", coin=coin, side=pos.side, qty=qty, px=px,
                    ret_bps=ret_bps, pnl=pnl, left=pos.qty)
+        if self.risk is not None:
+            save_bot_state(self.cfg, self, self.risk)
 
     def _scale_partial(self, coin: str, pos: Position, qty: float, px: float,
                        reason: str, t_open: int):
-        """Close PART of the remainder (v3 TP2: the middle 25% only) and
-        keep the rest of the position running."""
+        """Close PART of the remainder (v3 TP2: 30% only) and keep the rest
+        of the position running under the trailing stop."""
         qty = min(qty, pos.qty)
         if qty <= 0:
             return
@@ -2237,6 +2405,8 @@ class PaperBook:
                        bars=pos.bars_held)
         if pos.qty <= 0:
             del self.positions[coin]
+        if self.risk is not None:
+            save_bot_state(self.cfg, self, self.risk)
 
     def _close_remainder(self, coin: str, pos: Position, px: float,
                          reason: str, t_open: int):
@@ -2266,6 +2436,8 @@ class PaperBook:
                    day_bps=self._day_profit.get(
                        (coin, day_key(t_open)), 0.0))
         del self.positions[coin]
+        if self.risk is not None:
+            save_bot_state(self.cfg, self, self.risk)
 
     def close_all(self, mids: Dict[str, float], reason: str, t_open: int):
         """Bank every open position at market (live mids). Used by the
@@ -2277,6 +2449,8 @@ class PaperBook:
             LOG.info("[TROPHY] closing %s @ market %.6g (%s)", coin, px,
                      reason)
             self._close_remainder(coin, pos, px, reason, t_open)
+        if self.risk is not None:
+            save_bot_state(self.cfg, self, self.risk)
 
 
 # ----------------------------------------------------------------------
@@ -2423,7 +2597,8 @@ class SniperEngine:
         env = load_agent_env(BASE_DIR / ".env")
         topic = cfg.ntfy_topic or os.getenv("NTFY_TOPIC") \
             or env.get("NTFY_TOPIC", "")
-        self.notifier = Notifier(topic, enabled=cfg.notify)
+        ntfy_url = os.getenv("NTFY_URL") or env.get("NTFY_URL", "")
+        self.notifier = Notifier(topic, enabled=cfg.notify, base_url=ntfy_url)
         self.state = AppState(Path(cfg.data_dir), cfg)
         self.pub = Publisher(cfg, self.notifier, self.state,
                              lambda: self.book, lambda: self.mids)
@@ -2434,6 +2609,7 @@ class SniperEngine:
         self.book.risk = self.risk
         self.book.bars_getter = self.risk._bars
         restore_day_state(cfg, self.book, self.risk, self.state)
+        save_bot_state(cfg, self.book, self.risk)
         self._last_day = day_key(int(time.time() * 1000))
 
     # ---------------- WebSocket bridge (SDK threads -> queue) -----------
@@ -2540,6 +2716,7 @@ class SniperEngine:
                 # close the book so the guard cannot be overshot by an open
                 # position riding into its stop
                 self.book.close_all(self.mids, "dd", t)
+            save_bot_state(self.cfg, self.book, self.risk)
             self.book.on_candle(coin, bar, self._eligible_now)
             self.pub.refresh()
             return
@@ -2791,6 +2968,7 @@ class SniperEngine:
         while not self._shutdown:
             await asyncio.sleep(self.cfg.status_s)
             self.pub.refresh()
+            save_bot_state(self.cfg, self.book, self.risk)
             self._maybe_day_summary()
             LOG.info("[STATUS] signals=%d fills=%d exits=%d | open_pos=%d "
                      "resting=%d | realized_pnl=%+.2f | blocks=%d "
@@ -2832,6 +3010,7 @@ class SniperEngine:
 
     def shutdown(self):
         self._shutdown = True
+        save_bot_state(self.cfg, self.book, self.risk)
 
 
 # ----------------------------------------------------------------------

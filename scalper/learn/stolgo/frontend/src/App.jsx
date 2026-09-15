@@ -7,11 +7,12 @@ import { OptimizationPage } from "./pages/OptimizationPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { StrategyDetailPage } from "./pages/StrategyDetailPage";
 import { StrategyLibraryPage } from "./pages/StrategyLibraryPage";
+import { LiveMonitorPage } from "./pages/LiveMonitorPage";
 
 const emptyData = { candles: [], volume: [], equity: [], drawdown: [], trades: [] };
 
 export function App() {
-  const [activePage, setActivePage] = useState("library");
+  const [activePage, setActivePage] = useState("live");
   const [exportState, setExportState] = useState("Export");
   const [runs, setRuns] = useState([]);
   const [sweeps, setSweeps] = useState([]);
@@ -22,7 +23,7 @@ export function App() {
   const [loadingRuns, setLoadingRuns] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState("");
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState("dark");
 
   useEffect(() => {
     let alive = true;
@@ -99,6 +100,7 @@ export function App() {
   };
 
   const pages = {
+    live: <LiveMonitorPage />,
     library: <StrategyLibraryPage loading={loadingRuns} onOpenDetail={navigateToDetail} runs={runs} />,
     detail: (
       <StrategyDetailPage
