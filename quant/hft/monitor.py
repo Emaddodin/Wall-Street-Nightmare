@@ -323,3 +323,21 @@ class LiveMonitorAgent:
             f"🛡️ Capital is fully guarded. Engine is waiting for verified alpha conditions."
         )
         self.push_ntfy(title, body, tags=f"{tag},bar_chart,shield", priority=priority)
+
+    async def notify_day_rollover(self, day_num: int, balance: float, target_balance: float):
+        """Dispatched at 00:00 UTC marking the new trading day of the path."""
+        title = f"DAY {day_num} PATH LAUNCHED: 00:00 UTC"
+        body = (
+            f"🏆 [DAY {day_num} OF COMPOUNDING PATH: 00:00 UTC]\n\n"
+            f"💰 Day Starting Equity: ${balance:.2f} USDT\n"
+            f"🎯 Day {day_num} Target (+100%): ${target_balance:.2f} USDT\n"
+            f"🛑 Daily Circuit Breaker: ${balance * 0.50:.2f} USDT (-50%)\n\n"
+            f"⚡ All 5 Quantitative Pillars Active:\n"
+            f"• Avellaneda-Stoikov Market Maker: ONLINE\n"
+            f"• CatBoost Microsecond Direction Predictor: ONLINE\n"
+            f"• Hawkes Liquidity Excitation Tracker: ONLINE\n"
+            f"• 5-Level OFI Microstructure: ONLINE\n"
+            f"• ATR Chandelier Trailing Ratchet: ONLINE\n\n"
+            f"🚀 Hunting microsecond BTC alpha setups. Good luck!"
+        )
+        self.push_ntfy(title, body, tags="trophy,rocket,chart_with_upwards_trend", priority="high")

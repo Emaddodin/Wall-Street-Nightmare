@@ -131,6 +131,13 @@ class HFTEngine:
         self._balance = self.config.balance_usdt
         self._trade_count = 0
         self._pnl_total = 0.0
+        now_sec = time.time()
+        self._current_utc_day = int(now_sec // 86400)
+        self._day_start_balance = self._balance
+        self._day_trades = 0
+        self._day_target_pct = 1.0  # +100% daily target
+        self._day_loss_limit_pct = 0.50  # -50% loss limit
+        self._day_halted = False
         self.monitor = LiveMonitorAgent()
         self.flow_auditor = TradeFlowAuditor()
 
@@ -215,6 +222,20 @@ class HFTEngine:
 
         # 3. Telemetry broadcast (every 1 second)
         now_ts = time.time()
+        # Check UTC midnight rollover (00:00 UTC)
+        current_day = int(now_ts // 86400)
+        if current_day > self._current_utc_day:
+            self._current_utc_day = current_day
+            self._day_start_balance = self._balance
+            self._day_trades = 0
+            self._day_halted = False
+            day_num = current_day - int(1789430400 // 86400) + 1  # Path day counter
+            asyncio.create_task(self.monitor.notify_day_rollover(
+                day_num=max(1, day_num),
+                balance=self._balance,
+                target_balance=self._balance * 2.0
+            ))
+
         # Periodic E2E self-test every 10 mins
         if now_ts - self.flow_auditor.metrics.last_self_test_ts > 600.0:
             self.flow_auditor.run_e2e_self_test(self)
