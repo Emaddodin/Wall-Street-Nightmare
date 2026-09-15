@@ -137,6 +137,11 @@ class Config:
                                     # closed bars, cut it early
     scratch_min_mfe_r: float = 0.5  # ... where "follow-through" = this much
                                     # favorable excursion (R) at least once
+    # ---- profit ratchet: a strong floating peak must not round-trip -------
+    # (yesterday's HEMI: +$42 floating -> closed at +$10 on the give-back)
+    ratchet_enabled: bool = True
+    ratchet_arm_r: float = 1.5      # arm once the peak reached this many R
+    ratchet_keep: float = 0.5       # exit if it gives back past this fraction
     retest_bars: int = 8
     # ---- universe (coin finder) ----------------------------------------
     top_n: int = 70                 # hunting ground: 60-80 coins (v2)
@@ -165,7 +170,8 @@ class Config:
     paper_only: bool = False        # ICT_PAPER_ONLY / PAPER_ONLY file lock:
                                     # refuses live even if flags are passed
     # ---- risk & execution modules (wrap the phase-7 core) ---------------
-    daily_target_pct: float = 100.0   # halt the day once equity = 2x start
+    daily_target_pct: float = 160.5   # TODAY ONLY: 153.52 -> ~400 equity,
+                                      # then the trophy lock banks the book
     close_on_target: bool = True      # trophy lock: when LIVE equity crosses
                                       # the daily target, close every open
                                       # position at market (not just stop
@@ -2059,6 +2065,21 @@ class PaperBook:
                          coin, pos.bars_held, pos.mfe_r,
                          self.cfg.scratch_min_mfe_r, c)
                 self._close_remainder(coin, pos, c, "scratch", t_open)
+                return
+        # 4c. profit ratchet (market): once a position has shown a strong
+        #     floating peak (>= ratchet_arm_r), never let it round-trip past
+        #     ratchet_keep of that peak -- bank the bulk instead of watching
+        #     +$40 melt back to +$10. The stop above still wins first.
+        if pos in self.positions.values() and not fill_bar and \
+                self.cfg.ratchet_enabled and pos.risk > 0 and \
+                pos.mfe_r >= self.cfg.ratchet_arm_r:
+            cur_r = ((c - pos.entry_px) * pos.side) / pos.risk
+            if cur_r <= pos.mfe_r * self.cfg.ratchet_keep:
+                LOG.info("[RATCHET] %s peak %.2fR -> now %.2fR (giving back "
+                         "past %.0f%%) -- locking at market %.6g",
+                         coin, pos.mfe_r, cur_r, self.cfg.ratchet_keep * 100,
+                         c)
+                self._close_remainder(coin, pos, c, "ratchet", t_open)
                 return
         # 5. time kill (market)
         if pos in self.positions.values() and \
