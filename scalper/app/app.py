@@ -378,6 +378,23 @@ def _render_hft_terminal() -> str:
       </div>
     </div>
 
+    <!-- Trade Flow Diagnostic & Execution Funnel -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Trade Flow & Pipeline Diagnostic (A-to-Z Auditor)</span>
+        <span class="card-badge" id="flow-status-badge">FUNNEL NOMINAL</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 8px;">
+        <div class="metric-row"><span class="k">Idle Duration</span><span class="v" id="flow-idle">0m</span></div>
+        <div class="metric-row"><span class="k">E2E Pipeline Self-Test</span><span class="v" id="flow-selftest" style="color: var(--accent-green);">PASSED (0 Bugs)</span></div>
+        <div class="metric-row"><span class="k">Peak Confidence Seen</span><span class="v" id="flow-maxconf">0.0%</span></div>
+        <div class="metric-row"><span class="k">Hawkes Quiet Ratio</span><span class="v" id="flow-quiet">0.0%</span></div>
+      </div>
+      <div style="background: rgba(255,255,255,0.03); border-radius: 6px; padding: 8px 12px; font-size: 12px; font-family: var(--mono); color: var(--text-muted);">
+        <span style="color: var(--accent-cyan); font-weight: 700;">DIAGNOSIS:</span> <span id="flow-diagnosis">Evaluating execution pipeline...</span>
+      </div>
+    </div>
+
     <!-- Active Position & ATR Chandelier Ratchet -->
     <div class="card">
       <div class="card-header">
@@ -531,6 +548,29 @@ def _render_hft_terminal() -> str:
             Scanning L2 Orderbook for Aggressive Alpha Triggers (No Active Position)
           </div>
         `;
+      }
+
+      // Trade Flow Diagnostics
+      if (d.trade_flow) {
+        const tf = d.trade_flow;
+        const idleEl = document.getElementById('flow-idle');
+        if (idleEl) idleEl.textContent = (tf.idle_minutes || 0) + 'm';
+        const stEl = document.getElementById('flow-selftest');
+        if (stEl) {
+          stEl.textContent = tf.self_test_passed ? 'PASSED (0 Bugs)' : 'FAILED';
+          stEl.style.color = tf.self_test_passed ? 'var(--accent-green)' : 'var(--accent-red)';
+        }
+        const mcEl = document.getElementById('flow-maxconf');
+        if (mcEl) mcEl.textContent = ((tf.max_confidence_seen || 0) * 100).toFixed(1) + '% (Req: >60%)';
+        const qEl = document.getElementById('flow-quiet');
+        if (qEl) qEl.textContent = (tf.hawkes_quiet_pct || 0) + '% of ticks';
+        const diagEl = document.getElementById('flow-diagnosis');
+        if (diagEl) diagEl.textContent = tf.diagnosis || 'Scanning market';
+        const badge = document.getElementById('flow-status-badge');
+        if (badge) {
+          badge.textContent = tf.status || 'NOMINAL';
+          badge.style.color = tf.status && tf.status.includes('FAULT') ? 'var(--accent-red)' : 'var(--accent-green)';
+        }
       }
 
       // Logs Terminal

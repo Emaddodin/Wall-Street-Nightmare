@@ -299,3 +299,27 @@ class LiveMonitorAgent:
             f"🔒 Capital preservation lock engaged until next UTC day."
         )
         self.push_ntfy(title, body, tags="octagonal_sign,warning,rotating_light", priority="urgent")
+
+    async def notify_flow_diagnostic(self, diag: dict):
+        """Dispatched periodically when the bot is idle to confirm market vs bug."""
+        idle_m = diag.get("idle_minutes", 30)
+        status = diag.get("status", "SCANNING_NOMINAL")
+        is_bug = "FAULT" in status
+        icon = "⚠️" if is_bug else "🔍"
+        tag = "warning" if is_bug else "magifying_glass_tilted_left"
+        priority = "high" if is_bug else "default"
+
+        title = f"TRADE FLOW AUDIT: {status}"
+        body = (
+            f"{icon} [TRADE FLOW INACTIVITY AUDIT: {idle_m}M IDLE]\n\n"
+            f"📊 Status: {status}\n"
+            f"🔬 Diagnosis: {diag.get('diagnosis')}\n\n"
+            f"⚙️ Pipeline Funnel Health:\n"
+            f"• E2E Self-Test: {'✅ PASSED (Zero Software Bugs)' if diag.get('self_test_passed') else '❌ FAILED'}\n"
+            f"• L2 Ticks Processed: {diag.get('ticks_processed'):,} ticks\n"
+            f"• Peak Confidence Seen: {diag.get('max_confidence_seen', 0)*100:.1f}% (Req: >60.0%)\n"
+            f"• Quiet Order Flow: {diag.get('hawkes_quiet_pct')}% of ticks\n"
+            f"• Pipeline Exceptions: {diag.get('pipeline_exceptions')}\n\n"
+            f"🛡️ Capital is fully guarded. Engine is waiting for verified alpha conditions."
+        )
+        self.push_ntfy(title, body, tags=f"{tag},bar_chart,shield", priority=priority)

@@ -29,6 +29,7 @@ from .exits import ChandelierExit, ExitState
 from .models import GARCH11, VolatilityState
 from .risk import FractionalKelly, PositionSpec
 from .monitor import LiveMonitorAgent
+from .flow_checker import TradeFlowAuditor
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,7 @@ class HFTEngine:
         self._trade_count = 0
         self._pnl_total = 0.0
         self.monitor = LiveMonitorAgent()
+        self.flow_auditor = TradeFlowAuditor()
 
     async def run(self) -> None:
         self._running = True
@@ -139,6 +141,7 @@ class HFTEngine:
             self.config.symbols, self._balance, self.config.dry_run,
         )
         await self.monitor.start()
+        self.flow_auditor.run_e2e_self_test(self)
         await self._feed.start()
 
     async def stop(self) -> None:
@@ -164,6 +167,7 @@ class HFTEngine:
             return
 
         bids_t = [(l.price, l.qty) for l in bids]
+        self.flow_auditor.record_tick()
         asks_t = [(l.price, l.qty) for l in asks]
 
         # 1. Volatility update
@@ -211,6 +215,14 @@ class HFTEngine:
 
         # 3. Telemetry broadcast (every 1 second)
         now_ts = time.time()
+        # Periodic E2E self-test every 10 mins
+        if now_ts - self.flow_auditor.metrics.last_self_test_ts > 600.0:
+            self.flow_auditor.run_e2e_self_test(self)
+
+        # Check for prolonged inactivity notification
+        if self.flow_auditor.should_alert_inactivity():
+            diag_rep = self.flow_auditor.get_diagnostic_report()
+            asyncio.create_task(self.monitor.notify_flow_diagnostic(diag_rep))
         if now_ts - st._last_telemetry_ts >= 1.0:
             st._last_telemetry_ts = now_ts
             pos_dict = None
@@ -253,6 +265,8 @@ class HFTEngine:
                 leverage=st._last_lev,
                 kelly_f=st._last_kelly,
             ))
+            self.monitor.metrics["trade_flow"] = self.flow_auditor.get_diagnostic_report()
+            self.monitor._flush_state()
 
         # 4. Chandelier on open position
         if st.position is not None:
@@ -262,6 +276,7 @@ class HFTEngine:
         # 5. Hawkes clustering check
         excited, hk_dir = st.hawkes.net_imbalance_excited(self.config.min_hawkes_ratio)
         if not excited:
+            self.flow_auditor.record_hawkes_quiet()
             return
 
         # 6. Signal evaluation
@@ -276,10 +291,12 @@ class HFTEngine:
         )
 
         if not signal.is_valid:
+            self.flow_auditor.record_confidence(signal.confidence)
             return
 
         ml_dir = "long" if signal.direction == 1 else "short"
         if hk_dir != "neutral" and ml_dir != hk_dir:
+            self.flow_auditor.record_direction_conflict()
             return
 
         # 7. Kelly position sizing
@@ -296,11 +313,13 @@ class HFTEngine:
         )
 
         if spec is None:
+            self.flow_auditor.record_kelly_rejected()
             return
 
         # 8. Spread check
         spread_bps = book.spread_bps
         if spread_bps > self.config.max_spread_bps:
+            self.flow_auditor.record_spread_wide()
             return
 
         # 9. Open position
@@ -362,6 +381,7 @@ class HFTEngine:
             float(signal.ofi_vector.mean()), signal.confidence,
         )
         self._trade_count += 1
+        self.flow_auditor.record_trade_executed()
         await self.monitor.notify_entry(
             symbol=symbol,
             side=spec.side,
