@@ -129,21 +129,40 @@ class KillZoneGuard:
         if kz is None:
             mins, nxt = self.minutes_until_next()
             return f"⏳ Off-Window (next: {nxt} in {mins}m)"
-        return f"{kz.emoji} {kz.name} Kill Zone"
+        
+        utc_dt = datetime.fromtimestamp(time.time(), tz=timezone.utc)
+        now_min = utc_dt.hour * 60 + utc_dt.minute
+        end_min = kz.end_hour * 60 + kz.end_min
+        if end_min < now_min:
+            end_min += 24 * 60
+        mins_left = end_min - now_min
+        end_str = f"{kz.end_hour:02d}:{kz.end_min:02d} UTC"
+        return f"{kz.emoji} {kz.name} Kill Zone (Ends: {end_str} / {mins_left}m left)"
 
     def all_zones_summary(self) -> list[dict]:
         """Returns all zones as list of dicts for UI display."""
         utc_dt = datetime.fromtimestamp(time.time(), tz=timezone.utc)
         hour = utc_dt.hour
         minute = utc_dt.minute
+        now_min = hour * 60 + minute
+        
         result = []
         for kz in self._zones:
             active = self._in_zone(hour, minute, kz)
+            countdown = ""
+            if active:
+                end_min = kz.end_hour * 60 + kz.end_min
+                if end_min < now_min:
+                    end_min += 24 * 60
+                mins_left = end_min - now_min
+                countdown = f"{mins_left}m left"
+                
             result.append({
                 "name": kz.name,
                 "emoji": kz.emoji,
                 "window": f"{kz.start_hour:02d}:{kz.start_min:02d} – {kz.end_hour:02d}:{kz.end_min:02d} UTC",
                 "active": active,
+                "countdown": countdown,
                 "priority": kz.priority,
             })
         return result

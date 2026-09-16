@@ -142,6 +142,7 @@ class LiveMonitorAgent:
         kelly_f: float = 0.0,
         killzone_label: str = "",
         day_plan: dict | None = None,
+        killzones_summary: list[dict] | None = None,
     ):
         unrealized = position["unrealized_pnl"] if position else 0.0
         equity = balance + unrealized
@@ -172,6 +173,7 @@ class LiveMonitorAgent:
             "dynamic_leverage": leverage,
             "kelly_fraction": round(kelly_f, 4),
             "killzone": killzone_label,
+            "killzones_summary": killzones_summary or [],
             "day": day_plan or {},
         })
         self._flush_state()

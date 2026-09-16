@@ -316,10 +316,10 @@ def _render_hft_terminal() -> str:
 
       <div class="card">
         <div class="card-header">
-          <span class="card-title">Execution Mode</span>
+          <span class="card-title">Execution & Kill Zone</span>
           <span class="card-badge">Paper Account</span>
         </div>
-        <div class="val-hero" style="font-size: 20px; color: var(--accent-cyan);">ACTIVE RUN</div>
+        <div class="val-hero" style="font-size: 14px; color: var(--accent-gold);" id="hero-kz">--</div>
         <div class="val-sub" id="hero-trades">Trades: 0 · Halt: False</div>
       </div>
     </div>
@@ -376,6 +376,17 @@ def _render_hft_terminal() -> str:
           <span class="k">Lev Cap</span>
           <span class="v" id="dp-lev-cap">20x</span>
         </div>
+      </div>
+    </div>
+    
+    <!-- ICT Kill Zones Schedule & Live Countdown -->
+    <div class="card" id="kz-summary-card" style="border-color: rgba(0, 240, 255, 0.3);">
+      <div class="card-header">
+        <span class="card-title">🕒 ICT Kill Zones & Countdown</span>
+        <span class="card-badge" id="kz-hero-badge" style="background: rgba(0,255,136,0.2); color: var(--accent-green); font-weight: 700;">LIVE</span>
+      </div>
+      <div id="kz-list" style="display: flex; flex-direction: column; gap: 8px; font-family: var(--mono); font-size: 13px;">
+        <!-- Populated by JS -->
       </div>
     </div>
 
@@ -552,6 +563,7 @@ def _render_hft_terminal() -> str:
       document.getElementById('hero-lev').textContent = (d.dynamic_leverage||1) + 'x';
       document.getElementById('hero-sigma').textContent = 'GARCH σ: ' + (d.garch_sigma||0).toFixed(5) + ' · f*: ' + (d.kelly_fraction||0).toFixed(3);
       document.getElementById('hero-trades').textContent = 'Trades: ' + (d.trade_count||0) + ' · Cap: $65.00';
+      document.getElementById('hero-kz').textContent = d.killzone || '--';
 
       // DayPlanner Campaign
       const dp = d.day || {};
@@ -578,6 +590,70 @@ def _render_hft_terminal() -> str:
       const regime = dp.regime || 'NORMAL';
       regimeEl.textContent = regime.replace(/_/g, ' ');
       regimeEl.className = 'regime-badge regime-' + regime;
+
+      // Render ICT Kill Zones Schedule with live countdown
+      const defaultZones = [
+        { name: "Asian Open", startH: 0, startM: 0, endH: 2, endM: 0, emoji: "🌏", window: "00:00 – 02:00 UTC" },
+        { name: "London Open", startH: 2, startM: 0, endH: 5, endM: 0, emoji: "🇬🇧", window: "02:00 – 05:00 UTC" },
+        { name: "NY Open", startH: 7, startM: 0, endH: 10, endM: 0, emoji: "🗽", window: "07:00 – 10:00 UTC" },
+        { name: "London Close", startH: 11, startM: 0, endH: 13, endM: 0, emoji: "🔄", window: "11:00 – 13:00 UTC" },
+        { name: "NY Afternoon", startH: 14, startM: 0, endH: 16, endM: 0, emoji: "📈", window: "14:00 – 16:00 UTC" }
+      ];
+
+      const now = new Date();
+      const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+      let activeFound = false;
+
+      const kzListHtml = defaultZones.map(z => {
+        const startMin = z.startH * 60 + z.startM;
+        const endMin = z.endH * 60 + z.endM;
+        const isActive = nowMin >= startMin && nowMin < endMin;
+        
+        let statusBadge = "";
+        let rowWeight = "400";
+        let bgStyle = "background: rgba(255,255,255,0.02);";
+
+        if (isActive) {
+          activeFound = true;
+          const minsLeft = endMin - nowMin;
+          const endStr = String(z.endH).padStart(2, '0') + ":" + String(z.endM).padStart(2, '0') + " UTC";
+          rowWeight = "700";
+          bgStyle = "background: rgba(0,255,136,0.08); border-left: 3px solid var(--accent-green);";
+          statusBadge = `<span style="background: rgba(0,255,136,0.2); color: var(--accent-green); padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 11px;">ACTIVE · Ends ${endStr} (${minsLeft}m left)</span>`;
+        } else {
+          let minsUntil = startMin - nowMin;
+          if (minsUntil < 0) minsUntil += 24 * 60;
+          const hrs = Math.floor(minsUntil / 60);
+          const remMins = minsUntil % 60;
+          const timeStr = hrs > 0 ? `${hrs}h ${remMins}m` : `${remMins}m`;
+          statusBadge = `<span style="color: var(--text-muted); font-size: 11px;">Starts in ${timeStr}</span>`;
+        }
+
+        return `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 6px; ${bgStyle} font-weight: ${rowWeight};">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 16px;">${z.emoji}</span>
+              <span style="color: ${isActive ? 'var(--accent-green)' : 'var(--text-main)'};">${z.name}</span>
+              <span style="font-size: 11px; color: var(--text-muted); margin-left: 4px;">${z.window}</span>
+            </div>
+            <div>${statusBadge}</div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('kz-list').innerHTML = kzListHtml;
+      const heroBadge = document.getElementById('kz-hero-badge');
+      if (heroBadge) {
+        if (activeFound) {
+          heroBadge.textContent = "IN KILL ZONE";
+          heroBadge.style.background = "rgba(0,255,136,0.2)";
+          heroBadge.style.color = "var(--accent-green)";
+        } else {
+          heroBadge.textContent = "OFF-WINDOW";
+          heroBadge.style.background = "rgba(255,255,255,0.08)";
+          heroBadge.style.color = "var(--text-muted)";
+        }
+      }
 
       // Pillar 1: AS
       document.getElementById('as-spread').textContent = (d.as_maker_spread_bps||0).toFixed(1) + ' bps';

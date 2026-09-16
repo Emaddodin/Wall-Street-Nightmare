@@ -306,6 +306,7 @@ class HFTEngine:
                 leverage=st._last_lev,
                 kelly_f=st._last_kelly,
                 killzone_label=self.killzone.zone_label(),
+                killzones_summary=self.killzone.all_zones_summary(),
                 day_plan=self.day_planner.to_dict(self._day_plan),
             ))
             self.monitor.metrics["trade_flow"] = self.flow_auditor.get_diagnostic_report()
