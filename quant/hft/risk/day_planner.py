@@ -232,8 +232,9 @@ class DayPlanner:
             return False, "DAY_TRADE_LIMIT"
         if plan.session_quota_used >= plan.session_quota_max:
             return False, "SESSION_QUOTA_EXHAUSTED"
-        if plan.consecutive_losses >= 3 and plan.regime not in ("BEHIND_LATE",):
-            return False, "CONSEC_LOSS_COOLDOWN"
+
+        # We rely on DRAWDOWN_WARNING regime to de-risk (lower Kelly, higher conf)
+        # rather than hard-blocking, so that the system can still trade and recover.
         return True, "ALLOWED"
 
     def record_session_trade(self, session_name: str) -> None:

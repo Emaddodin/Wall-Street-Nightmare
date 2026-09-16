@@ -313,7 +313,8 @@ class HFTEngine:
 
         # 4. Chandelier on open position
         if st.position is not None:
-            await self._manage_open_position(st, mid, bids_t[0][0], asks_t[0][0], vol)
+            # high = ask, low = bid
+            await self._manage_open_position(st, mid, asks_t[0][0], bids_t[0][0], vol)
             return
 
         # 4b. DayPlanner gate — refuse new entries based on regime and quotas
@@ -351,7 +352,10 @@ class HFTEngine:
         )
 
         if not signal.is_valid:
-            self.flow_auditor.record_confidence(signal.confidence)
+            if "spread" in signal.reason:
+                self.flow_auditor.record_spread_wide()
+            else:
+                self.flow_auditor.record_confidence(signal.confidence)
             return
 
         # 7b. DayPlanner confidence floor — regime-adjusted minimum
@@ -444,8 +448,14 @@ class HFTEngine:
             low=spec.entry_price,
             close=spec.entry_price,
         )
+        # Fix CRITICAL ATR BUG: inject GARCH volatility directly to seed the ATR
+        pos.chandelier._atr = st.last_vol.sigma * mid
         pos.chandelier.init_position(spec.side, spec.entry_price)
         st.position = pos
+        
+        # Update AS inventory (+ qty for long, - qty for short)
+        inv_delta = spec.qty_base if spec.side == "long" else -spec.qty_base
+        st.as_model.update_inventory(inv_delta, spec.entry_price)
 
         mode = "[DRY RUN]" if self.config.dry_run else "[LIVE]"
         logger.info(
@@ -489,12 +499,12 @@ class HFTEngine:
 
         old_mult = pos.chandelier.current_multiplier
         pos.chandelier.update_bar(high=high, low=low, close=price)
-        if pos.chandelier.current_multiplier < old_mult:
-            new_mult = pos.chandelier.current_multiplier
-            stop_px = pos.chandelier.evaluate(price).stop_price
-            await self.monitor.log_ratchet_shift(old_mult, new_mult, pos.current_pnl_pct(price), new_stop=stop_px)
         pos.update_peak(price)
         exit_state: ExitState = pos.chandelier.evaluate(price)
+        
+        if pos.chandelier.current_multiplier < old_mult:
+            new_mult = pos.chandelier.current_multiplier
+            await self.monitor.log_ratchet_shift(old_mult, new_mult, pos.current_pnl_pct(price), new_stop=exit_state.stop_price)
 
         pnl_pct = pos.current_pnl_pct(price)
 
@@ -519,7 +529,9 @@ class HFTEngine:
                 exit_state.stop_price, exit_state.multiplier,
                 exit_state.atr, reason,
             )
+            # Clear position and inventory
             st.position = None
+            st.as_model.update_inventory(-st.as_model.inventory, price)
             st.as_model.reset_epoch()
             self.day_planner.record_trade_result(pnl_usdt)
             await self.monitor.log_exit(pos.spec.side, price, pnl_usdt, pnl_pct, reason, balance=self._balance)

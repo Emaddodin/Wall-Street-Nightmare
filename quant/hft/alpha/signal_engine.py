@@ -317,8 +317,9 @@ class SignalEngine:
         trade_price: float | None = None,
         trade_qty: float | None = None,
     ) -> SignalResult:
-        """Compute features and return a direction signal."""
-        self.feature_eng.update(bids, asks, mid_price, trade_price, trade_qty)
+        """Compute features and return a direction signal.
+        (Note: feature_eng.update must be called externally before this to avoid double-counting)
+        """
 
         if not self.feature_eng.is_ready():
             return SignalResult(
