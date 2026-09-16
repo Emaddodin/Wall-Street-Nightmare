@@ -136,9 +136,12 @@ class HFTEngine:
         self._current_utc_day = int(now_sec // 86400)
         self._day_start_balance = self._balance
         self._day_trades = 0
-        self._day_target_pct = 1.0  # +100% daily target
-        self._day_loss_limit_pct = 0.50  # -50% loss limit
+        self._day_target_pct = 1.0        # +100% daily target
+        self._day_loss_limit_pct = 0.50   # -50% daily loss limit
         self._day_halted = False
+        # Dynamic thresholds — recalculated each day from day_start_balance
+        self._day_target_usdt  = self._day_start_balance * (1.0 + self._day_target_pct)
+        self._day_loss_floor   = self._day_start_balance * (1.0 - self._day_loss_limit_pct)
         self.monitor = LiveMonitorAgent()
         self.flow_auditor = TradeFlowAuditor()
         self.killzone = KillZoneGuard()
@@ -231,11 +234,14 @@ class HFTEngine:
             self._day_start_balance = self._balance
             self._day_trades = 0
             self._day_halted = False
+            # Recompute thresholds from the new day's starting balance (compounding)
+            self._day_target_usdt = self._day_start_balance * (1.0 + self._day_target_pct)
+            self._day_loss_floor  = self._day_start_balance * (1.0 - self._day_loss_limit_pct)
             day_num = current_day - int(1789430400 // 86400) + 1  # Path day counter
             asyncio.create_task(self.monitor.notify_day_rollover(
                 day_num=max(1, day_num),
                 balance=self._balance,
-                target_balance=self._balance * 2.0
+                target_balance=self._day_target_usdt,
             ))
 
         # Periodic E2E self-test every 10 mins
@@ -288,6 +294,10 @@ class HFTEngine:
                 leverage=st._last_lev,
                 kelly_f=st._last_kelly,
                 killzone_label=self.killzone.zone_label(),
+                day_start=self._day_start_balance,
+                day_target=self._day_target_usdt,
+                day_loss_floor=self._day_loss_floor,
+                day_halted=self._day_halted,
             ))
             self.monitor.metrics["trade_flow"] = self.flow_auditor.get_diagnostic_report()
             self.monitor._flush_state()
@@ -297,11 +307,16 @@ class HFTEngine:
             await self._manage_open_position(st, mid, bids_t[0][0], asks_t[0][0], vol)
             return
 
+        # 4b. Day circuit-breaker gate — refuse new entries if day is halted
+        if self._day_halted:
+            return
+
         # 5. Kill zone gate — only take NEW entries inside ICT institutional windows
         in_kz, kz_name = self.killzone.check()
         if not in_kz:
             self.flow_auditor.record_outside_killzone()
             return
+
 
         # 6. Hawkes clustering check
         excited, hk_dir = st.hawkes.net_imbalance_excited(self.config.min_hawkes_ratio)
@@ -475,12 +490,25 @@ class HFTEngine:
             st.position = None
             st.as_model.reset_epoch()
             await self.monitor.log_exit(pos.spec.side, price, pnl_usdt, pnl_pct, reason, balance=self._balance)
-            if self._balance >= 130.0:
+
+            # --- Daily circuit breakers (dynamic thresholds, compound-aware) ---
+            if self._balance >= self._day_target_usdt:
+                self._day_halted = True
                 await self.monitor.notify_daily_target_hit(self._balance)
-                self._running = False
-            elif self._balance <= 32.50:
+                # Keep engine RUNNING so telemetry/guard/ntfy stay alive
+                # New entries blocked via _day_halted gate above
+                logger.info(
+                    "DAILY TARGET HIT: $%.2f >= $%.2f — halting new entries until 00:00 UTC",
+                    self._balance, self._day_target_usdt,
+                )
+            elif self._balance <= self._day_loss_floor:
+                self._day_halted = True
                 await self.monitor.notify_drawdown_halt(self._balance)
-                self._running = False
+                logger.info(
+                    "DAILY LOSS LIMIT HIT: $%.2f <= $%.2f — halting new entries until 00:00 UTC",
+                    self._balance, self._day_loss_floor,
+                )
+
 
     def stats(self) -> dict:
         return {
