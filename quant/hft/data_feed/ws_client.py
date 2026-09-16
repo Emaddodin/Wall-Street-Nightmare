@@ -134,12 +134,9 @@ class HyperliquidFeed:
             return
         book = self.books[coin]
 
-        # Hyperliquid sends full snapshots; incremental updates share the same channel.
-        # Detect by checking if this is the first message (seq == 0) or a delta.
-        if book.seq == 0:
-            await book.apply_snapshot(data)
-        else:
-            await book.apply_delta(data)
+        # Hyperliquid WebSocket ALWAYS sends full L2 snapshots — not incremental deltas.
+        # apply_snapshot clears the book and repopulates from scratch on every message.
+        await book.apply_snapshot(data)
 
         if self._on_book_update:
             await self._on_book_update(coin, book)

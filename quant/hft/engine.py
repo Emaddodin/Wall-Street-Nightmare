@@ -30,6 +30,7 @@ from .models import GARCH11, VolatilityState
 from .risk import FractionalKelly, PositionSpec
 from .monitor import LiveMonitorAgent
 from .flow_checker import TradeFlowAuditor
+from .utils.killzone import KillZoneGuard
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,7 @@ class HFTEngine:
         self._day_halted = False
         self.monitor = LiveMonitorAgent()
         self.flow_auditor = TradeFlowAuditor()
+        self.killzone = KillZoneGuard()
 
     async def run(self) -> None:
         self._running = True
@@ -285,6 +287,7 @@ class HFTEngine:
                 catboost_dir=st._last_dir,
                 leverage=st._last_lev,
                 kelly_f=st._last_kelly,
+                killzone_label=self.killzone.zone_label(),
             ))
             self.monitor.metrics["trade_flow"] = self.flow_auditor.get_diagnostic_report()
             self.monitor._flush_state()
@@ -294,13 +297,19 @@ class HFTEngine:
             await self._manage_open_position(st, mid, bids_t[0][0], asks_t[0][0], vol)
             return
 
-        # 5. Hawkes clustering check
+        # 5. Kill zone gate — only take NEW entries inside ICT institutional windows
+        in_kz, kz_name = self.killzone.check()
+        if not in_kz:
+            self.flow_auditor.record_outside_killzone()
+            return
+
+        # 6. Hawkes clustering check
         excited, hk_dir = st.hawkes.net_imbalance_excited(self.config.min_hawkes_ratio)
         if not excited:
             self.flow_auditor.record_hawkes_quiet()
             return
 
-        # 6. Signal evaluation
+        # 7. Signal evaluation
         signal: SignalResult = await st.signal_engine.generate_signal(
             bids=bids_t,
             asks=asks_t,
@@ -320,7 +329,7 @@ class HFTEngine:
             self.flow_auditor.record_direction_conflict()
             return
 
-        # 7. Kelly position sizing
+        # 8. Kelly position sizing
         side = "long" if signal.direction == 1 else "short"
         spec = self._kelly.compute_position(
             symbol=symbol,
@@ -337,14 +346,14 @@ class HFTEngine:
             self.flow_auditor.record_kelly_rejected()
             return
 
-        # 8. Spread check
+        # 9. Spread check — use abs() as safety net for any orderbook side-swap edge cases
         spread_bps = book.spread_bps
-        if spread_bps > self.config.max_spread_bps:
+        if abs(spread_bps) > self.config.max_spread_bps or spread_bps < 0:
             self.flow_auditor.record_spread_wide()
             return
 
-        # 9. Open position
-        await self._open_position(st, symbol, spec, signal, mid)
+        # 10. Open position
+        await self._open_position(st, symbol, spec, signal, mid, kz_name=kz_name)
 
     # ------------------------------------------------------------------
     # Trade callback
@@ -372,6 +381,7 @@ class HFTEngine:
         spec: PositionSpec,
         signal: SignalResult,
         mid: float,
+        kz_name: str = "",
     ) -> None:
         pos = OpenPosition(
             spec=spec,
@@ -395,11 +405,11 @@ class HFTEngine:
         mode = "[DRY RUN]" if self.config.dry_run else "[LIVE]"
         logger.info(
             "%s OPEN %s %s | entry=%.2f liq=%.2f stop=%.2f "
-            "margin=%.2f USDT lev=%dx OFI_mean=%.3f conf=%.2f",
+            "margin=%.2f USDT lev=%dx OFI_mean=%.3f conf=%.2f kz=%s",
             mode, spec.side.upper(), symbol,
             spec.entry_price, spec.liq_price, spec.stop_price,
             spec.margin_usdt, spec.leverage,
-            float(signal.ofi_vector.mean()), signal.confidence,
+            float(signal.ofi_vector.mean()), signal.confidence, kz_name,
         )
         self._trade_count += 1
         self.flow_auditor.record_trade_executed()
@@ -415,6 +425,7 @@ class HFTEngine:
             hawkes_buy=st.hawkes.buy_intensity,
             hawkes_sell=st.hawkes.sell_intensity,
             ofi=float(signal.ofi_vector.mean()),
+            killzone=kz_name,
         )
 
     async def _manage_open_position(

@@ -32,6 +32,7 @@ class TradeFlowMetrics:
     ticks_direction_conflict: int = 0
     ticks_spread_wide: int = 0
     ticks_kelly_rejected: int = 0
+    ticks_outside_killzone: int = 0   # ticks skipped due to ICT kill zone filter
     pipeline_exceptions: int = 0
     last_exception_msg: str = ""
     max_confidence_seen: float = 0.0
@@ -64,6 +65,9 @@ class TradeFlowAuditor:
 
     def record_kelly_rejected(self) -> None:
         self.metrics.ticks_kelly_rejected += 1
+
+    def record_outside_killzone(self) -> None:
+        self.metrics.ticks_outside_killzone += 1
 
     def record_trade_executed(self) -> None:
         self.metrics.last_trade_ts = time.time()
@@ -163,6 +167,7 @@ class TradeFlowAuditor:
             "low_conf_pct": round((self.metrics.ticks_low_confidence / total_ticks) * 100.0, 1),
             "direction_conflicts": self.metrics.ticks_direction_conflict,
             "kelly_rejections": self.metrics.ticks_kelly_rejected,
+            "outside_killzone_pct": round((self.metrics.ticks_outside_killzone / total_ticks) * 100.0, 1),
             "last_check_time": time.strftime("%H:%M:%S", time.gmtime()),
         }
 

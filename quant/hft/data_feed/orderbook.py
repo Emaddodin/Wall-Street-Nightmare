@@ -62,6 +62,8 @@ class OrderBook:
             self._bids.clear()
             self._asks.clear()
             levels = data.get("levels", [[], []])
+            # Hyperliquid WebSocket L2: levels[0] = BIDS (descending from best bid)
+            #                            levels[1] = ASKS (ascending from best ask)
             for entry in levels[0]:
                 px, sz = float(entry["px"]), float(entry["sz"])
                 if sz > 0:
@@ -76,6 +78,7 @@ class OrderBook:
     async def apply_delta(self, data: dict) -> None:
         async with self._lock:
             levels = data.get("levels", [[], []])
+            # Hyperliquid WebSocket L2: levels[0] = BIDS, levels[1] = ASKS
             for entry in levels[0]:
                 px, sz = float(entry["px"]), float(entry["sz"])
                 if sz == 0.0:

@@ -140,6 +140,7 @@ class LiveMonitorAgent:
         catboost_dir: str = "NEUTRAL",
         leverage: int = 1,
         kelly_f: float = 0.0,
+        killzone_label: str = "",
     ):
         unrealized = position["unrealized_pnl"] if position else 0.0
         equity = balance + unrealized
@@ -169,8 +170,10 @@ class LiveMonitorAgent:
             "catboost_direction": catboost_dir,
             "dynamic_leverage": leverage,
             "kelly_fraction": round(kelly_f, 4),
+            "killzone": killzone_label,
         })
         self._flush_state()
+
 
     async def log_as_dynamics(self, spread, inv_skew):
         self.metrics["as_maker_spread_bps"] = round(spread, 2)
@@ -194,6 +197,7 @@ class LiveMonitorAgent:
         hawkes_buy: float,
         hawkes_sell: float,
         ofi: float,
+        killzone: str = "",
     ):
         """Dispatched immediately upon order execution."""
         side_upper = side.upper()
@@ -201,17 +205,19 @@ class LiveMonitorAgent:
         icon = "🟢" if is_long else "🔴"
         tag = "green_circle" if is_long else "red_circle"
         sl_pct = abs((stop_price - entry_price) / entry_price) * 100.0
+        kz_line = f"🕐 Kill Zone: {killzone}\n" if killzone else ""
 
         self.metrics["catboost_confidence"] = round(confidence, 3)
         self.metrics["catboost_direction"] = "LONG" if is_long else "SHORT"
         self.metrics["dynamic_leverage"] = leverage
 
-        self.add_log(f"Alpha Entry ({side_upper}) | Conf: {confidence*100:.1f}% | Lev: {leverage}x @ ${entry_price:.1f}", "ALPHA")
+        self.add_log(f"Alpha Entry ({side_upper}) | Conf: {confidence*100:.1f}% | Lev: {leverage}x @ ${entry_price:.1f} | KZ: {killzone}", "ALPHA")
 
         title = f"HFT ENTRY: {side_upper} {symbol} ({leverage}x)"
         body = (
             f"{icon} [POSITION OPENED: {side_upper}]\n\n"
             f"🪙 Asset: {symbol} @ ${entry_price:,.1f}\n"
+            f"{kz_line}"
             f"⚡ Leverage: {leverage}x (Fractional Kelly)\n"
             f"💵 Margin: ${margin:.2f} USDT (Size: {qty:.4f} {symbol})\n"
             f"🛑 Initial Stop: ${stop_price:,.1f} (-{sl_pct:.2f}%)\n\n"
@@ -222,6 +228,7 @@ class LiveMonitorAgent:
             f"🎯 Target: Chandelier Ratchet Trailing Active"
         )
         self.push_ntfy(title, body, tags=f"{tag},rocket,dart", priority="high")
+
 
     async def log_ratchet_shift(self, old_mult: float, new_mult: float, pnl_pct: float, new_stop: float = 0.0):
         """Dispatched when Chandelier ratchet tightens the trailing stop."""
