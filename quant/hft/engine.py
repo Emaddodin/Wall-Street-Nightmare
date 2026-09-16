@@ -28,6 +28,7 @@ from .execution import AvellanedaStoikov, SquareRootSplitter
 from .exits import ChandelierExit, ExitState
 from .models import GARCH11, VolatilityState
 from .risk import FractionalKelly, PositionSpec
+from .risk.day_planner import DayPlanner
 from .monitor import LiveMonitorAgent
 from .flow_checker import TradeFlowAuditor
 from .utils.killzone import KillZoneGuard
@@ -142,6 +143,11 @@ class HFTEngine:
         # Dynamic thresholds — recalculated each day from day_start_balance
         self._day_target_usdt  = self._day_start_balance * (1.0 + self._day_target_pct)
         self._day_loss_floor   = self._day_start_balance * (1.0 - self._day_loss_limit_pct)
+        self.day_planner = DayPlanner(
+            start_balance=self._balance,
+            target_pct=self._day_target_pct,
+            loss_limit_pct=self._day_loss_limit_pct,
+        )
         self.monitor = LiveMonitorAgent()
         self.flow_auditor = TradeFlowAuditor()
         self.killzone = KillZoneGuard()
@@ -237,6 +243,7 @@ class HFTEngine:
             # Recompute thresholds from the new day's starting balance (compounding)
             self._day_target_usdt = self._day_start_balance * (1.0 + self._day_target_pct)
             self._day_loss_floor  = self._day_start_balance * (1.0 - self._day_loss_limit_pct)
+            self.day_planner.reset_day(self._balance)
             day_num = current_day - int(1789430400 // 86400) + 1  # Path day counter
             asyncio.create_task(self.monitor.notify_day_rollover(
                 day_num=max(1, day_num),
@@ -272,6 +279,11 @@ class HFTEngine:
                     "leverage": pos.spec.leverage,
                 }
 
+            # Evaluate DayPlanner for regime and pacing
+            self._day_plan = self.day_planner.evaluate(
+                current_equity=self._balance,
+                day_trades=self._day_trades,
+            )
             asyncio.create_task(self.monitor.update_tick(
                 mid=mid,
                 bid=bids_t[0][0],
@@ -294,10 +306,7 @@ class HFTEngine:
                 leverage=st._last_lev,
                 kelly_f=st._last_kelly,
                 killzone_label=self.killzone.zone_label(),
-                day_start=self._day_start_balance,
-                day_target=self._day_target_usdt,
-                day_loss_floor=self._day_loss_floor,
-                day_halted=self._day_halted,
+                day_plan=self.day_planner.to_dict(self._day_plan),
             ))
             self.monitor.metrics["trade_flow"] = self.flow_auditor.get_diagnostic_report()
             self.monitor._flush_state()
@@ -307,8 +316,14 @@ class HFTEngine:
             await self._manage_open_position(st, mid, bids_t[0][0], asks_t[0][0], vol)
             return
 
-        # 4b. Day circuit-breaker gate — refuse new entries if day is halted
-        if self._day_halted:
+        # 4b. DayPlanner gate — refuse new entries based on regime and quotas
+        if not hasattr(self, '_day_plan'):
+            self._day_plan = self.day_planner.evaluate(self._balance, self._day_trades)
+        allowed, gate_reason = self.day_planner.should_allow_entry(self._day_plan)
+        if not allowed:
+            if not self._day_halted:
+                logger.info("DayPlanner BLOCKED entry: %s (regime=%s)", gate_reason, self._day_plan.regime)
+                self._day_halted = True
             return
 
         # 5. Kill zone gate — only take NEW entries inside ICT institutional windows
@@ -339,14 +354,29 @@ class HFTEngine:
             self.flow_auditor.record_confidence(signal.confidence)
             return
 
+        # 7b. DayPlanner confidence floor — regime-adjusted minimum
+        if signal.confidence < self._day_plan.confidence_floor:
+            self.flow_auditor.record_confidence(signal.confidence)
+            return
+
         ml_dir = "long" if signal.direction == 1 else "short"
         if hk_dir != "neutral" and ml_dir != hk_dir:
             self.flow_auditor.record_direction_conflict()
             return
 
-        # 8. Kelly position sizing
+        # 8. Kelly position sizing (with DayPlanner regime multiplier)
         side = "long" if signal.direction == 1 else "short"
-        spec = self._kelly.compute_position(
+        # Apply DayPlanner's Kelly multiplier and leverage cap
+        adj_fraction = self.config.kelly_fraction * self._day_plan.kelly_multiplier
+        adj_max_lev = min(self.config.max_leverage, self._day_plan.max_leverage_cap)
+        regime_kelly = FractionalKelly(
+            fraction=adj_fraction,
+            max_leverage=adj_max_lev,
+            mmr=self._kelly.mmr,
+            safety_factor=self._kelly.safety_factor,
+            max_risk_pct=self._kelly.max_risk_pct,
+        )
+        spec = regime_kelly.compute_position(
             symbol=symbol,
             side=side,
             balance_usdt=self._balance,
@@ -427,6 +457,8 @@ class HFTEngine:
             float(signal.ofi_vector.mean()), signal.confidence, kz_name,
         )
         self._trade_count += 1
+        self._day_trades += 1
+        self.day_planner.record_session_trade(kz_name)
         self.flow_auditor.record_trade_executed()
         await self.monitor.notify_entry(
             symbol=symbol,
@@ -489,6 +521,7 @@ class HFTEngine:
             )
             st.position = None
             st.as_model.reset_epoch()
+            self.day_planner.record_trade_result(pnl_usdt)
             await self.monitor.log_exit(pos.spec.side, price, pnl_usdt, pnl_pct, reason, balance=self._balance)
 
             # --- Daily circuit breakers (dynamic thresholds, compound-aware) ---

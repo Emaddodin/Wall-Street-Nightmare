@@ -232,6 +232,40 @@ def _render_hft_terminal() -> str:
     .badge-RATCHET { background: var(--accent-gold); color: #000; }
     .badge-EXIT { background: var(--accent-green); color: #000; }
     .badge-SYSTEM { background: #333C52; color: #FFF; }
+
+    /* DayPlanner Progress */
+    .day-progress-wrap {
+      width: 100%; height: 20px; background: #141824;
+      border-radius: 6px; overflow: hidden; position: relative;
+      margin: 10px 0;
+    }
+    .day-progress-fill {
+      height: 100%; border-radius: 6px;
+      background: linear-gradient(90deg, #D4AF37, #00FF88);
+      transition: width 0.5s ease; position: relative;
+    }
+    .day-progress-label {
+      position: absolute; right: 8px; top: 50%;
+      transform: translateY(-50%);
+      font-size: 10px; font-family: var(--mono); font-weight: 700;
+      color: #000; text-shadow: 0 0 3px rgba(0,0,0,0.5);
+    }
+    .regime-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 4px;
+      font-size: 11px; font-family: var(--mono); font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .regime-NORMAL { background: rgba(0,240,255,0.12); color: var(--accent-cyan); }
+    .regime-AHEAD { background: rgba(0,255,136,0.12); color: var(--accent-green); }
+    .regime-ALMOST_THERE { background: rgba(0,255,136,0.25); color: #00FF88; }
+    .regime-TARGET_HIT { background: rgba(212,175,55,0.25); color: var(--accent-gold); }
+    .regime-BEHIND_EARLY { background: rgba(255,170,50,0.15); color: #FFAA32; }
+    .regime-BEHIND_LATE { background: rgba(255,46,84,0.15); color: var(--accent-red); }
+    .regime-DRAWDOWN_WARNING { background: rgba(255,46,84,0.20); color: var(--accent-red); }
+    .regime-DRAWDOWN_HALT { background: rgba(255,46,84,0.30); color: #FF1744; }
+    .day-stats-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px;
+    }
   </style>
 </head>
 <body>
@@ -287,6 +321,61 @@ def _render_hft_terminal() -> str:
         </div>
         <div class="val-hero" style="font-size: 20px; color: var(--accent-cyan);">ACTIVE RUN</div>
         <div class="val-sub" id="hero-trades">Trades: 0 · Halt: False</div>
+      </div>
+    </div>
+
+    <!-- Day Planner / Daily Campaign -->
+    <div class="card" style="border-color: rgba(212,175,55,0.3);">
+      <div class="card-header">
+        <span class="card-title">📊 Daily Campaign Planner</span>
+        <span class="regime-badge regime-NORMAL" id="dp-regime">NORMAL</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+        <span style="font-family: var(--mono); font-size: 13px; color: var(--text-muted);">
+          $<span id="dp-start">65.00</span> → $<span id="dp-target">130.00</span>
+        </span>
+        <span style="font-family: var(--mono); font-size: 11px; color: var(--accent-gold);">
+          Floor: $<span id="dp-floor">32.50</span>
+        </span>
+      </div>
+      <div class="day-progress-wrap">
+        <div class="day-progress-fill" id="dp-bar" style="width: 0%;">
+          <span class="day-progress-label" id="dp-bar-label">0%</span>
+        </div>
+      </div>
+      <div class="day-stats-grid" style="font-size: 12px; font-family: var(--mono);">
+        <div class="metric-row">
+          <span class="k">Day PnL</span>
+          <span class="v" id="dp-pnl">$0.00</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Kelly Mult</span>
+          <span class="v" id="dp-kelly">1.00×</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Session Quota</span>
+          <span class="v" id="dp-quota">0/12</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Day Trades</span>
+          <span class="v" id="dp-day-trades">0/40</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">KZ Hours Left</span>
+          <span class="v" id="dp-kz-hours">--</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Consec Losses</span>
+          <span class="v" id="dp-consec">0</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Conf Floor</span>
+          <span class="v" id="dp-conf-floor">60%</span>
+        </div>
+        <div class="metric-row">
+          <span class="k">Lev Cap</span>
+          <span class="v" id="dp-lev-cap">20x</span>
+        </div>
       </div>
     </div>
 
@@ -463,6 +552,32 @@ def _render_hft_terminal() -> str:
       document.getElementById('hero-lev').textContent = (d.dynamic_leverage||1) + 'x';
       document.getElementById('hero-sigma').textContent = 'GARCH σ: ' + (d.garch_sigma||0).toFixed(5) + ' · f*: ' + (d.kelly_fraction||0).toFixed(3);
       document.getElementById('hero-trades').textContent = 'Trades: ' + (d.trade_count||0) + ' · Cap: $65.00';
+
+      // DayPlanner Campaign
+      const dp = d.day || {};
+      const dpProg = Math.max(0, Math.min(100, dp.progress_pct || 0));
+      document.getElementById('dp-bar').style.width = dpProg + '%';
+      document.getElementById('dp-bar-label').textContent = dpProg.toFixed(0) + '%';
+      document.getElementById('dp-start').textContent = (dp.start_balance || 65).toFixed(2);
+      document.getElementById('dp-target').textContent = (dp.target_balance || 130).toFixed(2);
+      document.getElementById('dp-floor').textContent = (dp.loss_floor || 32.5).toFixed(2);
+      const dpPnlEl = document.getElementById('dp-pnl');
+      const dpPnl = dp.day_pnl_usdt || 0;
+      dpPnlEl.textContent = (dpPnl >= 0 ? '+' : '') + dpPnl.toFixed(2);
+      dpPnlEl.style.color = dpPnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+      document.getElementById('dp-kelly').textContent = (dp.kelly_multiplier || 1).toFixed(2) + '×';
+      document.getElementById('dp-quota').textContent = dp.session_quota || '0/12';
+      document.getElementById('dp-day-trades').textContent = dp.day_trades || '0/40';
+      document.getElementById('dp-kz-hours').textContent = (dp.kz_hours_remaining !== undefined ? dp.kz_hours_remaining.toFixed(1) + 'h' : '--');
+      const consecEl = document.getElementById('dp-consec');
+      consecEl.textContent = dp.consecutive_losses || 0;
+      consecEl.style.color = (dp.consecutive_losses || 0) >= 3 ? 'var(--accent-red)' : 'var(--text-main)';
+      document.getElementById('dp-conf-floor').textContent = Math.round((dp.confidence_floor || 0.6) * 100) + '%';
+      document.getElementById('dp-lev-cap').textContent = (dp.max_leverage_cap || 20) + 'x';
+      const regimeEl = document.getElementById('dp-regime');
+      const regime = dp.regime || 'NORMAL';
+      regimeEl.textContent = regime.replace(/_/g, ' ');
+      regimeEl.className = 'regime-badge regime-' + regime;
 
       // Pillar 1: AS
       document.getElementById('as-spread').textContent = (d.as_maker_spread_bps||0).toFixed(1) + ' bps';

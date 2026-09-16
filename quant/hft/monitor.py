@@ -141,17 +141,10 @@ class LiveMonitorAgent:
         leverage: int = 1,
         kelly_f: float = 0.0,
         killzone_label: str = "",
-        day_start: float = 0.0,
-        day_target: float = 0.0,
-        day_loss_floor: float = 0.0,
-        day_halted: bool = False,
+        day_plan: dict | None = None,
     ):
         unrealized = position["unrealized_pnl"] if position else 0.0
         equity = balance + unrealized
-        # Daily progress
-        day_pnl = equity - day_start if day_start > 0 else 0.0
-        day_range = (day_target - day_start) if day_target > day_start else 1.0
-        day_progress_pct = round((day_pnl / day_range) * 100.0, 1) if day_range != 0 else 0.0
         pnl_pct = ((equity - 65.0) / 65.0) * 100.0
 
         self.metrics.update({
@@ -179,15 +172,7 @@ class LiveMonitorAgent:
             "dynamic_leverage": leverage,
             "kelly_fraction": round(kelly_f, 4),
             "killzone": killzone_label,
-            "day": {
-                "start_balance": round(day_start, 2),
-                "target_balance": round(day_target, 2),
-                "loss_floor": round(day_loss_floor, 2),
-                "current_equity": round(equity, 2),
-                "day_pnl_usdt": round(day_pnl, 2),
-                "progress_pct": day_progress_pct,
-                "halted": day_halted,
-            },
+            "day": day_plan or {},
         })
         self._flush_state()
 
