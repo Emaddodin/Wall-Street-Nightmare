@@ -1,0 +1,16 @@
+[Unit]
+Description=Relapse Scalper & VPS System Health Watchdog Guard (Oneshot)
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/ict_sniper
+EnvironmentFile=/root/ict_sniper/.env
+ExecStart=/root/ict_sniper/venv/bin/python /root/ict_sniper/engine/guard.py --oneshot
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=relapse-watchdog
+
+[Install]
+WantedBy=multi-user.target

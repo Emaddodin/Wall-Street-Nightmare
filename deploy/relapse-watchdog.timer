@@ -1,0 +1,11 @@
+[Unit]
+Description=Timer for Relapse Scalper & VPS Health Watchdog Guard (30s cadence)
+After=network.target
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=30s
+Unit=relapse-watchdog.service
+
+[Install]
+WantedBy=timers.target

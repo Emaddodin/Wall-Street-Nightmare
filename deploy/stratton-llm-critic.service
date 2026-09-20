@@ -1,0 +1,27 @@
+[Unit]
+Description=Stratton Oakmont Local LLM Strategic Critic (llama-server)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/ict_sniper
+LimitMEMLOCK=infinity
+MemoryMax=1800M
+ExecStart=/root/ict_sniper/llama.cpp/llama-server \
+    -m /root/ict_sniper/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf \
+    --host 127.0.0.1 \
+    --port 8080 \
+    -t 2 \
+    -ngl 0 \
+    --mlock \
+    --ctx-size 2048
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stratton-llm-critic
+
+[Install]
+WantedBy=multi-user.target
