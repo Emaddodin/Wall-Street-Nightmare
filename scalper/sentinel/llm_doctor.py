@@ -179,7 +179,7 @@ class LLMDoctor:
 
         payload = {
             "prompt": prompt,
-            "n_predict": 128,
+            "n_predict": 80,
             "temperature": 0.1,
             "stream": False,
             "stop": ["<|im_end|>", "\n\n\n"],
@@ -192,7 +192,7 @@ class LLMDoctor:
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=3.5) as resp:
+            with urllib.request.urlopen(req, timeout=8.0) as resp:
                 if resp.status == 200:
                     raw = json.loads(resp.read().decode("utf-8"))
                     content = raw.get("content", "").strip()
