@@ -59,8 +59,11 @@ NTFY_TOPIC = os.getenv("NTFY_TOPIC", "tbt-96c0dc08c297676b")
 WEB_PORT = int(os.getenv("SCALPER_APP_PORT", "8443"))
 LLAMA_COMPLETION_URL = os.getenv("LLAMA_SERVER_URL", "http://127.0.0.1:8080/completion")
 
-MAX_RISK_STOP_USD = 15.00      # Hard -$15.00 loss cap
-RAPID_SPIKE_TARGET_USD = 50.00 # Target profit spike harvest
+MAX_RISK_STOP_USD = 15.00      # Hard -$15.00 loss cap to strictly protect bankroll
+# Unlimited Profit Engine: No ceiling or artificial profit cap.
+# Profits are allowed to run without limits (+$100, +$500, +$1,000+) using an intelligent trailing lock.
+TRAIL_ACTIVATION_USD = 20.00   # Start trailing once floating profit reaches +$20
+TRAIL_PULLBACK_RATIO = 0.20    # Lock in 80% of peak profit (allow 20% breathing room for major runners)
 
 
 def start_stratton_oakmont_app(port: int = WEB_PORT) -> None:
@@ -430,17 +433,25 @@ async def run_live_scalper():
                     )
                     scalper.active_stack = None
 
-                # Check Exit Condition B: Rapid Profit Spike (+$50.00)
-                elif floating_pnl >= RAPID_SPIKE_TARGET_USD:
-                    logger.info("🚀 RAPID PROFIT SPIKE REACHED: Floating PnL: +$%.2f >= +$%.2f", floating_pnl, RAPID_SPIKE_TARGET_USD)
-                    res = await gw.flatten_all_positions()
-                    push_ntfy(
-                        title=f"🏁 Profit Spike Harvested (+${floating_pnl:.2f})",
-                        message=f"Closed position @ ${quote.mid:.2f}. New Balance: ${res.get('balance', acc.balance):.2f}",
-                        tags="tada,moneybag",
-                        priority="high",
-                    )
-                    scalper.active_stack = None
+                # Track Peak Floating PnL for unlimited upside trailing
+                peak_pnl = max(scalper.active_stack.get("peak_pnl", 0.0), floating_pnl)
+                scalper.active_stack["peak_pnl"] = peak_pnl
+
+                # Unlimited Profit Runner: Once profit reaches activation threshold ($20+),
+                # allow the position to run to +$100, +$500, +$1000+ without artificial limits.
+                # Only exit if the market pulls back more than 20% from its absolute peak!
+                if peak_pnl >= TRAIL_ACTIVATION_USD:
+                    trailing_stop_level = peak_pnl * (1.0 - TRAIL_PULLBACK_RATIO)
+                    if floating_pnl <= trailing_stop_level:
+                        logger.info("🚀 TRAILING PROFIT HARVEST: Peak: +$%.2f | Locked Exit: +$%.2f (Pullback > 20%%)", peak_pnl, floating_pnl)
+                        res = await gw.flatten_all_positions()
+                        push_ntfy(
+                            title=f"🏁 Unlimited Profit Harvested (+${floating_pnl:.2f})",
+                            message=f"Locked in run from peak +${peak_pnl:.2f} @ ${quote.mid:.2f}.\nNew Balance: ${res.get('balance', acc.balance):.2f}",
+                            tags="tada,moneybag,rocket",
+                            priority="high",
+                        )
+                        scalper.active_stack = None
 
             # 3. Check for Strategy Entry if Flat
             elif tick_count % 3 == 0:  # Check pattern every few ticks
@@ -462,6 +473,7 @@ async def run_live_scalper():
                             "sl_price": sl_px,
                             "open_time": time.time(),
                             "floating_pnl": 0.0,
+                            "peak_pnl": 0.0,
                         }
                         push_ntfy(
                             title=f"⚡ Broker Order Executed: {direction} {lot_size} Lots",

@@ -349,7 +349,7 @@ def _render_hft_terminal() -> str:
       <span class="pill livep" id="engine-status">ACTIVE</span>
     </div>
     <div class="hero" id="gold_eq">$293.77</div>
-    <div class="sub" id="gold_eqsub">Target $1,000 · Tier $300 (0.10 Lots) · LiteFinance MT5 #91456523</div>
+    <div class="sub" id="gold_eqsub">Unlimited Profit Engine (No Limits) · Tier $300 (0.10 Lots) · LiteFinance MT5 #91456523</div>
     <div class="row">
       <span class="k">realized profit / gain</span>
       <span class="v up" id="gold_pnl">+$193.77 (+193.8%)</span>
@@ -526,7 +526,7 @@ def _render_hft_terminal() -> str:
       const eqSubEl = document.getElementById('gold_eqsub');
       if (eqSubEl) {
         const lots = tier >= 800 ? 0.40 : tier >= 400 ? 0.20 : tier >= 200 ? 0.10 : 0.05;
-        eqSubEl.textContent = `Target $1,000 · Tier $${tier.toFixed(0)} (${lots.toFixed(2)} Lots) · LiteFinance MT5 #91456523`;
+        eqSubEl.textContent = `Unlimited Profits (No Limits) · Tier $${tier.toFixed(0)} (${lots.toFixed(2)} Lots) · LiteFinance MT5 #91456523`;
       }
 
       const pnlEl = document.getElementById('gold_pnl');
