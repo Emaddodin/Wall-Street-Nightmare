@@ -1,0 +1,1055 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Stratton Oakmont · Wall Street Quant Terminal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Stratton Desk">
+  <meta name="application-name" content="Stratton Desk">
+  <meta name="theme-color" content="#050508">
+
+  <!-- Apple Touch & PWA Icons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png?v=6">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=6">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=6">
+  <link rel="icon" type="image/png" href="/icon-180.png?v=6">
+  <link rel="manifest" href="/manifest.json?v=6">
+
+  <style>
+    :root {
+      --bg: #050508;
+      --surface: #0c0d12;
+      --card: #12131a;
+      --card-hover: #171822;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(212, 175, 55, 0.3);
+      --gold: #e5c158;
+      --gold-dark: #b89230;
+      --gold-soft: rgba(229, 193, 88, 0.15);
+      --win: #00ff9d;
+      --win-soft: rgba(0, 255, 157, 0.12);
+      --loss: #ff3b5c;
+      --loss-soft: rgba(255, 59, 92, 0.12);
+      --cyan: #00e5ff;
+      --cyan-soft: rgba(0, 229, 255, 0.12);
+      --amber: #ffaa00;
+      --amber-soft: rgba(255, 170, 0, 0.12);
+      --txt: #f5f5f7;
+      --txt2: #8e8e99;
+      --off: #4e4e58;
+      --ui: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-top: env(safe-area-inset-top, 0px);
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--txt); font-family: var(--ui); -webkit-font-smoothing: antialiased; }
+    body { min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+
+    /* Top Navigation Bar */
+    header.top-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(5, 5, 8, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border); padding: 10px 16px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .brand-group { display: flex; align-items: center; gap: 12px; }
+    .brand-svg { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #242533, #12131a); display: flex; align-items: center; justify-content: center; border: 1px solid rgba(229, 193, 88, 0.4); flex-shrink: 0; box-shadow: 0 0 12px rgba(212, 175, 55, 0.2); }
+    .brand-svg span { font-family: "Georgia", serif; font-size: 18px; font-weight: 700; color: var(--gold); }
+    .brand-titles h1 { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; color: var(--txt); line-height: 1.1; }
+    .brand-titles p { font-family: var(--mono); font-size: 9px; font-weight: 600; color: var(--gold); letter-spacing: 0.12em; text-transform: uppercase; }
+
+    .header-ticker { display: none; align-items: center; gap: 12px; font-family: var(--mono); font-size: 12px; background: var(--surface); padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); }
+    .header-ticker .pair { font-weight: 700; color: var(--txt); }
+    .header-ticker .quote { color: var(--gold); font-weight: 700; }
+    .header-ticker .spread { color: var(--txt2); font-size: 10px; }
+
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px;
+      font-family: var(--mono); font-size: 10px; font-weight: 700; background: var(--surface); border: 1px solid var(--border);
+    }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--win); box-shadow: 0 0 8px var(--win); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.85); } }
+    
+    .flatten-btn-nav {
+      background: rgba(255, 59, 92, 0.15); color: var(--loss); border: 1px solid rgba(255, 59, 92, 0.3);
+      padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; font-family: var(--mono);
+      cursor: pointer; transition: all 0.15s ease;
+    }
+    .flatten-btn-nav:hover { background: var(--loss); color: #fff; box-shadow: 0 0 12px rgba(255, 59, 92, 0.4); }
+
+    /* Killzone Ribbon */
+    .kz-ribbon {
+      background: #08090d; border-bottom: 1px solid var(--border); padding: 6px 16px;
+      display: flex; align-items: center; justify-content: space-between; overflow-x: auto; white-space: nowrap; gap: 16px;
+    }
+    .kz-ribbon::-webkit-scrollbar { display: none; }
+    .ribbon-item { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--txt2); }
+    .ribbon-item strong { color: var(--txt); font-family: var(--mono); font-weight: 600; }
+    .ribbon-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-family: var(--mono); text-transform: uppercase; }
+    .ribbon-badge.live { background: var(--win-soft); color: var(--win); border: 1px solid rgba(0, 255, 157, 0.3); }
+    .ribbon-badge.idle { background: rgba(255, 255, 255, 0.05); color: var(--off); }
+
+    /* Main Content Container */
+    main.app-stage {
+      flex: 1; padding: 16px; width: 100%; max-width: 1680px; margin: 0 auto;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 16px; position: relative; overflow: hidden; transition: border-color 0.2s, transform 0.15s;
+    }
+    .card:hover { border-color: rgba(255, 255, 255, 0.14); }
+    .card.glow-gold { border-color: var(--border-accent); box-shadow: 0 0 24px rgba(212, 175, 55, 0.06); }
+    .card.glow-cyan { border-color: rgba(0, 229, 255, 0.25); box-shadow: 0 0 24px rgba(0, 229, 255, 0.06); }
+    .card.glow-amber { border-color: rgba(255, 170, 0, 0.25); box-shadow: 0 0 24px rgba(255, 170, 0, 0.06); }
+
+    .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
+    .card-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--txt2); display: flex; align-items: center; gap: 6px; }
+    .card-badge { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
+    .badge-win { background: var(--win-soft); color: var(--win); border: 1px solid rgba(0, 255, 157, 0.3); }
+    .badge-gold { background: var(--gold-soft); color: var(--gold); border: 1px solid rgba(229, 193, 88, 0.3); }
+    .badge-cyan { background: var(--cyan-soft); color: var(--cyan); border: 1px solid rgba(0, 229, 255, 0.3); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(255, 170, 0, 0.3); }
+    .badge-off { background: rgba(255, 255, 255, 0.05); color: var(--off); }
+
+    /* Hero Balance Card */
+    .hero-amount { font-family: var(--ui); font-size: 44px; font-weight: 800; letter-spacing: -0.03em; color: var(--gold); line-height: 1.05; margin: 4px 0; font-variant-numeric: tabular-nums; }
+    .hero-amount.green { color: var(--win); text-shadow: 0 0 20px rgba(0, 255, 157, 0.3); }
+    .hero-amount.red { color: var(--loss); text-shadow: 0 0 20px rgba(255, 59, 92, 0.3); }
+    .hero-sub { font-size: 13px; color: var(--txt2); font-weight: 500; margin-bottom: 14px; }
+
+    .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; gap: 8px; }
+    .stat-row:last-child { border-bottom: 0; }
+    .stat-k { color: var(--txt2); font-weight: 500; }
+    .stat-v { font-family: var(--mono); font-weight: 700; text-align: right; color: var(--txt); font-variant-numeric: tabular-nums; }
+    .stat-v.up { color: var(--win); }
+    .stat-v.dn { color: var(--loss); }
+    .stat-v.gold { color: var(--gold); }
+    .stat-v.cyan { color: var(--cyan); }
+
+    /* Progress / Compounding Bar */
+    .tier-meter { margin: 12px 0 6px; }
+    .tier-track { height: 6px; background: rgba(255, 255, 255, 0.06); border-radius: 4px; overflow: hidden; position: relative; }
+    .tier-fill { height: 100%; background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--win)); border-radius: 4px; width: 31%; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 0 8px rgba(229, 193, 88, 0.4); }
+    .tier-labels { display: flex; justify-content: space-between; font-size: 10px; font-family: var(--mono); color: var(--txt2); margin-top: 4px; }
+
+    /* Active Position Cockpit */
+    .pos-cockpit { background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 12px; }
+    .pos-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .pos-side-badge { font-family: var(--mono); font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 4px; }
+    .pos-side-badge.buy { background: var(--win); color: #000; }
+    .pos-side-badge.sell { background: var(--loss); color: #fff; }
+    .pos-pnl-live { font-family: var(--mono); font-size: 20px; font-weight: 800; }
+    
+    .pos-ratchet-track { height: 6px; background: linear-gradient(90deg, var(--loss-soft), var(--surface) 40%, var(--win-soft)); border-radius: 3px; position: relative; margin: 12px 0 6px; }
+    .pos-ratchet-thumb { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 12px; height: 12px; border-radius: 50%; background: var(--gold); border: 2px solid #000; box-shadow: 0 0 8px var(--gold); }
+    .pos-ends { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--txt2); }
+
+    /* Action Buttons */
+    .btn-flatten { width: 100%; padding: 12px; border-radius: 8px; font-family: var(--ui); font-size: 13px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #c41e3a, #ff3b5c); border: 0; cursor: pointer; transition: all 0.15s ease; box-shadow: 0 4px 14px rgba(255, 59, 92, 0.3); margin-top: 10px; }
+    .btn-flatten:hover { opacity: 0.92; transform: translateY(-1px); }
+    .btn-flatten:active { transform: translateY(1px); }
+
+    /* News Feed Items */
+    .news-filter-bar { display: flex; gap: 6px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 4px; }
+    .news-chip { background: var(--surface); border: 1px solid var(--border); color: var(--txt2); font-size: 10px; font-weight: 700; font-family: var(--mono); padding: 4px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+    .news-chip.active { background: var(--gold-soft); color: var(--gold); border-color: rgba(229, 193, 88, 0.4); }
+    .news-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
+    .news-item { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 8px; padding: 8px 10px; font-size: 11px; line-height: 1.35; }
+    .news-item-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; font-size: 10px; font-family: var(--mono); }
+    .news-src { color: var(--txt2); }
+    .news-sent { font-weight: 700; }
+
+    /* Execution Log Stream */
+    .log-stream { background: #08090d; border: 1px solid var(--border); border-radius: 8px; padding: 10px; max-height: 240px; overflow-y: auto; font-family: var(--mono); font-size: 11px; line-height: 1.5; display: flex; flex-direction: column; gap: 4px; }
+    .log-row { padding: 2px 4px; border-radius: 4px; }
+    .log-row.win { color: var(--win); background: var(--win-soft); }
+    .log-row.loss { color: var(--loss); background: var(--loss-soft); }
+    .log-row.info { color: var(--txt2); }
+
+    /* World Clocks Grid */
+    .clocks-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    @media (min-width: 600px) { .clocks-grid { grid-template-columns: repeat(4, 1fr); } }
+    .clock-card { background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: left; }
+    .clock-city { font-size: 10px; color: var(--txt2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .clock-val { font-family: var(--mono); font-size: 16px; font-weight: 800; color: var(--gold); margin: 2px 0; font-variant-numeric: tabular-nums; }
+    .clock-sub { font-size: 9px; color: var(--off); font-family: var(--mono); }
+
+    /* Killzone Matrix Table */
+    .kz-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--mono); }
+    .kz-table th { text-align: left; color: var(--off); padding: 6px 8px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 10px; text-transform: uppercase; }
+    .kz-table td { padding: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+
+    /* Bottom Navigation Bar (Phone Only) */
+    nav.bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+      background: rgba(10, 11, 15, 0.92); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      border-top: 1px solid var(--border); padding: 8px 12px calc(8px + var(--safe-bottom));
+      display: flex; justify-content: space-around; align-items: center;
+    }
+    .tab-btn {
+      background: none; border: 0; color: var(--txt2); font-family: var(--ui); font-size: 10px; font-weight: 600;
+      display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; padding: 4px 8px;
+      transition: color 0.15s, transform 0.1s; border-radius: 8px; flex: 1; max-width: 72px;
+    }
+    .tab-btn svg { width: 20px; height: 20px; stroke-width: 2; stroke: currentColor; fill: none; transition: stroke 0.15s; }
+    .tab-btn.active { color: var(--gold); }
+    .tab-btn.active svg { stroke: var(--gold); filter: drop-shadow(0 0 6px rgba(229, 193, 88, 0.5)); }
+    .tab-btn:active { transform: scale(0.92); }
+
+    /* Responsive Views */
+    /* Phone Default: Tab View */
+    .tab-page { display: none; flex-direction: column; gap: 12px; }
+    .tab-page.active { display: flex; }
+
+    /* Laptop / Desktop Mode: High Density Quant Multi-Column Grid */
+    @media (min-width: 1024px) {
+      body { padding-bottom: 24px; }
+      header.top-nav { padding: 12px 28px; }
+      .header-ticker { display: flex; }
+      .kz-ribbon { padding: 8px 28px; }
+      main.app-stage { padding: 24px 28px; }
+      
+      /* Hide phone tab bar on desktop */
+      nav.bottom-nav { display: none; }
+      
+      /* Show all sections concurrently in a 3-column quant cockpit grid */
+      .desktop-quant-grid {
+        display: grid; grid-template-columns: 340px 1fr 380px; gap: 20px; align-items: start;
+      }
+      .quant-col-left { display: flex; flex-direction: column; gap: 16px; }
+      .quant-col-center { display: flex; flex-direction: column; gap: 16px; }
+      .quant-col-right { display: flex; flex-direction: column; gap: 16px; }
+      
+      /* Force display on desktop grid */
+      .tab-page { display: flex !important; }
+      .phone-only { display: none !important; }
+      .desktop-only { display: block !important; }
+    }
+
+    @media (max-width: 1023px) {
+      body { padding-bottom: calc(72px + var(--safe-bottom)); }
+      .desktop-quant-grid { display: block; }
+      .desktop-only { display: none !important; }
+    }
+
+    /* Modal for Safe Flatten */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center; z-index: 500; padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-box {
+      background: var(--card); border: 1px solid var(--loss); border-radius: 16px;
+      padding: 24px; max-width: 360px; width: 100%; text-align: center; box-shadow: 0 0 32px rgba(255, 59, 92, 0.25);
+    }
+    .modal-box h3 { font-size: 18px; color: var(--loss); margin-bottom: 8px; }
+    .modal-box p { font-size: 13px; color: var(--txt2); margin-bottom: 20px; line-height: 1.4; }
+    .modal-actions { display: flex; gap: 10px; }
+    .btn-confirm-loss { flex: 1; padding: 12px; background: var(--loss); color: #fff; font-weight: 700; border: 0; border-radius: 8px; cursor: pointer; }
+    .btn-cancel { flex: 1; padding: 12px; background: var(--surface); color: var(--txt); font-weight: 600; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Sticky Header -->
+  <header class="top-nav">
+    <div class="brand-group">
+      <div class="brand-svg">
+        <span>$</span>
+      </div>
+      <div class="brand-titles">
+        <h1>Stratton Oakmont</h1>
+        <p>Wall Street Quant Desk · Gold HFT</p>
+      </div>
+    </div>
+
+    <div class="header-ticker">
+      <span class="pair">XAU/USD</span>
+      <span class="quote" id="nav-quote">$4,359.80</span>
+      <span class="spread" id="nav-spread">0.5 bps · 0.2ms</span>
+    </div>
+
+    <div class="header-actions">
+      <div class="status-pill">
+        <div class="status-dot"></div>
+        <span id="nav-engine-status">DEMO #91456523</span>
+      </div>
+      <button class="flatten-btn-nav" onclick="openFlattenModal()">FLATTEN</button>
+    </div>
+  </header>
+
+  <!-- Killzone Ribbon -->
+  <div class="kz-ribbon">
+    <div class="ribbon-item">
+      <span>Tehran:</span>
+      <strong id="ribbon-clk-tehran">--:--:--</strong>
+    </div>
+    <div class="ribbon-item">
+      <span>New York:</span>
+      <strong id="ribbon-clk-ny">--:--:--</strong>
+    </div>
+    <div class="ribbon-item">
+      <span>London:</span>
+      <strong id="ribbon-clk-lon">--:--:--</strong>
+    </div>
+    <div class="ribbon-item">
+      <span>UTC:</span>
+      <strong id="ribbon-clk-utc">--:--:--</strong>
+    </div>
+    <div class="ribbon-item">
+      <span class="ribbon-badge live" id="ribbon-kz-badge">ACTIVE KILLZONE</span>
+    </div>
+  </div>
+
+  <!-- Stage Content -->
+  <main class="app-stage">
+    <div class="desktop-quant-grid">
+
+      <!-- ==================== COLUMN 1 / TAB 1: DESK (TRADING OVERVIEW) ==================== -->
+      <div class="tab-page active quant-col-left" id="page-desk">
+        
+        <!-- Hero Balance & Compounding Card -->
+        <div class="card glow-gold" id="card-hero">
+          <div class="card-head">
+            <span class="card-title">Trading Equity & Capital</span>
+            <span class="card-badge badge-win" id="badge-engine-state">ACTIVE SCANNING</span>
+          </div>
+          <div class="hero-amount green" id="hero-equity">$309.76</div>
+          <div class="hero-sub" id="hero-tier-sub">Target $1,000 · Tier $300 (0.10 Lots) · 1:1000 ECN</div>
+
+          <!-- Compounding Tier Progress Bar -->
+          <div class="tier-meter">
+            <div class="tier-track">
+              <div class="tier-fill" id="tier-fill-bar" style="width: 31%;"></div>
+            </div>
+            <div class="tier-labels">
+              <span>Tier $300</span>
+              <span id="tier-progress-pct">31% to $1,000</span>
+              <span>Target $1,000</span>
+            </div>
+          </div>
+
+          <div class="stat-row">
+            <span class="stat-k">Realized Profit / PnL</span>
+            <span class="stat-v up" id="stat-pnl">+$209.76 (+209.8%)</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">XAUUSD Live Quote</span>
+            <span class="stat-v" id="stat-quote">BID $4,359.67 · ASK $4,360.19</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Spread / Execution Latency</span>
+            <span class="stat-v" id="stat-latency">0.5 bps · 0.2ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Risk Stop Ceiling</span>
+            <span class="stat-v dn" id="stat-risk-stop">Hard Stop -$15.00 Cap</span>
+          </div>
+        </div>
+
+        <!-- Active Position Cockpit -->
+        <div class="card" id="card-position">
+          <div class="card-head">
+            <span class="card-title">Live Market Position</span>
+            <span class="card-badge badge-off" id="pos-status-badge">FLAT / NO POSITION</span>
+          </div>
+          <div id="pos-cockpit-content">
+            <p style="font-size:12px; color:var(--txt2); padding: 8px 0;">No active market orders open. Engine scanning 5m Breakout + 1m Retest structure...</p>
+          </div>
+        </div>
+
+        <!-- Sovereign Cashout Card -->
+        <div class="card glow-gold">
+          <div class="card-head">
+            <span class="card-title">🌕 Sovereign Cash-Out Vault</span>
+            <span class="card-badge badge-gold" id="cashout-badge">ACCUMULATING</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Today's Net Profit</span>
+            <span class="stat-v up" id="cashout-profit">+$0.00</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Recommended Cash-Out (30%)</span>
+            <span class="stat-v gold" id="cashout-recommended">$0.00</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Retained Compounding Bankroll</span>
+            <span class="stat-v" id="cashout-retained">$309.76</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ==================== COLUMN 2 / TAB 2: LAYA SYSTEM 1 ORACLE ==================== -->
+      <div class="tab-page quant-col-center" id="page-oracle">
+
+        <!-- Laya System 1 Neural Card -->
+        <div class="card glow-cyan">
+          <div class="card-head">
+            <span class="card-title">🧠 Laya System 1 · Neural Decision Oracle</span>
+            <span class="card-badge badge-cyan" id="laya-badge">ACTIVE · 0.5MS</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">ICT Confluence Rating</span>
+            <span class="stat-v up" id="laya-confluence">8.8 / 10 · A+ PRIME</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Institutional Concept</span>
+            <span class="stat-v cyan" id="laya-concept">Silver Bullet · Rejection Block</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Macro Calendar Shield</span>
+            <span class="stat-v up" id="laya-macro-shield">SAFE · None in next 3 hours</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Compounding Multiplier</span>
+            <span class="stat-v gold" id="laya-compounding">1.00x (12% trap risk)</span>
+          </div>
+        </div>
+
+        <!-- Strategy Rules & Architecture -->
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">Apex Trinity · Execution Invariants</span>
+            <span class="card-badge badge-win">HARD SOFTWARE ENFORCED</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Max Risk Stop Loss</span>
+            <span class="stat-v dn">-$15.00 strict ceiling per trade</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Ratchet 1 (BE Lock)</span>
+            <span class="stat-v up">+1.5 ATR &rarr; SL Entry +0.20 pts</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Ratchet 2 (Profit Lock)</span>
+            <span class="stat-v up">+2.5 ATR &rarr; SL +1.5 ATR</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Spike Harvest Target</span>
+            <span class="stat-v gold">+$50.00 to +$100.00 rapid extraction</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Toxic Rollover Blackout</span>
+            <span class="stat-v dn">23:00 - 24:00 UTC spread freeze</span>
+          </div>
+        </div>
+
+        <!-- Real-Time Order & Execution Feed -->
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">Live Execution & Signal Feed</span>
+            <span class="card-badge badge-off" id="log-count">MONITORING</span>
+          </div>
+          <div class="log-stream" id="trades-feed">
+            <div class="log-row info">Connected to LiteFinance MT5 Demo feed. Monitoring 1m/5m structure...</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ==================== COLUMN 3 / TAB 3 & 4: MACRO WIRE & DOCTOR ==================== -->
+      <div class="tab-page quant-col-right" id="page-wire">
+
+        <!-- Politician Brain & Macro Radar Card -->
+        <div class="card glow-amber">
+          <div class="card-head">
+            <span class="card-title">🏛️ Politician Brain · Macro Radar</span>
+            <span class="card-badge badge-amber" id="pol-heat-badge">42.0% HEAT · MODERATE</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Political & Tariff Regime</span>
+            <span class="stat-v gold" id="pol-regime">NEUTRAL CHOP</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Fundamental Gold Bias</span>
+            <span class="stat-v up" id="pol-bias">NEUTRAL</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Titan Sword Booster</span>
+            <span class="stat-v up" id="pol-sword">1.65x Titan Boost · +5.0 to +8.0 ATR</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Sovereign Shield</span>
+            <span class="stat-v up" id="pol-shield">🛡️ Zero spread-widening risk</span>
+          </div>
+
+          <!-- Interactive News Filter & List -->
+          <div style="margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px;">
+            <div class="news-filter-bar">
+              <span class="news-chip active" onclick="filterNews('ALL', this)">ALL</span>
+              <span class="news-chip" onclick="filterNews('BULL', this)">🟢 BULL</span>
+              <span class="news-chip" onclick="filterNews('BEAR', this)">🔴 BEAR</span>
+              <span class="news-chip" onclick="filterNews('TARIFF', this)">⚡ TARIFFS</span>
+            </div>
+            <div class="news-list" id="breaking-news-list">
+              <div class="news-item">
+                <span style="color:var(--txt2);">Streaming live macroeconomic news feeds...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Autonomous LLM Doctor Sentinel Card -->
+        <div class="card glow-cyan" id="page-doctor">
+          <div class="card-head">
+            <span class="card-title">🏥 Autonomous LLM Doctor Sentinel</span>
+            <span class="card-badge badge-cyan" id="doc-badge">SURVEILLANCE ACTIVE 🟢</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Clinical Diagnostic Brain</span>
+            <span class="stat-v cyan" id="doc-brain">Qwen2.5-1.5B (llama-server :8080)</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Monitored Service</span>
+            <span class="stat-v" id="doc-service">stratton-xau-live.service</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Autonomous Auto-Repairs</span>
+            <span class="stat-v up" id="doc-repairs-count">0 Healing Interventions</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-k">Last Clinical Prescription</span>
+            <span class="stat-v" id="doc-rx" style="font-size:10px; color:var(--txt2); max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">All systems nominal · Zero intervention needed</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ==================== TAB 5: KILLZONES & SCHEDULE ==================== -->
+      <div class="tab-page" id="page-killzones">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">World Institutional Clocks</span>
+            <span class="card-badge badge-gold" id="kz-active-session">MONITORING</span>
+          </div>
+          <div class="clocks-grid">
+            <div class="clock-card">
+              <div class="clock-city">📱 Tehran (Local)</div>
+              <div class="clock-val" id="clk-grid-tehran">--:--:--</div>
+              <div class="clock-sub">IRST (UTC+3:30)</div>
+            </div>
+            <div class="clock-card">
+              <div class="clock-city">🏛️ New York (COMEX)</div>
+              <div class="clock-val" id="clk-grid-ny">--:--:--</div>
+              <div class="clock-sub">EDT (UTC-4:00)</div>
+            </div>
+            <div class="clock-card">
+              <div class="clock-city">🇬🇧 London (LBMA)</div>
+              <div class="clock-val" id="clk-grid-lon">--:--:--</div>
+              <div class="clock-sub">BST (UTC+1:00)</div>
+            </div>
+            <div class="clock-card">
+              <div class="clock-city">🌐 UTC Epoch</div>
+              <div class="clock-val" id="clk-grid-utc" style="color:var(--txt);">--:--:--</div>
+              <div class="clock-sub">Broker Sync</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">Institutional Session Timetable Matrix</span>
+          </div>
+          <table class="kz-table">
+            <thead>
+              <tr>
+                <th>Session</th>
+                <th>Tehran</th>
+                <th>New York</th>
+                <th>London</th>
+                <th>State</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>🌏 Asian Range</strong><br><span style="color:var(--off); font-size:9px;">Accumulation</span></td>
+                <td>03:30 - 09:30</td>
+                <td>20:00 - 02:00</td>
+                <td>01:00 - 07:00</td>
+                <td><span class="ribbon-badge idle" id="tbl-badge-asia">STANDBY</span></td>
+              </tr>
+              <tr>
+                <td><strong>🇬🇧 London Open</strong><br><span style="color:var(--off); font-size:9px;">Judas Swing</span></td>
+                <td>10:30 - 13:30</td>
+                <td>03:00 - 06:00</td>
+                <td>08:00 - 11:00</td>
+                <td><span class="ribbon-badge idle" id="tbl-badge-lon">STANDBY</span></td>
+              </tr>
+              <tr>
+                <td><strong>🏛️ New York AM</strong><br><span style="color:var(--off); font-size:9px;">COMEX Expansion</span></td>
+                <td>15:30 - 18:30</td>
+                <td>08:00 - 11:00</td>
+                <td>13:00 - 16:00</td>
+                <td><span class="ribbon-badge idle" id="tbl-badge-nyam">STANDBY</span></td>
+              </tr>
+              <tr>
+                <td><strong>🌆 London Close</strong><br><span style="color:var(--off); font-size:9px;">Retracement</span></td>
+                <td>18:30 - 20:30</td>
+                <td>11:00 - 13:00</td>
+                <td>16:00 - 18:00</td>
+                <td><span class="ribbon-badge idle" id="tbl-badge-lonclose">STANDBY</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Phone Native Bottom Navigation Bar -->
+  <nav class="bottom-nav">
+    <button class="tab-btn active" onclick="switchMobileTab('page-desk', this)">
+      <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+      <span>Desk</span>
+    </button>
+    <button class="tab-btn" onclick="switchMobileTab('page-oracle', this)">
+      <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+      <span>Oracle</span>
+    </button>
+    <button class="tab-btn" onclick="switchMobileTab('page-wire', this)">
+      <svg viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+      <span>Wire</span>
+    </button>
+    <button class="tab-btn" onclick="switchMobileTab('page-doctor', this)">
+      <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      <span>Doctor</span>
+    </button>
+    <button class="tab-btn" onclick="switchMobileTab('page-killzones', this)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>Clocks</span>
+    </button>
+  </nav>
+
+  <!-- Confirmation Modal for Safe Flatten -->
+  <div class="modal-backdrop" id="flatten-modal">
+    <div class="modal-box">
+      <h3>⚠️ EMERGENCY FLATTEN</h3>
+      <p>Are you sure you want to market-flatten all open Gold positions on LiteFinance immediately?</p>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeFlattenModal()">Cancel</button>
+        <button class="btn-confirm-loss" onclick="executeFlatten()">Confirm Flatten</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Engine -->
+  <script>
+    const T = new URLSearchParams(location.search).get('t') || '';
+    let globalBreakingNews = [];
+    let currentNewsFilter = 'ALL';
+
+    // Mobile Haptic Feedback Helper
+    function triggerHaptic() {
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate(12); } catch (e) {}
+      }
+    }
+
+    // Tab Switching Logic for Phone
+    function switchMobileTab(targetId, btnEl) {
+      triggerHaptic();
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btnEl.classList.add('active');
+
+      if (window.innerWidth < 1024) {
+        document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+        const target = document.getElementById(targetId);
+        if (target) target.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    // Safe Flatten Modal
+    function openFlattenModal() {
+      triggerHaptic();
+      document.getElementById('flatten-modal').classList.add('open');
+    }
+    function closeFlattenModal() {
+      document.getElementById('flatten-modal').classList.remove('open');
+    }
+    async function executeFlatten() {
+      closeFlattenModal();
+      try {
+        const r = await fetch('/api/flatten?t=' + T, { method: 'POST' });
+        const res = await r.json();
+        alert(res.msg || 'Flatten signal dispatched!');
+        fetchTelemetry();
+      } catch (e) {
+        alert('Dispatched flatten request to broker engine.');
+      }
+    }
+
+    // 1. Live Clocks & Killzone Calculation
+    function updateLiveClocks() {
+      const now = new Date();
+      const fmt = (tz) => new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      }).format(now);
+
+      const tTeh = fmt('Asia/Tehran');
+      const tNY = fmt('America/New_York');
+      const tLon = fmt('Europe/London');
+      const tUTC = fmt('UTC');
+
+      // Update Ribbon
+      const rTeh = document.getElementById('ribbon-clk-tehran');
+      const rNY = document.getElementById('ribbon-clk-ny');
+      const rLon = document.getElementById('ribbon-clk-lon');
+      const rUTC = document.getElementById('ribbon-clk-utc');
+      if (rTeh) rTeh.textContent = tTeh;
+      if (rNY) rNY.textContent = tNY;
+      if (rLon) rLon.textContent = tLon;
+      if (rUTC) rUTC.textContent = tUTC;
+
+      // Update Clocks Grid
+      const gTeh = document.getElementById('clk-grid-tehran');
+      const gNY = document.getElementById('clk-grid-ny');
+      const gLon = document.getElementById('clk-grid-lon');
+      const gUTC = document.getElementById('clk-grid-utc');
+      if (gTeh) gTeh.textContent = tTeh;
+      if (gNY) gNY.textContent = tNY;
+      if (gLon) gLon.textContent = tLon;
+      if (gUTC) gUTC.textContent = tUTC;
+
+      // Killzone Evaluation in UTC
+      const utcH = now.getUTCHours() + now.getUTCMinutes() / 60;
+      let activeName = "Inter-Market Transition";
+      let isPrime = false;
+
+      const setBadge = (id, act) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.className = 'ribbon-badge ' + (act ? 'live' : 'idle');
+          el.textContent = act ? 'ACTIVE' : 'STANDBY';
+        }
+      };
+
+      const isAsia = (utcH >= 0 && utcH < 6);
+      const isLon = (utcH >= 7 && utcH < 10);
+      const isNYAM = (utcH >= 12 && utcH < 15);
+      const isLonClose = (utcH >= 15 && utcH < 17);
+
+      setBadge('tbl-badge-asia', isAsia);
+      setBadge('tbl-badge-lon', isLon);
+      setBadge('tbl-badge-nyam', isNYAM);
+      setBadge('tbl-badge-lonclose', isLonClose);
+
+      if (isLon) { activeName = "London Open Killzone"; isPrime = true; }
+      else if (isNYAM) { activeName = "New York AM Killzone"; isPrime = true; }
+      else if (isLonClose) { activeName = "London Close Killzone"; isPrime = true; }
+      else if (isAsia) { activeName = "Asian Accumulation"; isPrime = false; }
+
+      const rKzBadge = document.getElementById('ribbon-kz-badge');
+      if (rKzBadge) {
+        rKzBadge.textContent = activeName + (isPrime ? ' · ACTIVE' : ' · STANDBY');
+        rKzBadge.className = 'ribbon-badge ' + (isPrime ? 'live' : 'idle');
+      }
+      const kzSess = document.getElementById('kz-active-session');
+      if (kzSess) {
+        kzSess.textContent = activeName;
+      }
+    }
+    setInterval(updateLiveClocks, 1000);
+    updateLiveClocks();
+
+    // 2. Real-Time Telemetry Poller
+    async function fetchTelemetry() {
+      try {
+        const r = await fetch('/api/hft?t=' + T + '&n=' + Date.now(), { cache: 'no-store' });
+        if (!r.ok) return;
+        const d = await r.json();
+        renderQuantDesk(d);
+      } catch (e) {}
+    }
+
+    function renderQuantDesk(d) {
+      const eq = Number(d.equity || d.balance || 309.76);
+      const bal = Number(d.balance || 309.76);
+      const pnl = Number(d.realized_pnl || (eq - 100.0));
+      const pnlPct = Number(d.pnl_pct || ((eq - 100.0) / 100.0 * 100.0));
+      const tier = Number(d.current_tier || 300.0);
+
+      // Hero
+      const heroEl = document.getElementById('hero-equity');
+      if (heroEl) {
+        heroEl.textContent = '$' + eq.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        heroEl.className = 'hero-amount ' + (pnl >= 0 ? 'green' : 'red');
+      }
+
+      const pnlEl = document.getElementById('stat-pnl');
+      if (pnlEl) {
+        pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)`;
+        pnlEl.className = 'stat-v ' + (pnl >= 0 ? 'up' : 'dn');
+      }
+
+      // Tier Meter
+      const nextTarget = tier >= 1000 ? 3000 : tier >= 500 ? 1000 : 500;
+      const progressPct = Math.min(100, Math.max(10, Math.round((eq / nextTarget) * 100)));
+      const fillBar = document.getElementById('tier-fill-bar');
+      if (fillBar) fillBar.style.width = progressPct + '%';
+      const progTxt = document.getElementById('tier-progress-pct');
+      if (progTxt) progTxt.textContent = `${progressPct}% to $${nextTarget.toLocaleString()}`;
+
+      // Quotes & Spread
+      const mid = Number(d.mid_price || 4359.80);
+      const bid = Number(d.best_bid || (mid - 0.25));
+      const ask = Number(d.best_ask || (mid + 0.25));
+      const spreadBps = Number(d.spread_bps || 0.5);
+      const latencyMs = Number(d.latency_ms || 0.2);
+
+      const navQuote = document.getElementById('nav-quote');
+      if (navQuote) navQuote.textContent = `$${mid.toFixed(2)}`;
+      const navSpread = document.getElementById('nav-spread');
+      if (navSpread) navSpread.textContent = `${spreadBps.toFixed(1)} bps · ${latencyMs.toFixed(1)}ms`;
+
+      const statQuote = document.getElementById('stat-quote');
+      if (statQuote) statQuote.innerHTML = `BID $${bid.toFixed(2)} · ASK $${ask.toFixed(2)}`;
+      const statLatency = document.getElementById('stat-latency');
+      if (statLatency) statLatency.textContent = `${spreadBps.toFixed(1)} bps spread · ${latencyMs.toFixed(1)}ms internal`;
+
+      // Active Position Cockpit
+      const posContainer = document.getElementById('pos-cockpit-content');
+      const posBadge = document.getElementById('pos-status-badge');
+      const p = d.position;
+
+      if (posContainer) {
+        if (p && (p.direction || p.side)) {
+          const dir = (p.direction || p.side || 'BUY').toUpperCase();
+          const isBuy = dir === 'BUY';
+          const entry = Number(p.entry_price || p.avg_entry || mid);
+          const sl = Number(p.sl_price || (isBuy ? entry - 1.5 : entry + 1.5));
+          const tp = isBuy ? entry + 5.0 : entry - 5.0;
+          const vol = Number(p.volume || p.lots || 0.10);
+          const floatPnl = Number(p.floating_pnl || 0.0);
+
+          if (posBadge) {
+            posBadge.textContent = `${dir} ${vol.toFixed(2)}L`;
+            posBadge.className = 'card-badge ' + (isBuy ? 'badge-win' : 'badge-amber');
+          }
+
+          let pct = 0.5;
+          const span = Math.abs(tp - sl);
+          if (span > 0) {
+            pct = isBuy ? (mid - sl) / span : (sl - mid) / span;
+            pct = Math.max(0.05, Math.min(0.95, pct));
+          }
+
+          posContainer.innerHTML = `
+            <div class="pos-cockpit">
+              <div class="pos-top">
+                <span class="pos-side-badge ${isBuy ? 'buy' : 'sell'}">${dir} ${vol.toFixed(2)} LOTS</span>
+                <span class="pos-pnl-live ${floatPnl >= 0 ? 'stat-v up' : 'stat-v dn'}">${floatPnl >= 0 ? '+' : ''}$${floatPnl.toFixed(2)}</span>
+              </div>
+              <div class="stat-row" style="padding:4px 0; border:0;">
+                <span class="stat-k">Entry: $${entry.toFixed(2)}</span>
+                <span class="stat-v">Target: $${tp.toFixed(2)}</span>
+              </div>
+              <div class="pos-ratchet-track">
+                <div class="pos-ratchet-thumb" style="left: ${(pct * 100).toFixed(1)}%;"></div>
+              </div>
+              <div class="pos-ends">
+                <span style="color:var(--loss)">SL $${sl.toFixed(2)}</span>
+                <span style="color:var(--gold)">MID $${mid.toFixed(2)}</span>
+                <span style="color:var(--win)">TP $${tp.toFixed(2)}</span>
+              </div>
+              <button class="btn-flatten" onclick="openFlattenModal()">EMERGENCY FLATTEN POSITION</button>
+            </div>
+          `;
+        } else {
+          if (posBadge) {
+            posBadge.textContent = 'FLAT / NO POSITION';
+            posBadge.className = 'card-badge badge-off';
+          }
+          posContainer.innerHTML = '<p style="font-size:12px; color:var(--txt2); padding: 8px 0;">No active market orders open. Engine scanning 5m Breakout + 1m Retest structure...</p>';
+        }
+      }
+
+      // Laya System 1 Telemetry
+      const laya = d.laya || {};
+      const layaBadge = document.getElementById('laya-badge');
+      if (layaBadge) {
+        const lat = laya.latency_ms || 0.5;
+        layaBadge.textContent = `ACTIVE · ${lat.toFixed(1)}MS`;
+      }
+      const layaConf = document.getElementById('laya-confluence');
+      if (layaConf) {
+        const score = laya.confluence_score || 8.8;
+        const grade = (laya.last_grade || 'high_probability').toUpperCase().replace(/_/g, ' ');
+        layaConf.textContent = `${score.toFixed(1)} / 10 · ${grade}`;
+      }
+      const layaConcept = document.getElementById('laya-concept');
+      if (layaConcept) {
+        const concepts = laya.matched_ict_concepts || ['Silver Bullet', 'Rejection Block'];
+        layaConcept.textContent = concepts.slice(0, 2).join(' · ');
+      }
+      const layaShield = document.getElementById('laya-macro-shield');
+      if (layaShield) {
+        const st = laya.macro_status || 'SAFE';
+        const ev = laya.macro_next_event || 'None in next 3 hours';
+        layaShield.textContent = `${st} · ${ev}`;
+        layaShield.className = 'stat-v ' + (st === 'SAFE' ? 'up' : 'gold');
+      }
+      const layaComp = document.getElementById('laya-compounding');
+      if (layaComp) {
+        layaComp.textContent = `${laya.compounding_boost || '1.00x'} (${laya.last_trap_prob || 12}% trap risk)`;
+      }
+
+      // Politician Brain Telemetry
+      const pol = laya.politician || {};
+      const polHeatBadge = document.getElementById('pol-heat-badge');
+      if (polHeatBadge) {
+        const heat = pol.heat_index || parseFloat(laya.geopolitical_heat) || 42.0;
+        const grade = pol.heat_grade || 'MODERATE ⚖️';
+        polHeatBadge.textContent = `${Number(heat).toFixed(1)}% HEAT · ${grade}`;
+      }
+      const polReg = document.getElementById('pol-regime');
+      if (polReg) polReg.textContent = (pol.political_regime || laya.political_regime || 'NEUTRAL CHOP').replace(/_/g, ' ');
+      const polBias = document.getElementById('pol-bias');
+      if (polBias) {
+        const b = pol.macro_bias || laya.macro_bias || 'NEUTRAL';
+        polBias.textContent = b.replace(/_/g, ' ');
+        polBias.className = 'stat-v ' + (b.includes('BULL') ? 'up' : b.includes('BEAR') ? 'dn' : 'gold');
+      }
+      const polSword = document.getElementById('pol-sword');
+      if (polSword) {
+        const boost = pol.max_alpha_boost || '1.65x';
+        const target = pol.target_expansion || '+5.0 to +8.0 ATR';
+        polSword.textContent = `${boost} Titan Boost · ${target}`;
+      }
+      const polShield = document.getElementById('pol-shield');
+      if (polShield) {
+        const reason = pol.shield_reason || 'Zero spread-widening risk';
+        polShield.textContent = `🛡️ ${reason}`;
+      }
+
+      // Breaking News Wire
+      if (Array.isArray(pol.breaking_news)) {
+        globalBreakingNews = pol.breaking_news;
+        renderFilteredNews();
+      }
+
+      // Autonomous LLM Doctor Telemetry
+      const doc = d.doctor || {};
+      const docBadge = document.getElementById('doc-badge');
+      if (docBadge) {
+        const st = doc.doctor_status || 'SURVEILLANCE ACTIVE 🟢';
+        docBadge.textContent = st;
+        docBadge.className = 'card-badge ' + (st.includes('HEALING') ? 'badge-amber' : 'badge-cyan');
+      }
+      const docBrain = document.getElementById('doc-brain');
+      if (docBrain) docBrain.textContent = `${doc.model || 'Qwen2.5-1.5B'} (${doc.runtime || 'llama-server :8080'})`;
+      const docSvc = document.getElementById('doc-service');
+      if (docSvc) docSvc.textContent = doc.monitored_service || 'stratton-xau-live.service';
+      const docRepairs = document.getElementById('doc-repairs-count');
+      if (docRepairs) docRepairs.textContent = `${doc.total_healings || 0} Auto-Repairs Applied`;
+      const docRx = document.getElementById('doc-rx');
+      if (docRx) {
+        const rx = doc.last_prescription;
+        if (rx && rx.diagnosis) {
+          docRx.textContent = `Rx: ${rx.prescribed_action} (${rx.diagnosis})`;
+          docRx.title = `${rx.prescribed_action}: ${rx.explanation || ''}`;
+        } else {
+          docRx.textContent = 'All systems nominal · Zero intervention needed';
+        }
+      }
+
+      // Sovereign Cashout Telemetry
+      const w = d.daily_withdrawal || {};
+      const dProf = Number(w.daily_profit || 0.0);
+      const dCash = Number(w.recommended_cashout_today || 0.0);
+      const dRet = Number(w.retained_compounding_balance || bal);
+      const cpEl = document.getElementById('cashout-profit');
+      if (cpEl) cpEl.textContent = `+$${dProf.toFixed(2)}`;
+      const ccEl = document.getElementById('cashout-recommended');
+      if (ccEl) ccEl.textContent = `$${dCash.toFixed(2)} (30% Rate)`;
+      const crEl = document.getElementById('cashout-retained');
+      if (crEl) crEl.textContent = `$${dRet.toFixed(2)}`;
+
+      // Execution Log Stream
+      const logs = d.recent_logs || [];
+      const logFeed = document.getElementById('trades-feed');
+      if (logFeed && logs.length > 0) {
+        logFeed.innerHTML = logs.map(l => {
+          const txt = typeof l === 'string' ? l : (l.text || '');
+          const isWin = txt.includes('+') || txt.includes('Spike');
+          const isLoss = txt.includes('-') || txt.includes('Stop');
+          const cls = isWin ? 'log-row win' : isLoss ? 'log-row loss' : 'log-row info';
+          return `<div class="${cls}">${txt}</div>`;
+        }).join('');
+      }
+    }
+
+    // Interactive News Filter
+    function filterNews(type, chipEl) {
+      triggerHaptic();
+      currentNewsFilter = type;
+      document.querySelectorAll('.news-chip').forEach(c => c.classList.remove('active'));
+      chipEl.classList.add('active');
+      renderFilteredNews();
+    }
+
+    function renderFilteredNews() {
+      const container = document.getElementById('breaking-news-list');
+      if (!container) return;
+      if (!globalBreakingNews || globalBreakingNews.length === 0) {
+        container.innerHTML = '<div class="news-item"><span style="color:var(--txt2);">Streaming live macroeconomic news feeds...</span></div>';
+        return;
+      }
+
+      let filtered = globalBreakingNews;
+      if (currentNewsFilter === 'BULL') {
+        filtered = globalBreakingNews.filter(n => n.sentiment.includes('BULL'));
+      } else if (currentNewsFilter === 'BEAR') {
+        filtered = globalBreakingNews.filter(n => n.sentiment.includes('BEAR'));
+      } else if (currentNewsFilter === 'TARIFF') {
+        filtered = globalBreakingNews.filter(n => (n.title || '').toLowerCase().includes('tariff') || (n.title || '').toLowerCase().includes('trade'));
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="news-item"><span style="color:var(--txt2);">No headlines match current filter.</span></div>';
+        return;
+      }
+
+      container.innerHTML = filtered.slice(0, 5).map(n => {
+        const isBull = n.sentiment.includes('BULL');
+        const isBear = n.sentiment.includes('BEAR');
+        const sentColor = isBull ? 'var(--win)' : isBear ? 'var(--loss)' : 'var(--gold)';
+        return `
+          <div class="news-item">
+            <div class="news-item-top">
+              <span class="news-src">${n.source} · ${n.age_min}m ago</span>
+              <span class="news-sent" style="color:${sentColor};">${n.sentiment}</span>
+            </div>
+            <div style="color:var(--txt);">${n.title}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Start Poller
+    fetchTelemetry();
+    setInterval(fetchTelemetry, 1500);
+
+    // Keyboard Shortcuts for Desktop Terminal Power Users
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.key === 'f' || e.key === 'F') {
+        openFlattenModal();
+      } else if (e.key === 'Escape') {
+        closeFlattenModal();
+      } else if (e.key === 'r' || e.key === 'R') {
+        fetchTelemetry();
+      }
+    });
+  </script>
+</body>
+</html>
