@@ -396,6 +396,29 @@ def _render_hft_terminal() -> str:
     <div class="row" style="border:0;">
       <span class="k">compounding accelerator</span>
       <span class="v" id="laya_boost" style="color:var(--gold);">1.25x - 1.50x Active</span>
+  </div>
+
+  <!-- "To The Moon" Sovereign Cash-Out & Daily Profit Allocation Card -->
+  <div class="card key" id="cashout_card">
+    <div class="row" style="border:0; padding-bottom:4px;">
+      <span class="sub" style="font-weight:700; color:var(--gold);">🌕 "TO THE MOON" SOVEREIGN CASH-OUT ALLOCATION</span>
+      <span class="pill on" id="cashout_status_badge">ACCUMULATING</span>
+    </div>
+    <div class="row">
+      <span class="k">today's net trading profit</span>
+      <span class="v up" id="cashout_profit">+$0.00</span>
+    </div>
+    <div class="row">
+      <span class="k">recommended daily cash-out</span>
+      <span class="v" id="cashout_recommended" style="color:var(--gold); font-weight:700;">$0.00 (30% Rate)</span>
+    </div>
+    <div class="row">
+      <span class="k">retained broker bankroll</span>
+      <span class="v" id="cashout_retained">$294.80 (Compounding)</span>
+    </div>
+    <div class="row" style="border:0;">
+      <span class="k">sovereign withdrawal policy</span>
+      <span class="v" style="font-size:10px; color:var(--txt2);">70% Bank / 30% Broker (Auto-Ratchet)</span>
     </div>
   </div>
 
@@ -650,6 +673,29 @@ def _render_hft_terminal() -> str:
       const layaBoost = document.getElementById('laya_boost');
       if (layaBoost) {
         layaBoost.textContent = `${laya.compounding_boost || '1.25x'} (${laya.last_trap_prob || 15}% trap risk)`;
+      }
+
+      // "To The Moon" Sovereign Cash-Out & Daily Profit Allocation
+      const w = d.daily_withdrawal || {};
+      const dProf = Number(w.daily_profit || 0.0);
+      const dCash = Number(w.recommended_cashout_today || 0.0);
+      const dRet = Number(w.retained_compounding_balance || bal);
+      const dRate = Number(w.withdrawal_rate_pct || 30);
+      const dStatus = w.status || (dCash >= 50 ? 'READY FOR CASHOUT' : 'ACCUMULATING');
+
+      const cpEl = document.getElementById('cashout_profit');
+      if (cpEl) cpEl.textContent = `+$${dProf.toFixed(2)}`;
+
+      const ccEl = document.getElementById('cashout_recommended');
+      if (ccEl) ccEl.textContent = `$${dCash.toFixed(2)} (${dRate}% Rate)`;
+
+      const crEl = document.getElementById('cashout_retained');
+      if (crEl) crEl.textContent = `$${dRet.toFixed(2)} (Compounding)`;
+
+      const csEl = document.getElementById('cashout_status_badge');
+      if (csEl) {
+        csEl.textContent = dStatus.replace(/_/g, ' ');
+        csEl.className = 'pill ' + (dCash >= 50 ? 'livep' : 'on');
       }
 
       // Logs Feed

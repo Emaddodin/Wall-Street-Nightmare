@@ -167,6 +167,7 @@ def sync_dashboard_state(
     tier: float = 300.0,
     last_latency_ms: float = 0.0,
     laya_telemetry: Optional[Dict[str, Any]] = None,
+    daily_withdrawal: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Syncs live broker telemetry to HFT dashboard JSON file."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -191,6 +192,7 @@ def sync_dashboard_state(
         "latency_ms": round(last_latency_ms, 2),
         "position": active_pos,
         "laya": laya_telemetry or {},
+        "daily_withdrawal": daily_withdrawal or {},
         "recent_logs": [message] if message else [],
         "updated_at": time.time(),
         "updated_iso": datetime.now(timezone.utc).isoformat(),
@@ -220,6 +222,46 @@ class LiveBrokerScalper:
         self.last_latency_ms: float = 0.0
         self.last_wick_ratio: float = 0.50
         self.last_trend_aligned: bool = True
+        self.daily_date: str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        self.daily_start_balance: float = 0.0
+        self.milestone_notified: set[int] = set()
+
+    def compute_daily_withdrawal(self, current_balance: float) -> Dict[str, Any]:
+        """
+        Computes recommended daily profit withdrawal according to the "To The Moon" Sovereign schedule.
+        - Under $1,000 balance: 30% daily profit cash-out (retaining 70% to compound through initial velocity).
+        - $1,000 - $5,000 balance: 50% daily profit cash-out.
+        - $5,000+ balance: 70% daily profit cash-out (locking in hard cash while keeping bankroll sovereign).
+        """
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if self.daily_date != today_str:
+            self.daily_date = today_str
+            self.daily_start_balance = current_balance
+            self.milestone_notified.clear()
+        elif self.daily_start_balance <= 0.0:
+            self.daily_start_balance = current_balance
+
+        daily_profit = max(0.0, current_balance - self.daily_start_balance)
+        if current_balance < 1000.0:
+            rate = 0.30
+        elif current_balance < 5000.0:
+            rate = 0.50
+        else:
+            rate = 0.70
+
+        cashout_target = round(daily_profit * rate, 2)
+        retained = round(current_balance - cashout_target, 2)
+
+        return {
+            "daily_date": self.daily_date,
+            "daily_start_balance": round(self.daily_start_balance, 2),
+            "current_balance": round(current_balance, 2),
+            "daily_profit": round(daily_profit, 2),
+            "withdrawal_rate_pct": int(rate * 100),
+            "recommended_cashout_today": cashout_target,
+            "retained_compounding_balance": retained,
+            "status": "READY_FOR_CASH_OUT" if cashout_target >= 50.0 else "ACCUMULATING",
+        }
 
     def get_current_session_label(self) -> str:
         """Returns ICT session killzone based on current UTC hour."""
@@ -513,6 +555,22 @@ async def run_live_scalper():
             # 4. Sync telemetry to mobile dashboard (every ~1s)
             if tick_count % 20 == 0:
                 acc = await gw.get_account_snapshot()
+                withdrawal_info = scalper.compute_daily_withdrawal(acc.balance)
+
+                # Milestone notification check (every $50 in recommended cashout)
+                if withdrawal_info["recommended_cashout_today"] >= 50.0:
+                    milestone_bracket = int(withdrawal_info["recommended_cashout_today"] // 50) * 50
+                    if milestone_bracket not in scalper.milestone_notified:
+                        scalper.milestone_notified.add(milestone_bracket)
+                        push_ntfy(
+                            title=f"🏦 Daily Cash-Out Milestone: ${milestone_bracket}",
+                            message=f"Today's Profit: +${withdrawal_info['daily_profit']:.2f}\n"
+                                    f"Available Cash-Out: ${withdrawal_info['recommended_cashout_today']:.2f} ({withdrawal_info['withdrawal_rate_pct']}%)\n"
+                                    f"Retained for Compounding: ${withdrawal_info['retained_compounding_balance']:.2f}",
+                            tags="moneybag,gem",
+                            priority="high",
+                        )
+
                 sync_dashboard_state(
                     balance=acc.balance,
                     equity=acc.equity,
@@ -523,6 +581,7 @@ async def run_live_scalper():
                     tier=vault.get("current_tier", 300.0),
                     last_latency_ms=scalper.last_latency_ms,
                     laya_telemetry=laya_oracle.get_telemetry(),
+                    daily_withdrawal=withdrawal_info,
                     message="Trading on LiteFinance MT5 Demo" if not scalper.active_stack else f"In {scalper.active_stack['direction']} position ({scalper.active_stack['volume']} lots)",
                 )
 
