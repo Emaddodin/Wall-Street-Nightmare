@@ -70,10 +70,12 @@ class LiteFinanceGateway:
         self._last_account: Optional[AccountSnapshot] = None
         self._last_account_ts: float = 0.0
         self._lock = asyncio.Lock()
+        self._reconnecting: bool = False
+        self._consecutive_errors: int = 0
 
     @property
     def is_connected(self) -> bool:
-        return self._connected and self._page is not None
+        return self._connected and self._page is not None and not self._page.is_closed()
 
     def _on_js_quote_tick(self, bid: float, ask: float, mid: float, ts_ms: float) -> None:
         """Callback invoked directly from Chrome V8 MutationObserver on every price tick."""
@@ -312,8 +314,12 @@ class LiteFinanceGateway:
                     mid=mid,
                     timestamp=now,
                 )
+                self._consecutive_errors = 0
                 return self._last_quote
         except Exception as e:
+            err_str = str(e).lower()
+            if "crashed" in err_str or "closed" in err_str:
+                self._handle_crash(e)
             logger.debug("Failed to read quote: %s", e)
         return self._last_quote
 
@@ -358,9 +364,14 @@ class LiteFinanceGateway:
                 floating_pnl=change,
             )
             self._last_account_ts = now
+            self._consecutive_errors = 0
             return self._last_account
         except Exception as e:
-            logger.warning("Failed to fetch account snapshot: %s", e)
+            err_str = str(e).lower()
+            if "crashed" in err_str or "closed" in err_str:
+                self._handle_crash(e)
+            else:
+                logger.warning("Failed to fetch account snapshot: %s", e)
             return self._last_account or AccountSnapshot(balance=0.0, equity=0.0, assets_used=0.0, available=0.0, floating_pnl=0.0)
 
     async def open_market_order(
@@ -483,6 +494,56 @@ class LiteFinanceGateway:
                 logger.error("Error flattening broker positions: %s", e)
                 return {"success": False, "error": str(e)}
 
+
+    def _handle_crash(self, error: Exception) -> None:
+        """Tracks consecutive errors and schedules automatic background recovery on browser crashes."""
+        self._consecutive_errors += 1
+        err_str = str(error).lower()
+        if "crashed" in err_str or "closed" in err_str or self._consecutive_errors >= 5:
+            if not self._reconnecting:
+                logger.error("🚨 LiteFinance Gateway browser crash/disconnect detected (%s). Triggering auto-recovery...", error)
+                asyncio.create_task(self.reconnect())
+
+    async def reconnect(self) -> bool:
+        """Self-healing reconnect: cleanly shuts down dead browser context and re-spawns a fresh session."""
+        if self._reconnecting:
+            return False
+        self._reconnecting = True
+        logger.warning("🔄 Self-healing LiteFinanceGateway: Initiating automatic reconnection...")
+        try:
+            if self._context:
+                await self._context.close()
+        except Exception:
+            pass
+        try:
+            if self._browser:
+                await self._browser.close()
+        except Exception:
+            pass
+        try:
+            if self._playwright:
+                await self._playwright.stop()
+        except Exception:
+            pass
+        self._browser = None
+        self._context = None
+        self._page = None
+        self._playwright = None
+        self._connected = False
+        await asyncio.sleep(2.0)
+        try:
+            success = await self.initialize()
+            if success:
+                logger.info("✅ LiteFinanceGateway auto-recovery SUCCESSFUL! Terminal re-attached.")
+                self._consecutive_errors = 0
+            else:
+                logger.error("❌ LiteFinanceGateway auto-recovery failed to initialize.")
+            return success
+        except Exception as ex:
+            logger.error("❌ LiteFinanceGateway auto-recovery encountered error: %s", ex)
+            return False
+        finally:
+            self._reconnecting = False
 
     async def close(self) -> None:
         """Closes browser and cleans up resources cleanly."""

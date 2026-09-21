@@ -401,6 +401,7 @@ async def run_live_scalper():
 
     logger.info("Entering live trading loop with Laya System 1 Surveillance...")
     tick_count = 0
+    last_quote_time = time.time()
 
     while not stop_event.is_set():
         try:
@@ -429,9 +430,14 @@ async def run_live_scalper():
             if not quote:
                 quote = await gw.get_live_quote()
             if not quote:
+                if (time.time() - last_quote_time) > 20.0 and not getattr(gw, "_reconnecting", False):
+                    logger.warning("⚠️ Market quote stream stalled (>20s). Triggering self-healing gateway reconnect...")
+                    asyncio.create_task(gw.reconnect())
+                    last_quote_time = time.time()
                 await asyncio.sleep(0.05)
                 continue
 
+            last_quote_time = time.time()
             tick_count += 1
             scalper.update_tick(quote)
 
