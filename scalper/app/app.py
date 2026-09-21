@@ -74,6 +74,14 @@ def _read_hft_state() -> dict:
                 best.setdefault("symbol", "XAUUSD")
             except Exception:
                 pass
+        # Load Autonomous LLM Doctor Telemetry if available
+        try:
+            doc_file = DATA / "state" / "doctor_telemetry.json"
+            if doc_file.exists():
+                with open(doc_file, "r") as df:
+                    best["doctor"] = json.load(df)
+        except Exception:
+            pass
         return best
     return {
         "engine": "5-Pillar High-Frequency Quant Execution Engine",
@@ -427,6 +435,30 @@ def _render_hft_terminal() -> str:
     </div>
   </div>
 
+  <!-- Autonomous LLM Doctor & Self-Healing Sentinel Card -->
+  <div class="card key" id="doctor_card" style="border-left: 3px solid #00e5ff;">
+    <div class="row" style="border:0; padding-bottom:4px;">
+      <span class="sub" style="font-weight:700; color:#00e5ff;">🏥 AUTONOMOUS LLM DOCTOR · ZERO-DOWNTIME SENTINEL</span>
+      <span class="pill livep" id="doctor_badge" style="background:rgba(0,229,255,0.15); color:#00e5ff; border:1px solid #00e5ff;">SURVEILLANCE ACTIVE</span>
+    </div>
+    <div class="row">
+      <span class="k">clinical triage brain</span>
+      <span class="v" id="doctor_model" style="color:#00e5ff; font-weight:700;">Qwen2.5-1.5B (llama-server :8080)</span>
+    </div>
+    <div class="row">
+      <span class="k">monitored engine & latency</span>
+      <span class="v" id="doctor_vitals" style="color:var(--txt);">stratton-xau-live · 0.2ms internal</span>
+    </div>
+    <div class="row">
+      <span class="k">autonomous healings completed</span>
+      <span class="v up" id="doctor_heals">0 Auto-Repairs</span>
+    </div>
+    <div class="row" style="border:0;">
+      <span class="k">last clinical prescription</span>
+      <span class="v" id="doctor_last_rx" style="font-size:10px; color:var(--txt2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px;">All systems nominal · Zero intervention needed</span>
+    </div>
+  </div>
+
   <!-- "To The Moon" Sovereign Cash-Out & Daily Profit Allocation Card -->
   <div class="card key" id="cashout_card">
     <div class="row" style="border:0; padding-bottom:4px;">
@@ -739,6 +771,41 @@ def _render_hft_terminal() -> str:
       if (polHead) {
         polHead.textContent = pol.active_headline || 'Trump Tariff & Trade War Regime Active';
         polHead.title = pol.active_headline || '';
+      }
+
+      // Autonomous LLM Doctor Telemetry
+      const doc = d.doctor || {};
+      const docBadge = document.getElementById('doctor_badge');
+      if (docBadge) {
+        const dSt = doc.doctor_status || 'SURVEILLANCE ACTIVE 🟢';
+        docBadge.textContent = dSt;
+        docBadge.style.color = dSt.includes('HEALING') ? '#ffaa00' : '#00e5ff';
+        docBadge.style.borderColor = dSt.includes('HEALING') ? '#ffaa00' : '#00e5ff';
+      }
+      const docModel = document.getElementById('doctor_model');
+      if (docModel) {
+        docModel.textContent = `${doc.model || 'Qwen2.5-1.5B'} (${doc.runtime || 'llama-server :8080'})`;
+      }
+      const docVitals = document.getElementById('doctor_vitals');
+      if (docVitals) {
+        const svc = doc.monitored_service || 'stratton-xau-live';
+        const lat = Number(d.latency_ms || 0.2).toFixed(1);
+        docVitals.textContent = `${svc} · ${lat}ms internal`;
+      }
+      const docHeals = document.getElementById('doctor_heals');
+      if (docHeals) {
+        const cnt = doc.total_healings || 0;
+        docHeals.textContent = `${cnt} Auto-Repairs`;
+      }
+      const docLastRx = document.getElementById('doctor_last_rx');
+      if (docLastRx) {
+        const rx = doc.last_prescription;
+        if (rx && rx.diagnosis) {
+          docLastRx.textContent = `Rx: ${rx.prescribed_action} (${rx.diagnosis}) - ${rx.explanation || ''}`;
+          docLastRx.title = docLastRx.textContent;
+        } else {
+          docLastRx.textContent = 'All systems nominal · Zero intervention needed';
+        }
       }
 
       // "To The Moon" Sovereign Cash-Out & Daily Profit Allocation
