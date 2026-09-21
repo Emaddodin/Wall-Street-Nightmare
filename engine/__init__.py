@@ -1,22 +1,13 @@
-"""5-Minute Market Flow & Relapse Scalper engine package."""
+"""Stratton Oakmont High-Frequency Execution Gateway Engine."""
 
-from engine.execution_router import (
-    ExecutionRouter,
-    OrderSlice,
-    OrderBasket,
-    BrokerVenue,
-    SimulatedBrokerVenue,
-    RiskInvariants,
+from engine.litefinance_gateway import (
+    LiteFinanceGateway,
+    AccountSnapshot,
+    QuoteSnapshot,
 )
-from engine.fsm import RelapseFSM, RelapseState
 
 __all__ = [
-    "ExecutionRouter",
-    "OrderSlice",
-    "OrderBasket",
-    "BrokerVenue",
-    "SimulatedBrokerVenue",
-    "RiskInvariants",
-    "RelapseFSM",
-    "RelapseState",
+    "LiteFinanceGateway",
+    "AccountSnapshot",
+    "QuoteSnapshot",
 ]

@@ -1,7 +1,0 @@
-[Unit]
-Description=STRATTON OAKMONT chrome recycle -- bound Chrome's memory growth, when nothing is open
-After=stratton-oakmont-chrome.service
-
-[Service]
-Type=oneshot
-ExecStart=/home/stratton-oakmont/venv/bin/python /home/stratton-oakmont/bot/tools/recycle_chrome.py

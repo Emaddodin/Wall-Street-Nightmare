@@ -1,7 +1,0 @@
-[Unit]
-Description=TBT chrome recycle -- bound Chrome's memory growth, when nothing is open
-After=tbt-chrome.service
-
-[Service]
-Type=oneshot
-ExecStart=/home/tbt/venv/bin/python /home/tbt/bot/tools/recycle_chrome.py

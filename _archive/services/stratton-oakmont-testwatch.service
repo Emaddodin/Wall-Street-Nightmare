@@ -1,9 +1,0 @@
-[Unit]
-Description=STRATTON OAKMONT half-hour heartbeat for the 12-hour test
-After=stratton-oakmont-paper.service
-
-[Service]
-Type=oneshot
-User=stratton
-WorkingDirectory=/home/stratton-oakmont/bot
-ExecStart=/home/stratton-oakmont/venv/bin/python -u /home/stratton-oakmont/bot/tools/testwatch.py

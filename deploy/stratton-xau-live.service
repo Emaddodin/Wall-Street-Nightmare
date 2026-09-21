@@ -1,0 +1,23 @@
+[Unit]
+Description=Stratton Oakmont XAUUSD Scalper (Live Broker Execution + Laya System 1 + Web Terminal)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/ict_sniper
+EnvironmentFile=/root/ict_sniper/.env
+Environment=SCALPER_APP_HOST=0.0.0.0
+Environment=SCALPER_APP_PORT=8443
+Environment=SCALPER_APP_HTTP_PORT=8088
+Environment=SCALPER_APP_CERT=/root/ict_sniper/tls/fullchain.pem
+Environment=SCALPER_APP_KEY=/root/ict_sniper/tls/privkey.pem
+ExecStart=/root/ict_sniper/venv/bin/python -u run_xau_broker_live.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stratton-xau-challenge
+
+[Install]
+WantedBy=multi-user.target
