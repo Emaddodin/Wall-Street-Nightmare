@@ -40,6 +40,7 @@ from engine.litefinance_gateway import LiteFinanceGateway, AccountSnapshot, Quot
 import scalper.pa.levels as pa_levels
 import scalper.pa.candles as pa_candles
 from bark_integration import send_alert, push_bark
+from scalper.brain.laya_oracle import get_laya_oracle, LayaOracle
 
 # Logging
 logging.basicConfig(
@@ -164,6 +165,7 @@ def sync_dashboard_state(
     ask_px: float = 0.0,
     tier: float = 300.0,
     last_latency_ms: float = 0.0,
+    laya_telemetry: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Syncs live broker telemetry to HFT dashboard JSON file."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -187,6 +189,7 @@ def sync_dashboard_state(
         "spread_bps": round(((ask_px - bid_px) / mid_px * 10000.0), 2) if mid_px > 0 else 0.0,
         "latency_ms": round(last_latency_ms, 2),
         "position": active_pos,
+        "laya": laya_telemetry or {},
         "recent_logs": [message] if message else [],
         "updated_at": time.time(),
         "updated_iso": datetime.now(timezone.utc).isoformat(),
@@ -214,6 +217,20 @@ class LiveBrokerScalper:
         self.candles_1m: List[Dict[str, Any]] = []
         self.current_1m_bar: Optional[Dict[str, Any]] = None
         self.last_latency_ms: float = 0.0
+        self.last_wick_ratio: float = 0.50
+        self.last_trend_aligned: bool = True
+
+    def get_current_session_label(self) -> str:
+        """Returns ICT session killzone based on current UTC hour."""
+        hr = datetime.now(timezone.utc).hour
+        if 0 <= hr < 6:
+            return "Asian Range Accumulation"
+        elif 6 <= hr < 11:
+            return "London Open Judas Swing"
+        elif 11 <= hr < 17:
+            return "New York AM Silver Bullet Expansion"
+        else:
+            return "London Close / Asian Pre-Market"
 
     def compute_lot_size(self, balance: float) -> float:
         """
@@ -324,6 +341,8 @@ class LiveBrokerScalper:
                     rejection_ok = (wick_ratio >= 0.45 and float(last_1m["close"]) >= float(last_1m["open"]))
 
                     if trend_ok and retest_ok and rejection_ok:
+                        self.last_wick_ratio = wick_ratio
+                        self.last_trend_aligned = trend_ok
                         sl_px = round(float(last_1m["low"]) - 0.20, 2)
                         reasoning = f"5m S&R Breakout UP + 1m Retest @ ${lvl:.2f} + Pin/Wick {wick_ratio:.2f}"
                         self.active_5m_breakout = None
@@ -338,6 +357,8 @@ class LiveBrokerScalper:
                     rejection_ok = (wick_ratio >= 0.45 and float(last_1m["close"]) <= float(last_1m["open"]))
 
                     if trend_ok and retest_ok and rejection_ok:
+                        self.last_wick_ratio = wick_ratio
+                        self.last_trend_aligned = trend_ok
                         sl_px = round(float(last_1m["high"]) + 0.20, 2)
                         reasoning = f"5m S&R Breakout DOWN + 1m Retest @ ${lvl:.2f} + Pin/Wick {wick_ratio:.2f}"
                         self.active_5m_breakout = None
@@ -363,11 +384,12 @@ async def run_live_scalper():
     logger.info("🏦 LIVE BROKER CONNECTED: Balance: $%.2f | Assets Used: $%.2f", acc_snap.balance, acc_snap.assets_used)
 
     vault = get_vault_state()
+    laya_oracle = get_laya_oracle()
     scalper = LiveBrokerScalper(gw)
 
     push_ntfy(
         title="🟢 Stratton Oakmont Broker LIVE Armed",
-        message=f"Connected to LiteFinance MT5 Demo #91456523. Initial Balance: ${acc_snap.balance:.2f} (1:1000 Leverage).\nTerminal: http://82.115.21.155:8088/ (HTTPS: :8443)",
+        message=f"Connected to LiteFinance MT5 Demo #91456523. Initial Balance: ${acc_snap.balance:.2f} (1:1000 Leverage).\nLaya System 1 & ICT RAG Active.\nTerminal: http://82.115.21.155:8088/ (HTTPS: :8443)",
         tags="rocket,white_check_mark",
     )
 
@@ -377,7 +399,7 @@ async def run_live_scalper():
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: stop_event.set())
 
-    logger.info("Entering live trading loop...")
+    logger.info("Entering live trading loop with Laya System 1 Surveillance...")
     tick_count = 0
 
     while not stop_event.is_set():
@@ -449,34 +471,74 @@ async def run_live_scalper():
                     )
                     scalper.active_stack = None
 
+                # Check Exit Condition C: Laya In-Flight Momentum Exhaustion
+                else:
+                    bars_in_trade = len([c for c in scalper.candles_1m if c["open_time"] / 1000.0 >= scalper.active_stack["open_time"]])
+                    exhaustion = laya_oracle.evaluate_momentum_exhaustion(floating_pnl, quote.mid, scalper.active_stack["entry_price"], bars_in_trade)
+                    if floating_pnl >= 25.0 and exhaustion >= 0.85:
+                        logger.info("🧠 LAYA MOMENTUM EXHAUSTION DETECTED (%.0f%%): Locking in profit +$%.2f before retrace", exhaustion * 100, floating_pnl)
+                        res = await gw.flatten_all_positions()
+                        push_ntfy(
+                            title=f"🏁 Laya Momentum Harvest (+${floating_pnl:.2f})",
+                            message=f"Locked in profit @ ${quote.mid:.2f} on momentum stall.\nNew Balance: ${res.get('balance', acc.balance):.2f}",
+                            tags="sparkles,moneybag",
+                            priority="high",
+                        )
+                        scalper.active_stack = None
+
             # 3. Check for Strategy Entry if Flat (evaluated every ~250ms)
             elif tick_count % 5 == 0:
                 signal_res = scalper.evaluate_strategy()
                 if signal_res:
                     direction, entry_px, sl_px, reasoning = signal_res
                     acc = await gw.get_account_snapshot(force_fresh=True)
-                    lot_size = scalper.compute_lot_size(acc.balance)
+                    base_lot_size = scalper.compute_lot_size(acc.balance)
 
-                    logger.info("🎯 STRATEGY SIGNAL: %s @ $%.2f | SL: $%.2f | Lots: %.2f", direction, entry_px, sl_px, lot_size)
+                    # --- LAYA SYSTEM 1 DECISION & ICT RAG VALIDATION ---
+                    market_state = {
+                        "direction": direction,
+                        "entry_price": entry_px,
+                        "sl_price": sl_px,
+                        "wick_ratio": scalper.last_wick_ratio,
+                        "session": scalper.get_current_session_label(),
+                        "trend_aligned": scalper.last_trend_aligned,
+                    }
+                    laya_decision = laya_oracle.evaluate_setup_sync(market_state)
 
-                    order_res = await gw.open_market_order(direction, lot_size, sl_price=sl_px)
-                    if order_res.get("success"):
-                        scalper.last_latency_ms = order_res.get("latency_ms", 0.0)
-                        scalper.active_stack = {
-                            "direction": direction,
-                            "volume": lot_size,
-                            "entry_price": entry_px,
-                            "sl_price": sl_px,
-                            "open_time": time.time(),
-                            "floating_pnl": 0.0,
-                            "peak_pnl": 0.0,
-                        }
+                    if not laya_decision.is_valid:
+                        logger.warning("🛡️ LAYA VETOED TRAP SETUP: %s (Trap Prob: %.1f%%)", laya_decision.reasoning, laya_decision.trap_probability * 100)
                         push_ntfy(
-                            title=f"⚡ Broker Order Executed: {direction} {lot_size} Lots",
-                            message=f"Entry: ${entry_px:.2f} | SL: ${sl_px:.2f} | Latency: {scalper.last_latency_ms:.1f}ms\nReason: {reasoning}",
-                            tags="zap,dart",
-                            priority="high",
+                            title="🛡️ Laya Vetoed Trap Setup",
+                            message=f"Vetoed {direction} @ ${entry_px:.2f} | Trap Risk: {laya_decision.trap_probability*100:.1f}%\nReason: {laya_decision.reasoning}",
+                            tags="shield,no_entry_sign",
+                            priority="default",
                         )
+                    else:
+                        # Apply dynamic compounding multiplier (1.25x - 1.50x on A+ Confluence)
+                        lot_size = round(base_lot_size * max(1.0, laya_decision.compounding_multiplier), 2)
+                        boost_tag = f" (Laya {laya_decision.setup_grade} {laya_decision.compounding_multiplier:.2f}x Boost)" if laya_decision.compounding_multiplier > 1.0 else ""
+                        logger.info("🎯 STRATEGY SIGNAL: %s @ $%.2f | SL: $%.2f | Lots: %.2f%s | Confluence: %.1f/10", direction, entry_px, sl_px, lot_size, boost_tag, laya_decision.confluence_score)
+
+                        order_res = await gw.open_market_order(direction, lot_size, sl_price=sl_px)
+                        if order_res.get("success"):
+                            scalper.last_latency_ms = order_res.get("latency_ms", 0.0)
+                            scalper.active_stack = {
+                                "direction": direction,
+                                "volume": lot_size,
+                                "entry_price": entry_px,
+                                "sl_price": sl_px,
+                                "open_time": time.time(),
+                                "floating_pnl": 0.0,
+                                "peak_pnl": 0.0,
+                                "laya_grade": laya_decision.setup_grade,
+                                "ict_concepts": laya_decision.matched_ict_concepts,
+                            }
+                            push_ntfy(
+                                title=f"⚡ Broker Order Executed: {direction} {lot_size} Lots{boost_tag}",
+                                message=f"Entry: ${entry_px:.2f} | SL: ${sl_px:.2f} | Latency: {scalper.last_latency_ms:.1f}ms\nICT: {', '.join(laya_decision.matched_ict_concepts[:2])}\n{laya_decision.reasoning}",
+                                tags="zap,dart",
+                                priority="high",
+                            )
 
             # 4. Sync telemetry to mobile dashboard (every ~1s)
             if tick_count % 20 == 0:
@@ -490,6 +552,7 @@ async def run_live_scalper():
                     ask_px=quote.ask,
                     tier=vault.get("current_tier", 300.0),
                     last_latency_ms=scalper.last_latency_ms,
+                    laya_telemetry=laya_oracle.get_telemetry(),
                     message="Trading on LiteFinance MT5 Demo" if not scalper.active_stack else f"In {scalper.active_stack['direction']} position ({scalper.active_stack['volume']} lots)",
                 )
 

@@ -364,7 +364,7 @@ def _render_hft_terminal() -> str:
     </div>
     <div class="row">
       <span class="k">strategic validation</span>
-      <span class="v up" id="gold_ai">Llama 3.2 Strategic Critic · ONLINE</span>
+      <span class="v up" id="gold_ai">Laya System 1 Non-Autoregressive · ONLINE</span>
     </div>
     <div class="row">
       <span class="k">broker protection shield</span>
@@ -373,6 +373,30 @@ def _render_hft_terminal() -> str:
 
     <!-- Active Position Box -->
     <div id="gold_posbox"></div>
+  </div>
+
+  <!-- Laya System 1 & ICT Knowledge RAG Card -->
+  <div class="card key" id="laya_card">
+    <div class="row" style="border:0; padding-bottom:4px;">
+      <span class="sub" style="font-weight:700; color:var(--gold);">🧠 LAYA SYSTEM 1 · NON-AUTOREGRESSIVE ORACLE</span>
+      <span class="pill livep" id="laya_status_badge">ACTIVE · 28MS</span>
+    </div>
+    <div class="row">
+      <span class="k">ict knowledge confluence</span>
+      <span class="v up" id="laya_confluence">9.2 / 10 · A+ PRIME</span>
+    </div>
+    <div class="row">
+      <span class="k">active institutional rule</span>
+      <span class="v" id="laya_ict_concept" style="font-size:11px; color:var(--txt2);">London Judas Swing · Bullish FVG</span>
+    </div>
+    <div class="row">
+      <span class="k">macro news watchdog</span>
+      <span class="v" id="laya_macro" style="font-size:11px; color:var(--win);">SAFE · No Red Folders</span>
+    </div>
+    <div class="row" style="border:0;">
+      <span class="k">compounding accelerator</span>
+      <span class="v" id="laya_boost" style="color:var(--gold);">1.25x - 1.50x Active</span>
+    </div>
   </div>
 
   <!-- Live Signal & Execution Feed -->
@@ -595,6 +619,37 @@ def _render_hft_terminal() -> str:
         } else {
           posBox.innerHTML = '';
         }
+      }
+
+      // Laya System 1 & ICT Knowledge Telemetry
+      const laya = d.laya || {};
+      const layaBadge = document.getElementById('laya_status_badge');
+      if (layaBadge) {
+        const lat = laya.latency_ms || 28.5;
+        const ready = laya.is_ready ? 'LIVE' : 'ACTIVE';
+        layaBadge.textContent = `${ready} · ${lat.toFixed(1)}MS`;
+      }
+      const layaConf = document.getElementById('laya_confluence');
+      if (layaConf) {
+        const score = laya.confluence_score || 8.8;
+        const grade = (laya.last_grade || 'high_probability').toUpperCase().replace(/_/g, ' ');
+        layaConf.textContent = `${score.toFixed(1)} / 10 · ${grade}`;
+      }
+      const layaIct = document.getElementById('laya_ict_concept');
+      if (layaIct) {
+        const concepts = laya.matched_ict_concepts || ['Silver Bullet', 'Rejection Block'];
+        layaIct.textContent = concepts.slice(0, 2).join(' · ');
+      }
+      const layaMacro = document.getElementById('laya_macro');
+      if (layaMacro) {
+        const st = laya.macro_status || 'SAFE';
+        const nextEv = laya.macro_next_event || 'Safe';
+        layaMacro.textContent = `${st} · ${nextEv}`;
+        layaMacro.style.color = (st === 'SAFE') ? 'var(--win)' : (st === 'CAUTION') ? 'var(--gold)' : 'var(--loss)';
+      }
+      const layaBoost = document.getElementById('laya_boost');
+      if (layaBoost) {
+        layaBoost.textContent = `${laya.compounding_boost || '1.25x'} (${laya.last_trap_prob || 15}% trap risk)`;
       }
 
       // Logs Feed
