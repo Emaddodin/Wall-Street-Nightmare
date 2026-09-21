@@ -1,8 +1,8 @@
 """
-The Apex Trinity Strategy Engine: Maximum Mathematical Alpha for XAUUSD.
+The "To The Moon" Strategy Engine (Apex Sovereign Matrix): Maximum Mathematical Alpha for XAUUSD.
 Combines 3 uncorrelated institutional ICT playbooks:
 1. 5m S&R Breakout + 1m Retest (Momentum Continuation)
-2. NY Silver Bullet FVG 50% CE Tap (Algorithmic 14:00-15:00 UTC Imbalance)
+2. Multi-Session Silver Bullet FVG 50% CE Tap (London 07:00-08:00 UTC & NY 14:00-15:00 UTC)
 3. London Asian Turtle Soup Sweep (06:00-09:00 UTC Liquidity Pool Raid)
 
 Features:
@@ -10,6 +10,7 @@ Features:
 - Dynamic ATR(14) volatility normalized risk & reward
 - Risk-free trailing pyramiding (cushion stacking)
 - Institutional 60/40 partial scale-out & moonbag runner
+- Sovereign compounding ladder up to 5.0 lots cap
 """
 from __future__ import annotations
 
@@ -109,9 +110,9 @@ class ApexTrinityStrategy:
             return None
 
         # -------------------------------------------------------------
-        # SETUP 2: ICT NY SILVER BULLET (14:00 - 15:00 UTC / 10:00 - 11:00 AM NY)
+        # SETUP 2: ICT SILVER BULLET (London 07:00-08:00 UTC & NY 14:00-15:00 UTC)
         # -------------------------------------------------------------
-        if 14 <= utc_hour < 15:
+        if (14 <= utc_hour < 15) or (7 <= utc_hour < 8):
             sb_signal = self._evaluate_silver_bullet(df_1m, curr_px, atr, curr_time)
             if sb_signal:
                 self.last_signal_time = curr_time

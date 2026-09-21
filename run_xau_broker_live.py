@@ -41,6 +41,7 @@ import scalper.pa.levels as pa_levels
 import scalper.pa.candles as pa_candles
 from bark_integration import send_alert, push_bark
 from scalper.brain.laya_oracle import get_laya_oracle, LayaOracle
+from scalper.strategies.apex_trinity import ApexTrinityStrategy, ApexSignal
 
 # Logging
 logging.basicConfig(
@@ -207,13 +208,13 @@ def sync_dashboard_state(
 
 class LiveBrokerScalper:
     """
-    Manages live candle generation, Wednesday pattern detection, and order dispatch via LiteFinanceGateway.
+    Manages live candle generation, "To The Moon" ICT Sovereign strategy, and order dispatch via LiteFinanceGateway.
     """
 
     def __init__(self, gateway: LiteFinanceGateway):
         self.gw = gateway
+        self.apex = ApexTrinityStrategy(min_candles_warmup=30)
         self.active_stack: Optional[Dict[str, Any]] = None
-        self.active_5m_breakout: Optional[Dict[str, Any]] = None
         self.candles_1m: List[Dict[str, Any]] = []
         self.current_1m_bar: Optional[Dict[str, Any]] = None
         self.last_latency_ms: float = 0.0
@@ -226,7 +227,7 @@ class LiveBrokerScalper:
         if 0 <= hr < 6:
             return "Asian Range Accumulation"
         elif 6 <= hr < 11:
-            return "London Open Judas Swing"
+            return "London Open Judas / Silver Bullet"
         elif 11 <= hr < 17:
             return "New York AM Silver Bullet Expansion"
         else:
@@ -234,11 +235,13 @@ class LiveBrokerScalper:
 
     def compute_lot_size(self, balance: float) -> float:
         """
-        Calculates safe lot volume based on account balance and 1:1000 leverage.
-        $100 Tier -> 0.05 lots
-        $300 Tier -> 0.10 lots
-        $500 Tier -> 0.20 lots
-        $1000 Tier -> 0.40 lots
+        "To The Moon" (Apex Sovereign) Aggressive Compounding Ladder:
+        $50 - $200 Tier   -> 0.05 lots
+        $200 - $400 Tier  -> 0.10 lots
+        $400 - $800 Tier  -> 0.20 lots
+        $800 - $1500 Tier -> 0.40 lots
+        $1500 - $3000 Tier -> 0.80 lots
+        $3000+ Tier       -> min(5.00, round(balance / 2000.0, 2))
         """
         if balance < 200.0:
             return 0.05
@@ -246,8 +249,12 @@ class LiveBrokerScalper:
             return 0.10
         elif balance < 800.0:
             return 0.20
+        elif balance < 1500.0:
+            return 0.40
+        elif balance < 3000.0:
+            return 0.80
         else:
-            return min(1.00, round(balance / 2000.0, 2))
+            return min(5.00, round(balance / 2000.0, 2))
 
     def update_tick(self, quote: QuoteSnapshot) -> None:
         """Accumulates ticks into 1-minute OHLCV candles."""
@@ -275,96 +282,16 @@ class LiveBrokerScalper:
             self.current_1m_bar["close"] = px
             self.current_1m_bar["volume"] += 1
 
-    def evaluate_strategy(self) -> Optional[Tuple[str, float, float, str]]:
+    def evaluate_strategy(self) -> Optional[ApexSignal]:
         """
-        Evaluates 5m Breakout -> 1m Retest -> Rejection wick.
-        Returns: (direction, entry_px, sl_px, reasoning) or None
+        Evaluates "To The Moon" (Apex Sovereign Trinity Matrix):
+        1. 5m S&R Breakout + 1m Retest + Pin Wick
+        2. Multi-Session Silver Bullet FVG CE Tap (London 07-08 UTC & NY 14-15 UTC)
+        3. London Turtle Soup Asian Liquidity Sweep (06-09 UTC)
         """
         if len(self.candles_1m) < 30:
             return None
-
-        df_1m = pd.DataFrame(self.candles_1m)
-        df_1m["datetime"] = pd.to_datetime(df_1m["open_time"], unit="ms", utc=True)
-        df_1m["ema20"] = df_1m["close"].ewm(span=20).mean()
-        df_1m["ema50"] = df_1m["close"].ewm(span=50).mean()
-
-        # Resample to 5m
-        df_5m = (
-            df_1m.set_index("datetime")
-            .resample("5min")
-            .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum", "open_time": "first"})
-            .dropna()
-            .reset_index()
-        )
-        if len(df_5m) < 6:
-            return None
-
-        df_5m["res"] = pa_levels.range_high(df_5m, 6)
-        df_5m["sup"] = pa_levels.range_low(df_5m, 6)
-        df_5m["break_up"] = pa_levels.breakout_up(df_5m, 6, range_pct=0.03)
-        df_5m["break_down"] = pa_levels.breakout_down(df_5m, 6, range_pct=0.03)
-
-        # Check last closed 5m candle for breakout
-        last_5m = df_5m.iloc[-1]
-        curr_t_ms = int(time.time() * 1000)
-
-        if bool(last_5m.get("break_up", False)):
-            self.active_5m_breakout = {
-                "type": "UP",
-                "level": float(last_5m["res"]),
-                "bar_time": int(last_5m["open_time"]),
-            }
-        elif bool(last_5m.get("break_down", False)):
-            self.active_5m_breakout = {
-                "type": "DOWN",
-                "level": float(last_5m["sup"]),
-                "bar_time": int(last_5m["open_time"]),
-            }
-
-        # Check for 1m Retest + Rejection Setup
-        last_1m = df_1m.iloc[-1]
-        curr_px = float(last_1m["close"])
-
-        if self.active_5m_breakout:
-            b_type = self.active_5m_breakout["type"]
-            lvl = self.active_5m_breakout["level"]
-            b_time = self.active_5m_breakout["bar_time"]
-
-            # Must be within 20 minutes of breakout
-            if 0 < (curr_t_ms - b_time) <= 20 * 60_000:
-                if b_type == "UP":
-                    trend_ok = curr_px > last_1m["ema20"] > last_1m["ema50"]
-                    retest_ok = float(last_1m["low"]) <= lvl + 1.2 and float(last_1m["high"]) >= lvl - 0.2
-                    rng = max(0.01, float(last_1m["high"]) - float(last_1m["low"]))
-                    lower_wick = min(float(last_1m["open"]), float(last_1m["close"])) - float(last_1m["low"])
-                    wick_ratio = lower_wick / rng
-                    rejection_ok = (wick_ratio >= 0.45 and float(last_1m["close"]) >= float(last_1m["open"]))
-
-                    if trend_ok and retest_ok and rejection_ok:
-                        self.last_wick_ratio = wick_ratio
-                        self.last_trend_aligned = trend_ok
-                        sl_px = round(float(last_1m["low"]) - 0.20, 2)
-                        reasoning = f"5m S&R Breakout UP + 1m Retest @ ${lvl:.2f} + Pin/Wick {wick_ratio:.2f}"
-                        self.active_5m_breakout = None
-                        return ("BUY", curr_px, sl_px, reasoning)
-
-                elif b_type == "DOWN":
-                    trend_ok = curr_px < last_1m["ema20"] < last_1m["ema50"]
-                    retest_ok = float(last_1m["high"]) >= lvl - 1.2 and float(last_1m["low"]) <= lvl + 0.2
-                    rng = max(0.01, float(last_1m["high"]) - float(last_1m["low"]))
-                    upper_wick = float(last_1m["high"]) - max(float(last_1m["open"]), float(last_1m["close"]))
-                    wick_ratio = upper_wick / rng
-                    rejection_ok = (wick_ratio >= 0.45 and float(last_1m["close"]) <= float(last_1m["open"]))
-
-                    if trend_ok and retest_ok and rejection_ok:
-                        self.last_wick_ratio = wick_ratio
-                        self.last_trend_aligned = trend_ok
-                        sl_px = round(float(last_1m["high"]) + 0.20, 2)
-                        reasoning = f"5m S&R Breakout DOWN + 1m Retest @ ${lvl:.2f} + Pin/Wick {wick_ratio:.2f}"
-                        self.active_5m_breakout = None
-                        return ("SELL", curr_px, sl_px, reasoning)
-
-        return None
+        return self.apex.evaluate(self.candles_1m)
 
 
 async def run_live_scalper():
@@ -445,39 +372,70 @@ async def run_live_scalper():
             if scalper.active_stack:
                 acc = await gw.get_account_snapshot(force_fresh=True)
                 floating_pnl = acc.floating_pnl
+                current_mid = quote.mid
                 scalper.active_stack["floating_pnl"] = floating_pnl
-                scalper.active_stack["current_price"] = quote.mid
+                scalper.active_stack["current_price"] = current_mid
+                if floating_pnl > scalper.active_stack.get("peak_pnl", 0.0):
+                    scalper.active_stack["peak_pnl"] = floating_pnl
+
+                entry_px = scalper.active_stack["entry_price"]
+                direction = scalper.active_stack["direction"]
+                atr = scalper.active_stack.get("atr_1m", 1.50)
+
+                # Distance moved in favorable direction in points ($/oz)
+                gain_pts = (current_mid - entry_px) if direction == "BUY" else (entry_px - current_mid)
+
+                # --- "To The Moon" Sovereign Trailing Ratchet ---
+                # Ratchet 1: Breakeven Lock at +1.5 ATR (Guarantees Risk-Free Cushion)
+                if not scalper.active_stack.get("be_ratchet_hit", False) and gain_pts >= 1.5 * atr:
+                    scalper.active_stack["be_ratchet_hit"] = True
+                    new_sl = entry_px + 0.20 if direction == "BUY" else entry_px - 0.20
+                    scalper.active_stack["sl_price"] = new_sl
+                    logger.info("🛡️ 'TO THE MOON' BE RATCHET LOCKED: SL moved to BE+0.20 ($%.2f) at +%.2f pts", new_sl, gain_pts)
+
+                # Ratchet 2: Profit Lock at +2.5 ATR (TP1 Zone) -> Ratchet SL to +1.5 ATR
+                if not scalper.active_stack.get("tp1_ratchet_hit", False) and gain_pts >= 2.5 * atr:
+                    scalper.active_stack["tp1_ratchet_hit"] = True
+                    locked_sl = entry_px + (1.5 * atr) if direction == "BUY" else entry_px - (1.5 * atr)
+                    scalper.active_stack["sl_price"] = locked_sl
+                    logger.info("💰 'TO THE MOON' PROFIT LOCK: SL ratcheted to +1.5 ATR ($%.2f) at +%.2f pts", locked_sl, gain_pts)
+
+                # Check if price hit current active software Stop Loss
+                sl_hit = (direction == "BUY" and current_mid <= scalper.active_stack["sl_price"]) or \
+                         (direction == "SELL" and current_mid >= scalper.active_stack["sl_price"])
 
                 # Calculate tier-scaled risk stop and spike target
                 tier_mult = max(1.0, acc.balance / 100.0)
                 dynamic_risk_stop = max(MAX_RISK_STOP_USD, tier_mult * 15.0)
                 dynamic_spike_target = max(RAPID_SPIKE_TARGET_USD, tier_mult * 50.0)
 
-                # Check Exit Condition A: Risk Stop (-$15 or 15% tier loss)
-                if floating_pnl <= -dynamic_risk_stop:
-                    logger.warning("🚨 RISK STOP TRIGGERED: Floating PnL: -$%.2f <= -$%.2f", abs(floating_pnl), dynamic_risk_stop)
+                # Exit Condition A: Software Trailing SL or Fixed Risk Stop Hit
+                if sl_hit or floating_pnl <= -dynamic_risk_stop:
+                    is_trailing = scalper.active_stack.get("be_ratchet_hit", False)
+                    reason_label = "Trailing Profit Lock" if (is_trailing and floating_pnl > 0) else ("Trailing BE Hit" if is_trailing else "Risk Stop Hit")
+                    logger.warning("🛑 %s: Mid: $%.2f, SL: $%.2f, Floating PnL: $%.2f", reason_label, current_mid, scalper.active_stack["sl_price"], floating_pnl)
                     res = await gw.flatten_all_positions()
                     push_ntfy(
-                        title=f"🛑 Risk Stop Hit (-${abs(floating_pnl):.2f})",
-                        message=f"Closed position @ ${quote.mid:.2f}. New Balance: ${res.get('balance', acc.balance):.2f}",
-                        tags="warning,octagonal_sign",
-                        priority="urgent",
+                        title=f"🛑 {reason_label} (${floating_pnl:+.2f})",
+                        message=f"Strategy: {scalper.active_stack.get('strategy_type')}\nClosed @ ${current_mid:.2f}. New Balance: ${res.get('balance', acc.balance):.2f}",
+                        tags="warning,octagonal_sign" if floating_pnl < 0 else "moneybag,shield",
+                        priority="urgent" if floating_pnl < 0 else "default",
                     )
                     scalper.active_stack = None
 
-                # Check Exit Condition B: Rapid Profit Spike Harvest (+50% / $50 per tier)
-                elif floating_pnl >= dynamic_spike_target:
-                    logger.info("🚀 RAPID PROFIT SPIKE HARVESTED: Floating PnL: +$%.2f >= +$%.2f", floating_pnl, dynamic_spike_target)
+                # Exit Condition B: Macro Spike Harvest (+5.0 ATR or +50% tier target reached)
+                elif gain_pts >= 5.0 * atr or floating_pnl >= dynamic_spike_target:
+                    logger.info("🚀 'TO THE MOON' MACRO EXPANSION HARVESTED: PnL: +$%.2f | Points: +%.2f", floating_pnl, gain_pts)
                     res = await gw.flatten_all_positions()
                     push_ntfy(
-                        title=f"🏁 Profit Spike Harvested (+${floating_pnl:.2f})",
-                        message=f"Harvested spike @ ${quote.mid:.2f}.\nNew Balance: ${res.get('balance', acc.balance):.2f}\nProgressing to next tier!",
+                        title=f"🚀 TO THE MOON HARVEST (+${floating_pnl:.2f})",
+                        message=f"Strategy: {scalper.active_stack.get('strategy_type')}\nHarvested spike @ ${current_mid:.2f} (+{gain_pts:.2f} pts).\nNew Balance: ${res.get('balance', acc.balance):.2f} 🌕",
                         tags="tada,moneybag,rocket",
                         priority="high",
                     )
                     scalper.active_stack = None
 
-                # Check Exit Condition C: Laya In-Flight Momentum Exhaustion
+                # Exit Condition C: Laya In-Flight Momentum Exhaustion
                 else:
                     bars_in_trade = len([c for c in scalper.candles_1m if c["open_time"] / 1000.0 >= scalper.active_stack["open_time"]])
                     exhaustion = laya_oracle.evaluate_momentum_exhaustion(floating_pnl, quote.mid, scalper.active_stack["entry_price"], bars_in_trade)
@@ -494,20 +452,19 @@ async def run_live_scalper():
 
             # 3. Check for Strategy Entry if Flat (evaluated every ~250ms)
             elif tick_count % 5 == 0:
-                signal_res = scalper.evaluate_strategy()
-                if signal_res:
-                    direction, entry_px, sl_px, reasoning = signal_res
+                sig: Optional[ApexSignal] = scalper.evaluate_strategy()
+                if sig:
                     acc = await gw.get_account_snapshot(force_fresh=True)
                     base_lot_size = scalper.compute_lot_size(acc.balance)
 
                     # --- LAYA SYSTEM 1 DECISION & ICT RAG VALIDATION ---
                     market_state = {
-                        "direction": direction,
-                        "entry_price": entry_px,
-                        "sl_price": sl_px,
-                        "wick_ratio": scalper.last_wick_ratio,
-                        "session": scalper.get_current_session_label(),
-                        "trend_aligned": scalper.last_trend_aligned,
+                        "direction": sig.direction,
+                        "entry_price": sig.entry_price,
+                        "sl_price": sig.sl_price,
+                        "wick_ratio": getattr(scalper, "last_wick_ratio", 0.65),
+                        "session": sig.strategy_type,
+                        "trend_aligned": True,
                     }
                     laya_decision = laya_oracle.evaluate_setup_sync(market_state)
 
@@ -515,7 +472,7 @@ async def run_live_scalper():
                         logger.warning("🛡️ LAYA VETOED TRAP SETUP: %s (Trap Prob: %.1f%%)", laya_decision.reasoning, laya_decision.trap_probability * 100)
                         push_ntfy(
                             title="🛡️ Laya Vetoed Trap Setup",
-                            message=f"Vetoed {direction} @ ${entry_px:.2f} | Trap Risk: {laya_decision.trap_probability*100:.1f}%\nReason: {laya_decision.reasoning}",
+                            message=f"Vetoed {sig.direction} ({sig.strategy_type}) @ ${sig.entry_price:.2f} | Trap Risk: {laya_decision.trap_probability*100:.1f}%\nReason: {laya_decision.reasoning}",
                             tags="shield,no_entry_sign",
                             priority="default",
                         )
@@ -523,26 +480,33 @@ async def run_live_scalper():
                         # Apply dynamic compounding multiplier (1.25x - 1.50x on A+ Confluence)
                         lot_size = round(base_lot_size * max(1.0, laya_decision.compounding_multiplier), 2)
                         boost_tag = f" (Laya {laya_decision.setup_grade} {laya_decision.compounding_multiplier:.2f}x Boost)" if laya_decision.compounding_multiplier > 1.0 else ""
-                        logger.info("🎯 STRATEGY SIGNAL: %s @ $%.2f | SL: $%.2f | Lots: %.2f%s | Confluence: %.1f/10", direction, entry_px, sl_px, lot_size, boost_tag, laya_decision.confluence_score)
+                        logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f | TP1: $%.2f | Lots: %.2f%s | Confluence: %.1f/10",
+                                    sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, sig.tp1_price, lot_size, boost_tag, laya_decision.confluence_score)
 
-                        order_res = await gw.open_market_order(direction, lot_size, sl_price=sl_px)
+                        order_res = await gw.open_market_order(sig.direction, lot_size, sl_price=sig.sl_price)
                         if order_res.get("success"):
                             scalper.last_latency_ms = order_res.get("latency_ms", 0.0)
                             scalper.active_stack = {
-                                "direction": direction,
+                                "direction": sig.direction,
                                 "volume": lot_size,
-                                "entry_price": entry_px,
-                                "sl_price": sl_px,
+                                "entry_price": sig.entry_price,
+                                "sl_price": sig.sl_price,
+                                "tp1_price": sig.tp1_price,
+                                "spike_target": sig.spike_target,
+                                "atr_1m": sig.atr_1m,
+                                "strategy_type": sig.strategy_type,
                                 "open_time": time.time(),
                                 "floating_pnl": 0.0,
                                 "peak_pnl": 0.0,
+                                "be_ratchet_hit": False,
+                                "tp1_ratchet_hit": False,
                                 "laya_grade": laya_decision.setup_grade,
-                                "ict_concepts": laya_decision.matched_ict_concepts,
+                                "ict_concepts": sig.ict_concepts,
                             }
                             push_ntfy(
-                                title=f"⚡ Broker Order Executed: {direction} {lot_size} Lots{boost_tag}",
-                                message=f"Entry: ${entry_px:.2f} | SL: ${sl_px:.2f} | Latency: {scalper.last_latency_ms:.1f}ms\nICT: {', '.join(laya_decision.matched_ict_concepts[:2])}\n{laya_decision.reasoning}",
-                                tags="zap,dart",
+                                title=f"🌕 TO THE MOON EXECUTED: {sig.direction} {lot_size} Lots [{sig.strategy_type}]",
+                                message=f"Entry: ${sig.entry_price:.2f} | SL: ${sig.sl_price:.2f} | TP1: ${sig.tp1_price:.2f}\nLatency: {scalper.last_latency_ms:.1f}ms\nICT: {', '.join(sig.ict_concepts)}\n{sig.reasoning}",
+                                tags="zap,rocket,dart",
                                 priority="high",
                             )
 
