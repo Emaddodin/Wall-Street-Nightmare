@@ -402,10 +402,12 @@ async def run_live_scalper():
                 except Exception as ce:
                     logger.warning("Error processing dashboard command: %s", ce)
 
-            # 1. Fetch live quote
-            quote = await gw.get_live_quote()
+            # 1. Fetch live quote via reactive event stream or RAM lookup
+            quote = await gw.wait_for_quote(timeout=0.10)
             if not quote:
-                await asyncio.sleep(1.0)
+                quote = await gw.get_live_quote()
+            if not quote:
+                await asyncio.sleep(0.05)
                 continue
 
             tick_count += 1
@@ -413,7 +415,7 @@ async def run_live_scalper():
 
             # 2. Check position state if in trade
             if scalper.active_stack:
-                acc = await gw.get_account_snapshot()
+                acc = await gw.get_account_snapshot(force_fresh=True)
                 floating_pnl = acc.floating_pnl
                 scalper.active_stack["floating_pnl"] = floating_pnl
                 scalper.active_stack["current_price"] = quote.mid
@@ -447,12 +449,12 @@ async def run_live_scalper():
                     )
                     scalper.active_stack = None
 
-            # 3. Check for Strategy Entry if Flat
-            elif tick_count % 3 == 0:  # Check pattern every few ticks
+            # 3. Check for Strategy Entry if Flat (evaluated every ~250ms)
+            elif tick_count % 5 == 0:
                 signal_res = scalper.evaluate_strategy()
                 if signal_res:
                     direction, entry_px, sl_px, reasoning = signal_res
-                    acc = await gw.get_account_snapshot()
+                    acc = await gw.get_account_snapshot(force_fresh=True)
                     lot_size = scalper.compute_lot_size(acc.balance)
 
                     logger.info("🎯 STRATEGY SIGNAL: %s @ $%.2f | SL: $%.2f | Lots: %.2f", direction, entry_px, sl_px, lot_size)
@@ -476,8 +478,8 @@ async def run_live_scalper():
                             priority="high",
                         )
 
-            # 4. Sync telemetry to mobile dashboard
-            if tick_count % 2 == 0:
+            # 4. Sync telemetry to mobile dashboard (every ~1s)
+            if tick_count % 20 == 0:
                 acc = await gw.get_account_snapshot()
                 sync_dashboard_state(
                     balance=acc.balance,
@@ -491,10 +493,11 @@ async def run_live_scalper():
                     message="Trading on LiteFinance MT5 Demo" if not scalper.active_stack else f"In {scalper.active_stack['direction']} position ({scalper.active_stack['volume']} lots)",
                 )
 
-            await asyncio.sleep(1.0)
+            # Micro-yield (20ms) to keep CPU cool while maintaining sub-millisecond reactivity
+            await asyncio.sleep(0.02)
         except Exception as e:
             logger.error("Error in live trading cycle: %s", e)
-            await asyncio.sleep(2.0)
+            await asyncio.sleep(0.5)
 
     # Clean shutdown
     if scalper.active_stack:

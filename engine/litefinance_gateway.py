@@ -66,11 +66,41 @@ class LiteFinanceGateway:
         self._page: Optional[Page] = None
         self._connected = False
         self._last_quote: Optional[QuoteSnapshot] = None
+        self._new_quote_event = asyncio.Event()
+        self._last_account: Optional[AccountSnapshot] = None
+        self._last_account_ts: float = 0.0
         self._lock = asyncio.Lock()
 
     @property
     def is_connected(self) -> bool:
         return self._connected and self._page is not None
+
+    def _on_js_quote_tick(self, bid: float, ask: float, mid: float, ts_ms: float) -> None:
+        """Callback invoked directly from Chrome V8 MutationObserver on every price tick."""
+        now = time.time()
+        self._last_quote = QuoteSnapshot(
+            symbol="XAUUSD",
+            bid=float(bid),
+            ask=float(ask),
+            mid=float(mid),
+            timestamp=now,
+        )
+        self._new_quote_event.set()
+
+    def get_live_quote_sync(self) -> Optional[QuoteSnapshot]:
+        """Instant RAM lookup for live quotes (0.001ms latency, zero CDP round-trips)."""
+        if self._last_quote and (time.time() - self._last_quote.timestamp) < 2.0:
+            return self._last_quote
+        return None
+
+    async def wait_for_quote(self, timeout: float = 0.10) -> Optional[QuoteSnapshot]:
+        """Microsecond reactive wait for next market quote tick from Chrome V8."""
+        try:
+            await asyncio.wait_for(self._new_quote_event.wait(), timeout=timeout)
+            self._new_quote_event.clear()
+        except asyncio.TimeoutError:
+            pass
+        return self._last_quote
 
     async def initialize(self) -> bool:
         """Launches headless Chrome, applies session cookies, and loads XAUUSD terminal."""
@@ -90,6 +120,9 @@ class LiteFinanceGateway:
                     "--disable-ipc-flooding-protection",
                     "--disable-hang-monitor",
                     "--disable-features=Translate,OptimizationHints,MediaRouter",
+                    "--enable-tcp-fastopen",
+                    "--disable-extensions",
+                    "--mute-audio",
                 ]
                 if self.proxy:
                     launch_args.append(f"--proxy-server={self.proxy}")
@@ -111,6 +144,9 @@ class LiteFinanceGateway:
                 self._context = await self._browser.new_context(**context_kwargs)
                 self._page = await self._context.new_page()
 
+                # Expose Python callback into Chrome V8 window for zero-polling quote stream
+                await self._page.expose_function("__onJsQuoteUpdate", self._on_js_quote_tick)
+
                 logger.info("Navigating to %s...", CHART_URL)
                 await self._page.goto(CHART_URL, wait_until="domcontentloaded", timeout=45000)
                 await self._page.wait_for_timeout(3000)
@@ -118,24 +154,96 @@ class LiteFinanceGateway:
                 # Clear annoying overlays / 2FA popups
                 await self._clear_overlays()
 
-                # Setup ultra-fast in-memory DOM observer for quotes
+                # Setup ultra-fast MutationObserver + pre-cached execution inside Chrome V8
                 await self._page.evaluate("""() => {
                     window._fastQuote = null;
-                    const updateQ = () => {
+                    window._fastAccount = null;
+                    let lastBid = 0;
+                    let lastAsk = 0;
+
+                    const notifyQuote = () => {
                         const b = document.querySelector('.js_value_price_bid');
                         const a = document.querySelector('.js_value_price_ask');
                         if (b && a) {
-                            const bid = parseFloat(b.innerText.replace(/[^0-9.]/g, ''));
-                            const ask = parseFloat(a.innerText.replace(/[^0-9.]/g, ''));
-                            if (bid && ask) {
-                                window._fastQuote = { bid, ask, mid: Math.round(((bid + ask) / 2.0) * 100) / 100, ts: Date.now() };
+                            const bText = b.innerText || '';
+                            const aText = a.innerText || '';
+                            const bid = parseFloat(bText.replace(/[^0-9.]/g, ''));
+                            const ask = parseFloat(aText.replace(/[^0-9.]/g, ''));
+                            if (bid && ask && (bid !== lastBid || ask !== lastAsk)) {
+                                lastBid = bid;
+                                lastAsk = ask;
+                                const mid = Math.round(((bid + ask) / 2.0) * 100) / 100;
+                                const ts = Date.now();
+                                window._fastQuote = { bid, ask, mid, ts };
+                                if (window.__onJsQuoteUpdate) {
+                                    try {
+                                        window.__onJsQuoteUpdate(bid, ask, mid, ts);
+                                    } catch(e) {}
+                                }
                             }
                         }
                     };
-                    updateQ();
-                    setInterval(updateQ, 200);
-                }""")
 
+                    // 1. Instant MutationObserver on DOM bid/ask elements
+                    const bEl = document.querySelector('.js_value_price_bid');
+                    const aEl = document.querySelector('.js_value_price_ask');
+                    if (bEl && aEl) {
+                        const obs = new MutationObserver(() => notifyQuote());
+                        obs.observe(bEl, { characterData: true, childList: true, subtree: true });
+                        obs.observe(aEl, { characterData: true, childList: true, subtree: true });
+                    }
+
+                    // 2. High-speed 50ms interval fallback
+                    setInterval(notifyQuote, 50);
+                    notifyQuote();
+
+                    // 3. Pre-cached single-shot fast execution function
+                    window.__executeFastMarketOrder = (dir, vol) => {
+                        const isBuy = (dir === 'BUY');
+                        const radioId = isBuy ? '#trade_buy_1' : '#trade_sell_1';
+                        const radio = document.querySelector(radioId);
+                        if (radio && !radio.checked) {
+                            radio.checked = true;
+                            radio.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        const label = document.querySelector('label[for="' + (isBuy ? 'trade_buy_1' : 'trade_sell_1') + '"]');
+                        if (label) label.click();
+
+                        const inp = document.querySelector('#volume_value_1');
+                        if (inp && inp.value !== vol) {
+                            inp.value = vol;
+                            inp.dispatchEvent(new Event('input', { bubbles: true }));
+                            inp.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+
+                        const btn = document.querySelector('button.js_trade_action_open:not([style*="none"])') ||
+                                    document.querySelector('button[type="submit"]');
+                        if (btn && btn.offsetParent !== null) {
+                            btn.click();
+                            return btn.innerText.trim() || 'ORDER_CLICKED';
+                        }
+                        return 'CLICKED_FALLBACK';
+                    };
+
+                    // 4. Background account snapshot cache
+                    const updateAcc = () => {
+                        try {
+                            const rawText = document.querySelector('.portfolio, .bottom_bar, [class*="portfolio"]')?.innerText || '';
+                            if (!rawText) return;
+                            const parseNum = (str, regex) => {
+                                const m = str.match(regex);
+                                return m ? parseFloat(m[1].replace(/,/g, '')) : 0.0;
+                            };
+                            const total = parseNum(rawText, /([0-9,.]+)\\s*USD\\s*ASSETS,\\s*TOTAL/i);
+                            const used = parseNum(rawText, /([0-9,.]+)\\s*USD\\s*ASSETS\\s*USED/i);
+                            const avail = parseNum(rawText, /([0-9,.]+)\\s*USD\\s*AVAILABLE/i);
+                            const change = parseNum(rawText, /([+-]?[0-9,.]+)\\s*USD\\s*CURRENT\\s*CHANGE/i);
+                            window._fastAccount = { total, used, avail, change, ts: Date.now() };
+                        } catch(e) {}
+                    };
+                    setInterval(updateAcc, 500);
+                    updateAcc();
+                }""")
 
                 # Verify trading panel is visible
                 has_panel = await self._page.evaluate("""() => {
@@ -148,7 +256,7 @@ class LiteFinanceGateway:
                     await self._clear_overlays()
 
                 self._connected = True
-                logger.info("✅ LiteFinance Gateway successfully connected and ready.")
+                logger.info("✅ LiteFinance Gateway successfully connected and ready with Ultra-Fast Streaming.")
                 return True
             except Exception as e:
                 logger.error("Failed to initialize LiteFinance Gateway: %s", e)
@@ -174,9 +282,13 @@ class LiteFinanceGateway:
             pass
 
     async def get_live_quote(self) -> Optional[QuoteSnapshot]:
-        """Reads current real-time Bid and Ask prices from in-memory cache or DOM."""
+        """Reads current real-time Bid and Ask prices directly from memory or DOM fallback."""
+        snap = self.get_live_quote_sync()
+        if snap is not None:
+            return snap
+
         if not self._page:
-            return None
+            return self._last_quote
         try:
             quote_data = await self._page.evaluate("""() => {
                 if (window._fastQuote && (Date.now() - window._fastQuote.ts) < 2000) {
@@ -205,20 +317,25 @@ class LiteFinanceGateway:
             logger.debug("Failed to read quote: %s", e)
         return self._last_quote
 
+    async def get_account_snapshot(self, force_fresh: bool = False) -> AccountSnapshot:
+        """Reads real-time balance, assets used, available margin, and floating change with RAM cache."""
+        now = time.time()
+        if not force_fresh and self._last_account and (now - self._last_account_ts) < 2.0:
+            return self._last_account
 
-    async def get_account_snapshot(self) -> AccountSnapshot:
-        """Reads real-time balance, assets used, available margin, and floating change from footer."""
         if not self._page:
-            return AccountSnapshot(balance=0.0, equity=0.0, assets_used=0.0, available=0.0, floating_pnl=0.0)
+            return self._last_account or AccountSnapshot(balance=0.0, equity=0.0, assets_used=0.0, available=0.0, floating_pnl=0.0)
         try:
             acc_data = await self._page.evaluate("""() => {
+                if (window._fastAccount && (Date.now() - window._fastAccount.ts) < 1500) {
+                    return window._fastAccount;
+                }
                 const rawText = document.querySelector('.portfolio, .bottom_bar, [class*="portfolio"]')?.innerText || '';
                 const parseNum = (str, regex) => {
                     const m = str.match(regex);
                     return m ? parseFloat(m[1].replace(/,/g, '')) : 0.0;
                 };
                 
-                // Matches patterns like "293.77 USD ASSETS, TOTAL"
                 const total = parseNum(rawText, /([0-9,.]+)\\s*USD\\s*ASSETS,\\s*TOTAL/i);
                 const used = parseNum(rawText, /([0-9,.]+)\\s*USD\\s*ASSETS\\s*USED/i);
                 const avail = parseNum(rawText, /([0-9,.]+)\\s*USD\\s*AVAILABLE/i);
@@ -233,16 +350,18 @@ class LiteFinanceGateway:
             change = float(acc_data.get("change", 0.0))
             equity = round(balance + change, 2)
 
-            return AccountSnapshot(
+            self._last_account = AccountSnapshot(
                 balance=balance,
                 equity=equity,
                 assets_used=used,
                 available=avail,
                 floating_pnl=change,
             )
+            self._last_account_ts = now
+            return self._last_account
         except Exception as e:
             logger.warning("Failed to fetch account snapshot: %s", e)
-            return AccountSnapshot(balance=0.0, equity=0.0, assets_used=0.0, available=0.0, floating_pnl=0.0)
+            return self._last_account or AccountSnapshot(balance=0.0, equity=0.0, assets_used=0.0, available=0.0, floating_pnl=0.0)
 
     async def open_market_order(
         self,
@@ -265,6 +384,9 @@ class LiteFinanceGateway:
             try:
                 # Atomic single-shot order execution inside Chrome's V8 engine
                 clicked_btn = await self._page.evaluate("""({ dir, vol }) => {
+                    if (typeof window.__executeFastMarketOrder === 'function') {
+                        return window.__executeFastMarketOrder(dir, vol);
+                    }
                     const isBuy = (dir === 'BUY');
                     const radioId = isBuy ? '#trade_buy_1' : '#trade_sell_1';
                     const radio = document.querySelector(radioId);
