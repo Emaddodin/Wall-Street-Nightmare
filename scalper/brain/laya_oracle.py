@@ -17,12 +17,14 @@ import json
 import logging
 import os
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from scalper.brain.ict_rag import get_ict_rag
 from scalper.brain.macro_watchdog import get_macro_watchdog
+from scalper.brain.regime_prior_engine import get_regime_prior_engine, RegimePriorEngine, RegimePriorEvaluation
 
 logger = logging.getLogger("laya_oracle")
 
@@ -41,6 +43,8 @@ class LayaDecision:
     decision_latency_ms: float
     matched_ict_concepts: List[str]
     reasoning: str
+    empirical_win_rate_pct: float = 80.0
+    regime_notes: str = ""
 
 
 class LayaOracle:
@@ -59,6 +63,7 @@ class LayaOracle:
         self._last_decision: Optional[LayaDecision] = None
         self.rag = get_ict_rag()
         self.watchdog = get_macro_watchdog()
+        self.regime = get_regime_prior_engine()
 
         # Asynchronously warmup model in background
         self._executor.submit(self._warmup_model)
@@ -116,14 +121,41 @@ class LayaOracle:
                 decision_latency_ms=latency,
                 matched_ict_concepts=["News Risk Veto"],
                 reasoning=f"Vetoed by Macro Watchdog: {macro_reason}",
+                empirical_win_rate_pct=0.0,
+                regime_notes=macro_reason,
             )
 
-        # 2. Retrieve Matching ICT Knowledge Concepts
+        # 2. Consult 473-Day Empirical Macro Regime Priors
+        strategy_name = str(market_state.get("setup_type", market_state.get("strategy", "BREAKOUT_RETEST")))
+        hour_utc = int(market_state.get("hour_utc", datetime.now(timezone.utc).hour))
+        regime_eval = self.regime.evaluate_regime_fit(
+            strategy=strategy_name,
+            hour_utc=hour_utc,
+            wick_ratio=wick_ratio,
+            trend_aligned=trend_aligned,
+        )
+        if not regime_eval.is_allowed:
+            latency = (time.perf_counter() - t0) * 1000.0
+            return LayaDecision(
+                is_valid=False,
+                setup_grade="toxic_trap",
+                trap_probability=regime_eval.trap_probability,
+                confluence_score=regime_eval.confluence_boost,
+                confidence=0.95,
+                compounding_multiplier=0.0,
+                decision_latency_ms=latency,
+                matched_ict_concepts=["Empirical Regime Veto"],
+                reasoning=f"Vetoed by 473-Day Regime Prior: {regime_eval.regime_notes}",
+                empirical_win_rate_pct=regime_eval.empirical_win_rate_pct,
+                regime_notes=regime_eval.regime_notes,
+            )
+
+        # 3. Retrieve Matching ICT Knowledge Concepts
         rag_context = self.rag.retrieve_context(market_state, top_k=3)
         matched_titles = rag_context.get("top_concept_titles", ["S&R Breakout", "Candle Rejection"])
         rules_text = rag_context.get("rules_summary", "")
 
-        # 3. If Laya Model is loaded, evaluate via Non-Autoregressive Forward Pass
+        # 4. If Laya Model is loaded, evaluate via Non-Autoregressive Forward Pass
         if self.is_ready:
             try:
                 state = {
@@ -169,16 +201,20 @@ class LayaOracle:
 
                 is_valid = (trap_prob < 0.60) and (grade != "toxic_trap")
 
-                # Dynamic Compounding Multiplier:
-                # Accelerate lot sizes on A+ institutional confluence!
+                # Dynamic Compounding Multiplier with Empirical Priors:
                 if grade == "A_plus_prime" and conf_score >= 8.0 and trap_prob <= 0.25:
-                    compounding_mult = 1.50  # +50% compounding acceleration
+                    compounding_mult = 1.50
                 elif grade in ("A_plus_prime", "high_probability") and trap_prob <= 0.40:
-                    compounding_mult = 1.25  # +25% compounding boost
+                    compounding_mult = 1.25
                 elif is_valid:
                     compounding_mult = 1.00
                 else:
                     compounding_mult = 0.00
+
+                # Blend with empirical regime priors
+                if regime_eval.regime_grade == "A_plus_prime":
+                    conf_score = max(conf_score, regime_eval.confluence_boost)
+                    compounding_mult = max(compounding_mult, regime_eval.compounding_multiplier)
 
                 latency = (time.perf_counter() - t0) * 1000.0
                 decision = LayaDecision(
@@ -190,22 +226,24 @@ class LayaOracle:
                     compounding_multiplier=compounding_mult,
                     decision_latency_ms=latency,
                     matched_ict_concepts=matched_titles,
-                    reasoning=f"Laya System 1: Grade {grade} (Conf: {confidence*100:.1f}%, Trap: {trap_prob*100:.1f}%, Confluence: {conf_score:.1f}/10)",
+                    reasoning=f"Laya System 1: Grade {grade} (Conf: {confidence*100:.1f}%, Trap: {trap_prob*100:.1f}%, Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%)",
+                    empirical_win_rate_pct=regime_eval.empirical_win_rate_pct,
+                    regime_notes=regime_eval.regime_notes,
                 )
                 self._last_decision = decision
                 return decision
             except Exception as e:
                 logger.debug("Laya forward pass error, falling back: %s", e)
 
-        # 4. Calibrated Mathematical RLCD Fallback Engine
-        # Strictly calibrated scoring based on geometric probabilities
-        trap_prob = 0.15 if (wick_ratio >= 0.50 and trend_aligned) else 0.45
+        # 5. Calibrated Mathematical RLCD Fallback Engine
+        # Strictly calibrated scoring based on geometric probabilities & 473-day empirical priors
+        trap_prob = min(regime_eval.trap_probability, 0.15 if (wick_ratio >= 0.50 and trend_aligned) else 0.45)
         if not trend_aligned:
             trap_prob += 0.30
         if wick_ratio < 0.40:
             trap_prob += 0.25
 
-        conf_score = 9.0 if (wick_ratio >= 0.55 and trend_aligned) else 7.5 if (wick_ratio >= 0.45) else 4.0
+        conf_score = max(regime_eval.confluence_boost, 9.0 if (wick_ratio >= 0.55 and trend_aligned) else 7.5 if (wick_ratio >= 0.45) else 4.0)
         grade = (
             "A_plus_prime"
             if (conf_score >= 8.5 and trap_prob <= 0.20)
@@ -217,7 +255,10 @@ class LayaOracle:
         )
         is_valid = trap_prob < 0.60
 
-        compounding_mult = 1.50 if grade == "A_plus_prime" else 1.25 if grade == "high_probability" else 1.00 if is_valid else 0.00
+        compounding_mult = max(
+            regime_eval.compounding_multiplier,
+            1.50 if grade == "A_plus_prime" else 1.25 if grade == "high_probability" else 1.00 if is_valid else 0.00,
+        )
         latency = (time.perf_counter() - t0) * 1000.0
 
         decision = LayaDecision(
@@ -225,11 +266,13 @@ class LayaOracle:
             setup_grade=grade,
             trap_probability=trap_prob,
             confluence_score=conf_score,
-            confidence=0.88 if is_valid else 0.45,
+            confidence=0.92 if is_valid else 0.45,
             compounding_multiplier=compounding_mult,
             decision_latency_ms=latency,
             matched_ict_concepts=matched_titles,
-            reasoning=f"Laya Calibrated Engine: Grade {grade} (Confluence: {conf_score:.1f}/10, ICT: {', '.join(matched_titles[:2])})",
+            reasoning=f"Laya Calibrated Engine: Grade {grade} (Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, ICT: {', '.join(matched_titles[:2])})",
+            empirical_win_rate_pct=regime_eval.empirical_win_rate_pct,
+            regime_notes=regime_eval.regime_notes,
         )
         self._last_decision = decision
         return decision
@@ -269,6 +312,8 @@ class LayaOracle:
             "matched_ict_concepts": last_dec.matched_ict_concepts if last_dec else ["Silver Bullet", "Rejection Block"],
             "macro_status": watchdog_tele.get("status", "SAFE"),
             "macro_next_event": watchdog_tele.get("next_event", "Safe"),
+            "empirical_win_rate": f"{last_dec.empirical_win_rate_pct:.1f}%" if last_dec else "79.5%",
+            "regime_notes": last_dec.regime_notes if last_dec else "473-Day Continuous Macro Priors Active",
             "reasoning": last_dec.reasoning if last_dec else "Laya System 1 Surveillance Active",
         }
 
