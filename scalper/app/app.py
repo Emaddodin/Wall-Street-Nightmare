@@ -915,10 +915,16 @@ class HFTHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def do_HEAD(self):
-        self._serve_get_or_head(head_only=True)
+        try:
+            self._serve_get_or_head(head_only=True)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_GET(self):
-        self._serve_get_or_head(head_only=False)
+        try:
+            self._serve_get_or_head(head_only=False)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_OPTIONS(self):
         self.send_response(200)
