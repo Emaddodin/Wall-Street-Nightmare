@@ -218,13 +218,17 @@ class LiteFinanceGateway:
                             inp.dispatchEvent(new Event('change', { bubbles: true }));
                         }
 
-                        const btn = document.querySelector('button.js_trade_action_open:not([style*="none"])') ||
-                                    document.querySelector('button[type="submit"]');
-                        if (btn && btn.offsetParent !== null) {
-                            btn.click();
-                            return btn.innerText.trim() || 'ORDER_CLICKED';
+                        const btnSelector = isBuy ? 'button.btn_green.js_trade_action_open' : 'button.btn_red.js_trade_action_open';
+                        let btn = document.querySelector(btnSelector);
+                        if (!btn || btn.getBoundingClientRect().width === 0) {
+                            const allBtns = Array.from(document.querySelectorAll('button.js_trade_action_open, button[type="submit"]'));
+                            btn = allBtns.find(b => b.getBoundingClientRect().width > 0 && ((isBuy && (b.innerText || '').toUpperCase().includes('BUY')) || (!isBuy && (b.innerText || '').toUpperCase().includes('SELL')))) || allBtns.find(b => b.getBoundingClientRect().width > 0);
                         }
-                        return 'CLICKED_FALLBACK';
+                        if (btn && btn.getBoundingClientRect().width > 0) {
+                            btn.click();
+                            return { success: true, text: btn.innerText.trim() || (isBuy ? 'BUY' : 'SELL') };
+                        }
+                        return { success: false, error: 'NO_VISIBLE_ORDER_BUTTON' };
                     };
 
                     // 4. Background account snapshot cache
@@ -394,14 +398,14 @@ class LiteFinanceGateway:
             vol_str = f"{volume:.2f}"
             try:
                 # Atomic single-shot order execution inside Chrome's V8 engine
-                clicked_btn = await self._page.evaluate("""({ dir, vol }) => {
+                res = await self._page.evaluate("""({ dir, vol }) => {
                     if (typeof window.__executeFastMarketOrder === 'function') {
                         return window.__executeFastMarketOrder(dir, vol);
                     }
                     const isBuy = (dir === 'BUY');
                     const radioId = isBuy ? '#trade_buy_1' : '#trade_sell_1';
                     const radio = document.querySelector(radioId);
-                    if (radio) {
+                    if (radio && !radio.checked) {
                         radio.checked = true;
                         radio.dispatchEvent(new Event('change', { bubbles: true }));
                     }
@@ -416,16 +420,27 @@ class LiteFinanceGateway:
                     }
 
                     // Click order dispatch button
-                    const btn = document.querySelector('button.js_trade_action_open:not([style*="none"])') ||
-                                document.querySelector('button[type="submit"]');
-                    if (btn && btn.offsetParent !== null) {
-                        btn.click();
-                        return btn.innerText.trim();
+                    const btnSelector = isBuy ? 'button.btn_green.js_trade_action_open' : 'button.btn_red.js_trade_action_open';
+                    let btn = document.querySelector(btnSelector);
+                    if (!btn || btn.getBoundingClientRect().width === 0) {
+                        const allBtns = Array.from(document.querySelectorAll('button.js_trade_action_open, button[type="submit"]'));
+                        btn = allBtns.find(b => b.getBoundingClientRect().width > 0 && ((isBuy && (b.innerText || '').toUpperCase().includes('BUY')) || (!isBuy && (b.innerText || '').toUpperCase().includes('SELL')))) || allBtns.find(b => b.getBoundingClientRect().width > 0);
                     }
-                    return 'CLICKED_FALLBACK';
+                    if (btn && btn.getBoundingClientRect().width > 0) {
+                        btn.click();
+                        return { success: true, text: btn.innerText.trim() || (isBuy ? 'BUY' : 'SELL') };
+                    }
+                    return { success: false, error: 'NO_VISIBLE_ORDER_BUTTON' };
                 }""", {"dir": direction, "vol": vol_str})
 
                 latency_ms = (time.perf_counter() - t0) * 1000.0
+
+                if not isinstance(res, dict) or not res.get("success"):
+                    err_msg = res.get("error", "Button dispatch failed") if isinstance(res, dict) else str(res)
+                    logger.error("❌ BROKER ORDER DISPATCH FAILED: %s", err_msg)
+                    return {"success": False, "error": err_msg}
+
+                clicked_btn = res.get("text", "ORDER_CLICKED")
                 logger.info(
                     "⚡ ULTRA-FAST BROKER ORDER SENT: %s %.2f lots | Dispatch Latency: %.2fms | Button: %s",
                     direction, volume, latency_ms, clicked_btn
@@ -444,8 +459,8 @@ class LiteFinanceGateway:
 
     async def flatten_all_positions(self) -> Dict[str, Any]:
         """
-        Emergency / Profit spike flatten: atomic single-shot execution across all open tickets.
-        Zero sleeps, instant closure.
+        Emergency / Profit spike flatten: atomic execution across all open tickets.
+        Directly targets .js_trade_action_close and auto-opens portfolio drawer if needed.
         """
         async with self._lock:
             if not self._page:
@@ -453,42 +468,58 @@ class LiteFinanceGateway:
 
             t0 = time.perf_counter()
             try:
-                # Atomic open portfolio + click close on all positions + auto-confirm
+                # 1. Close any positions whose close button is already visible
                 closed_count = await self._page.evaluate("""() => {
-                    // 1. Ensure portfolio is open
-                    const p = Array.from(document.querySelectorAll('a, button, span')).find(el => el.innerText && el.innerText.trim() === 'PORTFOLIO');
-                    if (p) p.click();
-
-                    // 2. Click close on all positions immediately
-                    let count = 0;
-                    const closeBtns = Array.from(document.querySelectorAll('.btn_close, [class*="close_trade"], button.close, [data-action*="close"], table .icon_cross'));
+                    const closeBtns = Array.from(document.querySelectorAll('.js_trade_action_close, a.btn_red.js_trade_action_close, .btn_close, [class*="close_trade"]')).filter(b => b.getBoundingClientRect().width > 0);
+                    closedCount = 0;
                     closeBtns.forEach(b => {
-                        const target = b.closest('a, button') || b;
-                        if (target && target.offsetParent !== null) {
-                            target.click();
-                            count++;
-                        }
+                        b.click();
+                        closedCount++;
                     });
+                    return closedCount;
+                }""")
 
-                    // 3. Click any confirmation modal immediately
-                    setTimeout(() => {
-                        const confirmBtns = Array.from(document.querySelectorAll('button, .btn')).filter(x => {
-                            const t = x.innerText ? x.innerText.trim() : '';
-                            return (t === 'Close' || t === 'Yes' || t === 'Confirm') && x.offsetParent !== null;
+                # 2. If no buttons were immediately visible, ensure portfolio drawer is open
+                if closed_count == 0:
+                    await self._page.evaluate("""() => {
+                        const triggers = Array.from(document.querySelectorAll('a, button, span, div')).filter(el => {
+                            const txt = (el.innerText || '').trim();
+                            return (txt === 'PORTFOLIO' || txt === '^ PORTFOLIO' || txt.includes('PORTFOLIO')) && el.getBoundingClientRect().width > 0;
                         });
-                        confirmBtns.forEach(cb => cb.click());
-                    }, 50);
+                        if (triggers.length > 0) triggers[0].click();
+                    }""")
+                    await self._page.wait_for_timeout(350)
 
-                    return count;
+                    # Now click all close buttons in open drawer
+                    closed_count = await self._page.evaluate("""() => {
+                        const closeBtns = Array.from(document.querySelectorAll('.js_trade_action_close, a.btn_red.js_trade_action_close, .btn_close, [class*="close_trade"]')).filter(b => b.getBoundingClientRect().width > 0);
+                        let c = 0;
+                        closeBtns.forEach(b => {
+                            b.click();
+                            c++;
+                        });
+                        return c;
+                    }""")
+
+                # 3. Confirm modal if any
+                await self._page.evaluate("""() => {
+                    const confirmBtns = Array.from(document.querySelectorAll('button, a.btn')).filter(x => {
+                        const t = (x.innerText || '').trim();
+                        return (t === 'Close' || t === 'Yes' || t === 'Confirm' || t === 'OK') && x.getBoundingClientRect().width > 0;
+                    });
+                    confirmBtns.forEach(cb => cb.click());
                 }""")
 
                 latency_ms = (time.perf_counter() - t0) * 1000.0
-                logger.info("⚡ ULTRA-FAST BROKER FLATTEN: Closed %s tickets | Latency: %.2fms", closed_count, latency_ms)
+                acc = await self.get_account_snapshot(force_fresh=True)
+                logger.info("⚡ ULTRA-FAST BROKER FLATTEN: Closed %s tickets | Latency: %.2fms | Balance: $%.2f", closed_count, latency_ms, acc.balance)
 
                 return {
                     "success": True,
                     "closed_count": closed_count,
                     "latency_ms": latency_ms,
+                    "balance": acc.balance,
+                    "equity": acc.equity,
                 }
             except Exception as e:
                 logger.error("Error flattening broker positions: %s", e)
