@@ -51,6 +51,7 @@ from replay_data import (
     load_wednesday_candles,
 )
 from engine.killzone import KillZoneGuard, XAUUSD_GOLD_KILLZONES
+from bark_integration import send_alert, push_bark, get_bark_keys
 _kz_guard = KillZoneGuard(XAUUSD_GOLD_KILLZONES)
 
 # -----------------------------------------------------------------------------
@@ -70,6 +71,78 @@ DATA_DIR = ROOT_DIR / "data"
 STATE_FILE_APP = DATA_DIR / "state" / "hft.json"
 STATE_FILE_RELAPSE = DATA_DIR / "relapse_scalper_state.json"
 LLAMA_COMPLETION_URL = os.getenv("LLAMA_SERVER_URL", "http://127.0.0.1:8080/completion")
+VAULT_FILE = DATA_DIR / "stratton_vault.json"
+
+
+def get_vault_state() -> Dict[str, Any]:
+    default_state = {
+        "seed_capital": 100.0,
+        "vault_bankroll": 100.0,
+        "current_tier": 100.0,
+        "last_session_date": "",
+        "total_realized_profit": 0.0,
+        "sessions_completed": 0,
+        "latency_metrics": {
+            "avg_signal_to_stack_ms": 0.0,
+            "last_dispatch_latency_ms": 0.0,
+            "total_stacks_dispatched": 0,
+        },
+    }
+    if VAULT_FILE.exists():
+        try:
+            data = json.loads(VAULT_FILE.read_text(encoding="utf-8"))
+            default_state.update(data)
+            return default_state
+        except Exception:
+            pass
+    return default_state
+
+
+def calculate_tier_for_bankroll(bankroll: float) -> float:
+    """Tier Progression: 100$ -> 300$ -> 500$ -> 1000$ -> 2000$ -> 5000$ -> 10000$"""
+    if bankroll >= 25000.0:
+        return 10000.0
+    elif bankroll >= 10000.0:
+        return 5000.0
+    elif bankroll >= 5000.0:
+        return 3000.0
+    elif bankroll >= 2500.0:
+        return 2000.0
+    elif bankroll >= 1000.0:
+        return 1000.0
+    elif bankroll >= 500.0:
+        return 500.0
+    elif bankroll >= 300.0:
+        return 300.0
+    else:
+        return 100.0
+
+
+def save_vault_state(state: Dict[str, Any]) -> None:
+    try:
+        VAULT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = VAULT_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        tmp.replace(VAULT_FILE)
+    except Exception as e:
+        logger.error("Failed to save vault state: %s", e)
+
+
+def record_dispatch_latency(latency_ms: float) -> None:
+    vault = get_vault_state()
+    metrics = vault.setdefault("latency_metrics", {
+        "avg_signal_to_stack_ms": 0.0,
+        "last_dispatch_latency_ms": 0.0,
+        "total_stacks_dispatched": 0,
+    })
+    n = metrics.get("total_stacks_dispatched", 0)
+    avg = metrics.get("avg_signal_to_stack_ms", 0.0)
+    new_avg = ((avg * n) + latency_ms) / (n + 1)
+    metrics["total_stacks_dispatched"] = n + 1
+    metrics["avg_signal_to_stack_ms"] = round(new_avg, 2)
+    metrics["last_dispatch_latency_ms"] = round(latency_ms, 2)
+    save_vault_state(vault)
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -209,8 +282,12 @@ def get_all_ntfy_topics() -> List[str]:
 def push_ntfy(title: str, message: str, tags: str = "zap,chart", priority: str = "high") -> bool:
     global _last_ntfy_ts
     if os.getenv("XAU_NO_NTFY") == "1" and priority not in ("urgent", "max"):
-        logger.debug("ntfy suppressed (XAU_NO_NTFY=1): %s", title)
+        logger.debug("notification suppressed (XAU_NO_NTFY=1): %s", title)
         return True
+
+    if get_bark_keys():
+        return send_alert(title=title, message=message, priority=priority)
+
     now = time.time()
     # Rate limit: minimum 1.0s between notifications
     if now - _last_ntfy_ts < 1.0:
@@ -441,13 +518,19 @@ def sync_dashboard_state(balance: float, equity: float, current_price: float, ti
     #    Without this the HFT Terminal reads a stale/missing file and shows
     #    INITIALIZING forever — the phone never sees the live day.
     try:
+        vault_info = get_vault_state()
+        lat_metrics = vault_info.get("latency_metrics", {})
         hft_payload = {
-            "engine": "XAU $50 -> $3000 Aggressive Scalper",
+            "engine": "Stratton Oakmont XAU Scalper (Tier Progression Engine)",
             "status": "IN_TRADE" if scalper_pos else "SCANNING",
-            "mode": "PAPER TRADING (1:1 Live Simulation)",
+            "mode": "PAPER TRADING (Latency & Execution Validation)",
             "symbol": "XAUUSD",
             "balance": round(balance, 2),
             "equity": round(equity, 2),
+            "vault_bankroll": vault_info.get("vault_bankroll", 100.0),
+            "current_tier": vault_info.get("current_tier", 100.0),
+            "latency_ms": lat_metrics.get("last_dispatch_latency_ms", 0.0),
+            "avg_latency_ms": lat_metrics.get("avg_signal_to_stack_ms", 0.0),
             "realized_pnl": pnl_dollar,
             "pnl_pct": pnl_pct,
             "trade_count": trade_total,
@@ -547,13 +630,18 @@ class StackedOrder:
 
 
 class XAUScalpChallenge:
-    def __init__(self, starting_balance: float = STARTING_BALANCE):
-        self.balance: float = starting_balance
-        self.equity: float = starting_balance
+    def __init__(self, starting_balance: Optional[float] = None):
+        if starting_balance is None:
+            vault = get_vault_state()
+            starting_balance = calculate_tier_for_bankroll(vault.get("vault_bankroll", 100.0))
+        self.starting_balance: float = float(starting_balance)
+        self.balance: float = float(starting_balance)
+        self.equity: float = float(starting_balance)
         self.active_stack: List[StackedOrder] = []
         self.active_bias: Optional[str] = None
         self.entry_bar_idx: int = 0
         self.sl_price: float = 0.0
+        self.last_latency_ms: float = 0.0
 
     def calculate_equity(self, current_price: float) -> float:
         floating_pnl = 0.0
@@ -567,16 +655,19 @@ class XAUScalpChallenge:
     def open_stack(self, direction: str, entry_price: float, sl_price: float, bar_idx: int,
                    timestamp_ms: int, time_str: str, reason: str) -> None:
         self.active_stack.clear()
-        # Deterministic sizing: seed from the bar timestamp so a replay of the
-        # same day produces the same stacks every time (unseeded np.random
-        # made every catch-up/backtest run diverge).
+        t0 = time.perf_counter()
         rng = np.random.default_rng(int(timestamp_ms) % (2 ** 32))
         num_orders = int(rng.integers(5, 11))
-        scale = max(1.0, self.balance / 50.0)
+        
+        # Base lot scales with starting tier ($100 = 1.0x unit)
+        base_unit = max(1.0, self.starting_balance / 100.0)
+        scale = min(20.0, max(1.0, self.balance / self.starting_balance))
         total_lots = 0.0
 
         for i in range(num_orders):
-            lot_sz = round(float(rng.uniform(0.1, 0.25)) * min(scale, 10.0), 2)
+            base_lot = float(rng.uniform(0.1, 0.25)) * base_unit
+            lot_sz = round(base_lot * scale, 2)
+            lot_sz = min(50.0, max(0.01, lot_sz))
             fill_slip = 0.02 if direction == "BUY" else -0.02
             fill_px = round(entry_price + fill_slip, 2)
             ord_item = StackedOrder(
@@ -589,14 +680,18 @@ class XAUScalpChallenge:
             self.active_stack.append(ord_item)
             total_lots += lot_sz
 
+        dispatch_latency_ms = (time.perf_counter() - t0) * 1000.0
+        self.last_latency_ms = round(dispatch_latency_ms, 2)
+        record_dispatch_latency(dispatch_latency_ms)
+
         self.active_bias = direction
         self.entry_bar_idx = bar_idx
         self.sl_price = sl_price
         avg_entry = np.mean([o.entry_price for o in self.active_stack])
 
         logger.info(
-            "🚀 STACKING EXECUTED: %d market orders (%s | Total: %.2f Lots) @ ~$%.2f | SL: $%.2f. Reason: %s",
-            num_orders, direction, total_lots, avg_entry, sl_price, reason,
+            "🚀 STACKING EXECUTED: %d market orders (%s | Total: %.2f Lots) @ ~$%.2f | SL: $%.2f | Latency: %.2fms. Reason: %s",
+            num_orders, direction, total_lots, avg_entry, sl_price, dispatch_latency_ms, reason,
         )
 
         slices_list = [
@@ -617,7 +712,7 @@ class XAUScalpChallenge:
                              active_pos=pos_dict, log_event=f"Stacked {direction} {total_lots:.2f} lots @ ${avg_entry:.2f}")
 
         push_ntfy(
-            title=f"⚡ XAU Stacked: {direction} {total_lots:.2f} Lots",
+            title=f"⚡ XAU Stacked: {direction} {total_lots:.2f} Lots ({self.last_latency_ms:.1f}ms)",
             message=(
                 f"Asset: XAUUSD\n"
                 f"Direction: {direction}\n"
@@ -625,6 +720,7 @@ class XAUScalpChallenge:
                 f"Total Lots: {total_lots:.2f} (Stacked)\n"
                 f"Avg Entry: ${avg_entry:.2f} | SL: ${sl_price:.2f}\n"
                 f"Account Balance: ${self.balance:.2f}\n"
+                f"Dispatch Latency: {self.last_latency_ms:.2f} ms\n"
                 f"LLM Validation: {reason}"
             ),
             tags="moneybag,zap,rocket",
@@ -755,6 +851,7 @@ def run_trading_cycle(
 
     engine = XAUScalpChallenge(starting_balance=start_balance if start_balance is not None else STARTING_BALANCE)
     active_5m_breakout: Optional[Dict[str, Any]] = None
+    consecutive_opposing_bars: int = 0
 
     catchup_ts_ms = None
     if catchup:
@@ -844,7 +941,7 @@ def run_trading_cycle(
                 flt_eq = engine.calculate_equity(tick_px)
                 profit_gain = flt_eq - engine.balance
                 max_risk_loss = max(15.0, engine.balance * 0.15)
-                spike_target = max(50.0, engine.balance * 0.35)
+                spike_target = max(50.0, engine.balance * 0.50)
 
                 # Sync live dashboard with sub-second price
                 slices_list = [
@@ -862,9 +959,10 @@ def run_trading_cycle(
                 }
                 sync_dashboard_state(engine.balance, flt_eq, tick_px, f"{bar_time_str} (+{sub_i*5}s)", active_pos=pos_info)
 
-                # Rapid equity spike
+                # Rapid equity spike (+50% target)
                 if profit_gain >= spike_target:
                     engine.flatten_stack(tick_px, curr_t_ms, bar_time_str, f"Rapid Equity Spike (+${profit_gain:.2f})")
+                    consecutive_opposing_bars = 0
                     if sub_delay > 0:
                         time.sleep(sub_delay)
                     continue
@@ -877,22 +975,29 @@ def run_trading_cycle(
                 if hit_sl:
                     capped_loss = -max_risk_loss if profit_gain <= -max_risk_loss else profit_gain
                     engine.flatten_stack(tick_px, curr_t_ms, bar_time_str, f"Risk Stop Triggered (-${abs(capped_loss):.2f})", forced_pnl=capped_loss)
+                    consecutive_opposing_bars = 0
                     if sub_delay > 0:
                         time.sleep(sub_delay)
                     continue
 
-                # Momentum stall check on final sub-tick of candle
+                # Momentum stall check on final sub-tick of candle (2 consecutive opposing bars required)
                 if sub_i == sub_ticks - 1 and idx > engine.entry_bar_idx:
-                    is_stall = (
+                    is_opposing = (
                         (engine.active_bias == "BUY" and c_px < o_px)
                         or (engine.active_bias == "SELL" and c_px > o_px)
                     )
-                    if is_stall:
+                    if is_opposing:
+                        consecutive_opposing_bars += 1
+                    else:
+                        consecutive_opposing_bars = 0
+
+                    if consecutive_opposing_bars >= 2:
                         if profit_gain > 0:
                             engine.flatten_stack(tick_px, curr_t_ms, bar_time_str, f"Momentum Stall in Profit (+${profit_gain:.2f})")
                         else:
                             capped_loss = max(profit_gain, -max_risk_loss)
-                            engine.flatten_stack(tick_px, curr_t_ms, bar_time_str, "Momentum Stall: 1m closed against bias", forced_pnl=capped_loss)
+                            engine.flatten_stack(tick_px, curr_t_ms, bar_time_str, "Momentum Stall: 2 bars closed against bias", forced_pnl=capped_loss)
+                        consecutive_opposing_bars = 0
                         if sub_delay > 0:
                             time.sleep(sub_delay)
                         continue
@@ -935,6 +1040,7 @@ def run_trading_cycle(
                             sl_px = round(float(bar["low"]) - 0.15, 2)
                             engine.open_stack("BUY", curr_px, sl_px, idx, curr_t_ms, bar_time_str, reasoning)
                             active_5m_breakout = None
+                            consecutive_opposing_bars = 0
 
                 elif b_type == "DOWN":
                     trend_ok = curr_px < bar["ema20"] < bar["ema50"]
@@ -959,12 +1065,27 @@ def run_trading_cycle(
                             sl_px = round(float(bar["high"]) + 0.15, 2)
                             engine.open_stack("SELL", curr_px, sl_px, idx, curr_t_ms, bar_time_str, reasoning)
                             active_5m_breakout = None
+                            consecutive_opposing_bars = 0
 
     if engine.active_stack:
         engine.flatten_stack(float(df_1m["close"].iloc[-1]), int(df_1m["open_time"].iloc[-1]), "Session End", "Session End Flush")
 
-    logger.info("Challenge Run Complete. Starting Balance: $%.2f | Final Account Balance: $%.2f (Return: %+.1f%%)",
-                STARTING_BALANCE, engine.balance, ((engine.balance - STARTING_BALANCE) / STARTING_BALANCE * 100.0))
+    day_pnl = engine.balance - engine.starting_balance
+    vault = get_vault_state()
+    old_bankroll = vault.get("vault_bankroll", 100.0)
+    new_bankroll = round(max(0.0, old_bankroll + day_pnl), 2)
+    vault["vault_bankroll"] = new_bankroll
+    vault["total_realized_profit"] = round(vault.get("total_realized_profit", 0.0) + day_pnl, 2)
+    vault["sessions_completed"] = vault.get("sessions_completed", 0) + 1
+    vault["last_session_date"] = date_str
+    next_tier = calculate_tier_for_bankroll(new_bankroll)
+    vault["current_tier"] = next_tier
+    save_vault_state(vault)
+
+    logger.info("Session Run Complete. Starting Balance: $%.2f | Final Account Balance: $%.2f (Return: %+.1f%%)",
+                engine.starting_balance, engine.balance, ((engine.balance - engine.starting_balance) / engine.starting_balance * 100.0))
+    logger.info("🏛️ Stratton Vault Bankroll: $%.2f -> $%.2f | Next Morning Tier Allocation: $%.2f",
+                old_bankroll, new_bankroll, next_tier)
 
 
 def main() -> None:

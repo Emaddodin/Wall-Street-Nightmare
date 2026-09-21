@@ -165,6 +165,18 @@ class OrderBasket:
     def current_sz(self) -> float:
         return sum(s.sz for s in self.active_slices)
 
+    @property
+    def aggregate_sz(self) -> float:
+        return self.total_sz
+
+    @property
+    def avg_entry_price(self) -> float:
+        return self.entry_price
+
+    @property
+    def current_stop_price(self) -> float:
+        return self.sl_price
+
     def calculate_unrealized_pnl(self, current_price: float) -> Tuple[float, float]:
         """
         Calculate total dollar unrealized PnL and R-multiple on Hyperliquid.

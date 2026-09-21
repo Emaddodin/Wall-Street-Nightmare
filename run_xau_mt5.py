@@ -99,6 +99,13 @@ def get_all_ntfy_topics() -> List[str]:
 
 
 def push_ntfy(title: str, message: str, tags: str = "zap,chart", priority: str = "high") -> bool:
+    try:
+        from bark_integration import get_bark_keys, send_alert
+        if get_bark_keys():
+            return send_alert(title=title, message=message, priority=priority)
+    except Exception:
+        pass
+
     global _last_ntfy_ts
     now = time.time()
     if now - _last_ntfy_ts < 1.0:

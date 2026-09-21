@@ -9,7 +9,7 @@ wm/xvfb) still runs so the old app opens.
 | unit | what |
 |---|---|
 | `stratton-oakmont-paper` | the VP scalper paper book on live Bitunix candles -- TESLA IS GONE, pure price action + volume profile, 25% risk, $100 start, daily +100% target |
-| `stratton-oakmont-app` | phone app, https://62.60.198.135:8443 (own password, own port) |
+| `stratton-oakmont-app` | phone app, https://82.115.21.155:8443 (own password, own port) |
 
 The app headline: day PnL vs the +100% target, green/red, "TARGET HIT"
 banner when the day is banked, and the compounding goal curve.

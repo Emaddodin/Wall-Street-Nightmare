@@ -22,13 +22,12 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
 
 from engine.execution_router import (
     ExecutionRouter,
-    OrderSide,
     RiskInvariants,
     SimulatedBrokerVenue,
     emit_telemetry,
@@ -41,7 +40,6 @@ from engine.fsm import (
 )
 from macro.self_healing import (
     DEFAULT_NTFY_TOPIC,
-    RecoveryAction,
     SelfHealingLLMGuard,
     push_ntfy_async,
 )
@@ -115,9 +113,23 @@ async def dump_scalper_state(
         basket = router.active_basket
         in_blackout, blackout_reason = calendar.is_macro_blackout()
         kz_dash = kz_guard.multitz_dashboard()
+        try:
+            mark_px_for_state = await venue.get_market_price(
+                basket.coin if basket else "XAUUSD")
+        except Exception:
+            mark_px_for_state = 0.0
 
         pos_info = None
         if basket and basket.is_active:
+            # NOTE: OrderSlice fields are ticket_id / entry_price / is_active
+            # (there is no order_id / fill_price / status). Reading the wrong
+            # names raised AttributeError, the whole dump was skipped, and the
+            # phone went stale exactly while a position was open.
+            try:
+                mark_px = await venue.get_market_price(basket.coin)
+            except Exception:
+                mark_px = basket.entry_price
+            dollar_pnl, _ = basket.calculate_unrealized_pnl(mark_px)
             pos_info = {
                 "basket_id": basket.basket_id,
                 "symbol": "GOLD",
@@ -126,13 +138,14 @@ async def dump_scalper_state(
                 "avg_entry_price": round(basket.avg_entry_price, 2),
                 "stop_price": round(basket.current_stop_price, 2) if basket.current_stop_price else None,
                 "breakeven_locked": basket.breakeven_locked,
-                "unrealized_pnl": 0.0,
+                "unrealized_pnl": round(dollar_pnl, 2),
+                "mark_price": round(mark_px, 2),
                 "slices": [
                     {
-                        "order_id": s.order_id,
+                        "order_id": s.ticket_id,
                         "sz": s.sz,
-                        "fill_price": s.fill_price,
-                        "status": s.status.name,
+                        "fill_price": s.entry_price,
+                        "status": "FILLED" if s.is_active else "CLOSED",
                     }
                     for s in basket.slices
                 ],
@@ -190,6 +203,8 @@ async def dump_scalper_state(
                 "recent_fixes": [r.to_dict() for r in self_healing.history[-5:]] if self_healing else [],
             },
             "position": pos_info,
+            "current_price": round(mark_px_for_state, 2),
+            "recent_trades": list(getattr(router, "closed_history", []))[-10:],
         }
 
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)

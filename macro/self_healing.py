@@ -63,25 +63,56 @@ def emit_telemetry(
 
 from pathlib import Path
 
-def get_ntfy_topic(default: str = "tbt-gold-scalper") -> str:
-    topic = os.getenv("NTFY_TOPIC")
-    if topic:
-        return topic
+def _read_env_file_value(key: str) -> str:
     env_file = Path(__file__).resolve().parents[1] / ".env"
     if env_file.exists():
         try:
             for line in env_file.read_text().splitlines():
                 line = line.strip()
-                if line.startswith("NTFY_TOPIC=") and not line.startswith("NTFY_TOPIC_SHARED="):
+                if line.startswith(f"{key}=") and not line.startswith(f"{key}_SHARED=") if key == "NTFY_TOPIC" else line.startswith(f"{key}="):
                     val = line.split("=", 1)[1].strip()
                     if val:
                         return val
         except Exception:
             pass
+    return ""
+
+
+def get_all_ntfy_topics(default: str = "tbt-gold-scalper") -> List[str]:
+    """All ntfy topics that must receive every alert: NTFY_TOPIC + NTFY_TOPIC_SHARED (comma list)."""
+    seen: List[str] = []
+    for key in ("NTFY_TOPIC", "NTFY_TOPIC_SHARED"):
+        raw = os.getenv(key) or _read_env_file_value(key)
+        for part in str(raw or "").split(","):
+            t = part.strip()
+            if t and t not in seen:
+                seen.append(t)
+    if not seen:
+        seen = [default]
+    return seen
+
+
+def get_ntfy_topic(default: str = "tbt-gold-scalper") -> str:
+    topic = os.getenv("NTFY_TOPIC")
+    if topic:
+        return topic.split(",")[0].strip()
+    val = _read_env_file_value("NTFY_TOPIC")
+    if val:
+        return val.split(",")[0].strip()
     return default
 
 
 DEFAULT_NTFY_TOPIC = get_ntfy_topic("tbt-gold-scalper")
+DEFAULT_NTFY_TOPICS: List[str] = get_all_ntfy_topics("tbt-gold-scalper")
+
+
+def _fanout_topics(topic: Optional[str]) -> List[str]:
+    if topic:
+        return [t.strip() for t in str(topic).split(",") if t.strip()]
+    try:
+        return get_all_ntfy_topics()
+    except Exception:
+        return [DEFAULT_NTFY_TOPIC]
 
 
 def push_ntfy_sync(
@@ -92,23 +123,38 @@ def push_ntfy_sync(
     topic: Optional[str] = None,
 ) -> bool:
     """
-    Synchronously push an alert via ntfy.sh (fallback for non-async callers).
+    Synchronously push an alert via ntfy.sh to ALL configured topics (fallback for non-async callers).
     """
-    target_topic = topic or get_ntfy_topic()
-    url = f"https://ntfy.sh/{target_topic}"
     try:
-        from email.header import Header
-        encoded_title = Header(title, "utf-8").encode()
-        req = urllib.request.Request(
-            url,
-            data=message.encode("utf-8"),
-            headers={"Title": encoded_title, "Tags": tags, "Priority": priority},
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            return resp.status in (200, 201)
-    except Exception as e:
-        logger.warning("Failed to dispatch sync ntfy alert: %s", e)
-        return False
+        from bark_integration import get_bark_keys, push_bark
+        if get_bark_keys():
+            return push_bark(
+                title=title,
+                message=message,
+                level="timeSensitive" if priority in ("urgent", "high") else "active",
+                sound="alarm" if priority in ("urgent", "high") else "chime",
+            )
+    except Exception:
+        pass
+
+    targets = _fanout_topics(topic)
+    ok_any = False
+    for target_topic in targets:
+        url = f"https://ntfy.sh/{target_topic}"
+        try:
+            from email.header import Header
+            encoded_title = Header(title, "utf-8").encode()
+            req = urllib.request.Request(
+                url,
+                data=message.encode("utf-8"),
+                headers={"Title": encoded_title, "Tags": tags, "Priority": priority},
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.status in (200, 201):
+                    ok_any = True
+        except Exception as e:
+            logger.warning("Failed to dispatch sync ntfy alert to %s: %s", target_topic, e)
+    return ok_any
 
 
 async def push_ntfy_async(
@@ -120,11 +166,22 @@ async def push_ntfy_async(
     session: Optional[aiohttp.ClientSession] = None,
 ) -> bool:
     """
-    Asynchronously push an alert via ntfy.sh without blocking the event loop.
+    Asynchronously push an alert via ntfy.sh to ALL configured topics without blocking the event loop.
     """
+    try:
+        from bark_integration import get_bark_keys, push_bark_async
+        if get_bark_keys():
+            return await push_bark_async(
+                title=title,
+                message=message,
+                level="timeSensitive" if priority in ("urgent", "high") else "active",
+                sound="alarm" if priority in ("urgent", "high") else "chime",
+            )
+    except Exception:
+        pass
+
     from email.header import Header
-    target_topic = topic or get_ntfy_topic()
-    url = f"https://ntfy.sh/{target_topic}"
+    targets = _fanout_topics(topic)
     encoded_title = Header(title, "utf-8", maxlinelen=1000).encode().replace("\r", "").replace("\n", "")
     headers = {"Title": encoded_title, "Tags": tags, "Priority": priority}
 
@@ -133,23 +190,27 @@ async def push_ntfy_async(
         session = aiohttp.ClientSession()
         own_session = True
 
+    ok_any = False
     try:
-        async with session.post(url, data=message.encode("utf-8"), headers=headers, timeout=aiohttp.ClientTimeout(total=4.0)) as resp:
-            ok = resp.status in (200, 201)
-            emit_telemetry(
-                component="SelfHealingAlerting",
-                event="NTFY_PUSHED",
-                data={"title": title, "topic": target_topic, "status": resp.status},
-            )
-            return ok
-    except Exception as e:
-        emit_telemetry(
-            component="SelfHealingAlerting",
-            event="NTFY_PUSH_FAILED",
-            data={"title": title, "topic": target_topic, "error": str(e)},
-            level="WARNING",
-        )
-        return False
+        for target_topic in targets:
+            url = f"https://ntfy.sh/{target_topic}"
+            try:
+                async with session.post(url, data=message.encode("utf-8"), headers=headers, timeout=aiohttp.ClientTimeout(total=4.0)) as resp:
+                    ok = resp.status in (200, 201)
+                    ok_any = ok_any or ok
+                    emit_telemetry(
+                        component="SelfHealingAlerting",
+                        event="NTFY_PUSHED",
+                        data={"title": title, "topic": target_topic, "status": resp.status},
+                    )
+            except Exception as e:
+                emit_telemetry(
+                    component="SelfHealingAlerting",
+                    event="NTFY_PUSH_FAILED",
+                    data={"title": title, "topic": target_topic, "error": str(e)},
+                    level="WARNING",
+                )
+        return ok_any
     finally:
         if own_session and not session.closed:
             await session.close()

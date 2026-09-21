@@ -166,8 +166,8 @@ app:
   port: 8443
   host: 0.0.0.0
   session_hours: 2
-  certfile: /etc/letsencrypt/live/62.60.198.135.nip.io/fullchain.pem
-  keyfile: /etc/letsencrypt/live/62.60.198.135.nip.io/privkey.pem
+  certfile: /root/ict_sniper/tls/fullchain.pem
+  keyfile: /root/ict_sniper/tls/privkey.pem
   title: Scalper
 goal:
   start_equity: 100.0

@@ -122,6 +122,25 @@ def push_ntfy(
     Supports urgent priority escalation for critical faults.
     """
     topic = topic or get_env_val("NTFY_TOPIC", "tbt-gold-scalper")
+    try:
+        from bark_integration import get_bark_keys, push_bark
+        if get_bark_keys():
+            bark_ok = push_bark(
+                title=title,
+                message=message,
+                level="timeSensitive" if priority in ("urgent", "high") else "active",
+                sound="alarm" if priority in ("urgent", "high") else "chime",
+            )
+            emit_telemetry(
+                component="AlertEscalation",
+                event="BARK_ALERT_DISPATCHED",
+                data={"title": title, "priority": priority, "success": bark_ok},
+                level="INFO",
+            )
+            return bark_ok
+    except Exception:
+        pass
+
     url = f"https://ntfy.sh/{topic}"
     try:
         from email.header import Header
