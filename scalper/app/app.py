@@ -396,6 +396,35 @@ def _render_hft_terminal() -> str:
     <div class="row" style="border:0;">
       <span class="k">compounding accelerator</span>
       <span class="v" id="laya_boost" style="color:var(--gold);">1.25x - 1.50x Active</span>
+    </div>
+  </div>
+
+  <!-- Politician & Fundamental Brain Live Card -->
+  <div class="card key" id="politician_card" style="border-left: 3px solid #ffaa00;">
+    <div class="row" style="border:0; padding-bottom:4px;">
+      <span class="sub" style="font-weight:700; color:#ffaa00;">🏛️ POLITICIAN & FUNDAMENTAL BRAIN · LAYA MACRO</span>
+      <span class="pill livep" id="politician_badge">ONLINE · 62.5% HEAT</span>
+    </div>
+    <div class="row">
+      <span class="k">political & tariff regime</span>
+      <span class="v" id="politician_regime" style="color:var(--gold); font-weight:700;">TRADE WAR TARIFFS</span>
+    </div>
+    <div class="row">
+      <span class="k">fundamental gold bias</span>
+      <span class="v up" id="politician_bias">STRONG BULL (SAFE HAVEN)</span>
+    </div>
+    <div class="row">
+      <span class="k">alpha accelerator & target</span>
+      <span class="v" id="politician_sword" style="color:var(--win); font-size:11px;">1.65x Titan Boost · +5.0 to +8.0 ATR</span>
+    </div>
+    <div class="row">
+      <span class="k">sovereign guarantee shield</span>
+      <span class="v" id="politician_shield" style="font-size:11px; color:var(--win);">SHIELD ARMED · Spread Protection Active</span>
+    </div>
+    <div class="row" style="border:0;">
+      <span class="k">active parsed catalyst</span>
+      <span class="v" id="politician_headline" style="font-size:10px; color:var(--txt2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px;">Trump Tariffs & Geopolitical Flow Active</span>
+    </div>
   </div>
 
   <!-- "To The Moon" Sovereign Cash-Out & Daily Profit Allocation Card -->
@@ -673,6 +702,43 @@ def _render_hft_terminal() -> str:
       const layaBoost = document.getElementById('laya_boost');
       if (layaBoost) {
         layaBoost.textContent = `${laya.compounding_boost || '1.25x'} (${laya.last_trap_prob || 15}% trap risk)`;
+      }
+
+      // Politician & Fundamental Brain Telemetry
+      const pol = laya.politician || {};
+      const polBadge = document.getElementById('politician_badge');
+      if (polBadge) {
+        const heat = pol.heat_index || parseFloat(laya.geopolitical_heat) || 62.5;
+        const heatGrade = pol.heat_grade || 'ELEVATED ⚠️';
+        polBadge.textContent = `${Number(heat).toFixed(1)}% HEAT · ${heatGrade}`;
+      }
+      const polReg = document.getElementById('politician_regime');
+      if (polReg) {
+        polReg.textContent = (pol.political_regime || laya.political_regime || 'TRADE_WAR_TARIFFS').replace(/_/g, ' ');
+      }
+      const polBias = document.getElementById('politician_bias');
+      if (polBias) {
+        const b = pol.macro_bias || laya.macro_bias || 'STRONG_BULL';
+        polBias.textContent = b.replace(/_/g, ' ');
+        polBias.className = 'v ' + (b.includes('BULL') ? 'up' : b.includes('BEAR') ? 'dn' : '');
+      }
+      const polSword = document.getElementById('politician_sword');
+      if (polSword) {
+        const boost = pol.max_alpha_boost || '1.65x';
+        const target = pol.target_expansion || '+5.0 to +8.0 ATR';
+        polSword.textContent = `${boost} Titan Boost · ${target}`;
+      }
+      const polShield = document.getElementById('politician_shield');
+      if (polShield) {
+        const st = pol.shield_status || 'ACTIVE_PROTECTION';
+        const re = pol.shield_reason || 'Zero spread-widening risk';
+        polShield.textContent = (st === 'FREEZE') ? `⚠️ ${re}` : `🛡️ ${re}`;
+        polShield.style.color = (st === 'FREEZE') ? 'var(--loss)' : 'var(--win)';
+      }
+      const polHead = document.getElementById('politician_headline');
+      if (polHead) {
+        polHead.textContent = pol.active_headline || 'Trump Tariff & Trade War Regime Active';
+        polHead.title = pol.active_headline || '';
       }
 
       // "To The Moon" Sovereign Cash-Out & Daily Profit Allocation

@@ -506,24 +506,33 @@ async def run_live_scalper():
                         "sl_price": sig.sl_price,
                         "wick_ratio": getattr(scalper, "last_wick_ratio", 0.65),
                         "session": sig.strategy_type,
+                        "setup_type": sig.strategy_type,
+                        "hour_utc": datetime.now(timezone.utc).hour,
                         "trend_aligned": True,
                     }
                     laya_decision = laya_oracle.evaluate_setup_sync(market_state)
 
                     if not laya_decision.is_valid:
-                        logger.warning("🛡️ LAYA VETOED TRAP SETUP: %s (Trap Prob: %.1f%%)", laya_decision.reasoning, laya_decision.trap_probability * 100)
+                        logger.warning("🛡️ LAYA / POLITICIAN SHIELD VETOED SETUP: %s (Trap Prob: %.1f%%)", laya_decision.reasoning, laya_decision.trap_probability * 100)
                         push_ntfy(
-                            title="🛡️ Laya Vetoed Trap Setup",
+                            title="🛡️ System Guarantee Shield Veto",
                             message=f"Vetoed {sig.direction} ({sig.strategy_type}) @ ${sig.entry_price:.2f} | Trap Risk: {laya_decision.trap_probability*100:.1f}%\nReason: {laya_decision.reasoning}",
                             tags="shield,no_entry_sign",
                             priority="default",
                         )
                     else:
-                        # Apply dynamic compounding multiplier (1.25x - 1.50x on A+ Confluence)
+                        # Apply dynamic compounding multiplier (up to 1.65x - 1.75x on Macro Sovereign Titan)
                         lot_size = round(base_lot_size * max(1.0, laya_decision.compounding_multiplier), 2)
-                        boost_tag = f" (Laya {laya_decision.setup_grade} {laya_decision.compounding_multiplier:.2f}x Boost)" if laya_decision.compounding_multiplier > 1.0 else ""
-                        logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f | TP1: $%.2f | Lots: %.2f%s | Confluence: %.1f/10",
-                                    sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, sig.tp1_price, lot_size, boost_tag, laya_decision.confluence_score)
+                        boost_tag = f" (Laya {laya_decision.setup_grade} {laya_decision.compounding_multiplier:.2f}x Boost | TP {laya_decision.tp_expansion_multiplier:.2f}x)" if laya_decision.compounding_multiplier > 1.0 else ""
+                        
+                        # Apply Macro Target Expansion (The Sword)
+                        effective_spike_target = sig.spike_target
+                        if laya_decision.tp_expansion_multiplier > 1.0 and sig.atr_1m > 0:
+                            expansion_dist = sig.atr_1m * (laya_decision.tp_expansion_multiplier - 1.0) * 2.5
+                            effective_spike_target = (sig.spike_target + expansion_dist) if sig.direction == "BUY" else (sig.spike_target - expansion_dist)
+
+                        logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f | TP1: $%.2f | Spike: $%.2f | Lots: %.2f%s | Confluence: %.1f/10",
+                                    sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, sig.tp1_price, effective_spike_target, lot_size, boost_tag, laya_decision.confluence_score)
 
                         order_res = await gw.open_market_order(sig.direction, lot_size, sl_price=sig.sl_price)
                         if order_res.get("success"):
@@ -534,7 +543,7 @@ async def run_live_scalper():
                                 "entry_price": sig.entry_price,
                                 "sl_price": sig.sl_price,
                                 "tp1_price": sig.tp1_price,
-                                "spike_target": sig.spike_target,
+                                "spike_target": effective_spike_target,
                                 "atr_1m": sig.atr_1m,
                                 "strategy_type": sig.strategy_type,
                                 "open_time": time.time(),
@@ -544,11 +553,13 @@ async def run_live_scalper():
                                 "tp1_ratchet_hit": False,
                                 "laya_grade": laya_decision.setup_grade,
                                 "ict_concepts": sig.ict_concepts,
+                                "political_regime": laya_decision.political_regime,
+                                "macro_bias": laya_decision.macro_bias,
                             }
                             push_ntfy(
-                                title=f"🌕 TO THE MOON EXECUTED: {sig.direction} {lot_size} Lots [{sig.strategy_type}]",
-                                message=f"Entry: ${sig.entry_price:.2f} | SL: ${sig.sl_price:.2f} | TP1: ${sig.tp1_price:.2f}\nLatency: {scalper.last_latency_ms:.1f}ms\nICT: {', '.join(sig.ict_concepts)}\n{sig.reasoning}",
-                                tags="zap,rocket,dart",
+                                title=f"🌕 {laya_decision.setup_grade.upper()}: {sig.direction} {lot_size} Lots [{sig.strategy_type}]",
+                                message=f"Entry: ${sig.entry_price:.2f} | SL: ${sig.sl_price:.2f} | Spike: ${effective_spike_target:.2f}\nSizing: {laya_decision.compounding_multiplier:.2f}x | TP Exp: {laya_decision.tp_expansion_multiplier:.2f}x\nPolitician: {laya_decision.political_regime} ({laya_decision.macro_bias})\nLatency: {scalper.last_latency_ms:.1f}ms",
+                                tags="zap,rocket,shield",
                                 priority="high",
                             )
 

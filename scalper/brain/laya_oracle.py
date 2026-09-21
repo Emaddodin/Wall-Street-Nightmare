@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from scalper.brain.ict_rag import get_ict_rag
 from scalper.brain.macro_watchdog import get_macro_watchdog
 from scalper.brain.regime_prior_engine import get_regime_prior_engine, RegimePriorEngine, RegimePriorEvaluation
+from scalper.brain.politician_brain import get_politician_brain, PoliticianBrain, PoliticalAssessment
 
 logger = logging.getLogger("laya_oracle")
 
@@ -35,16 +36,20 @@ USE_CPU = os.getenv("LAYA_FORCE_CPU", "1") == "1"
 @dataclass
 class LayaDecision:
     is_valid: bool
-    setup_grade: str  # "A_plus_prime", "high_probability", "marginal", "toxic_trap"
+    setup_grade: str  # "macro_sovereign_titan", "A_plus_prime", "high_probability", "marginal", "toxic_trap"
     trap_probability: float  # 0.0 - 1.0
     confluence_score: float  # 0.0 - 10.0
     confidence: float  # 0.0 - 1.0
-    compounding_multiplier: float  # 1.0 - 1.5
+    compounding_multiplier: float  # 1.0 - 1.75
     decision_latency_ms: float
     matched_ict_concepts: List[str]
     reasoning: str
     empirical_win_rate_pct: float = 80.0
     regime_notes: str = ""
+    political_regime: str = ""
+    macro_bias: str = ""
+    geopolitical_heat: float = 50.0
+    tp_expansion_multiplier: float = 1.0
 
 
 class LayaOracle:
@@ -64,6 +69,7 @@ class LayaOracle:
         self.rag = get_ict_rag()
         self.watchdog = get_macro_watchdog()
         self.regime = get_regime_prior_engine()
+        self.politician = get_politician_brain()
 
         # Asynchronously warmup model in background
         self._executor.submit(self._warmup_model)
@@ -123,6 +129,10 @@ class LayaOracle:
                 reasoning=f"Vetoed by Macro Watchdog: {macro_reason}",
                 empirical_win_rate_pct=0.0,
                 regime_notes=macro_reason,
+                political_regime=self.politician._current_regime.value,
+                macro_bias=self.politician._current_bias.value,
+                geopolitical_heat=self.politician._geopolitical_heat_index,
+                tp_expansion_multiplier=1.0,
             )
 
         # 2. Consult 473-Day Empirical Macro Regime Priors
@@ -148,14 +158,40 @@ class LayaOracle:
                 reasoning=f"Vetoed by 473-Day Regime Prior: {regime_eval.regime_notes}",
                 empirical_win_rate_pct=regime_eval.empirical_win_rate_pct,
                 regime_notes=regime_eval.regime_notes,
+                political_regime=self.politician._current_regime.value,
+                macro_bias=self.politician._current_bias.value,
+                geopolitical_heat=self.politician._geopolitical_heat_index,
+                tp_expansion_multiplier=1.0,
             )
 
-        # 3. Retrieve Matching ICT Knowledge Concepts
+        # 3. Consult Politician & Fundamental Brain (Geopolitical & Tariff Realities)
+        pol_eval = self.politician.evaluate_entry_macro_fit(direction=direction, strategy_type=strategy_name)
+        if not pol_eval.is_permitted:
+            latency = (time.perf_counter() - t0) * 1000.0
+            return LayaDecision(
+                is_valid=False,
+                setup_grade="toxic_trap",
+                trap_probability=0.95,
+                confluence_score=1.0,
+                confidence=0.98,
+                compounding_multiplier=0.0,
+                decision_latency_ms=latency,
+                matched_ict_concepts=["Politician Shield Veto"],
+                reasoning=pol_eval.reasoning,
+                empirical_win_rate_pct=0.0,
+                regime_notes=f"Politician Shield: {pol_eval.active_catalyst}",
+                political_regime=pol_eval.regime.value,
+                macro_bias=pol_eval.macro_bias.value,
+                geopolitical_heat=pol_eval.geopolitical_heat_index,
+                tp_expansion_multiplier=1.0,
+            )
+
+        # 4. Retrieve Matching ICT Knowledge Concepts
         rag_context = self.rag.retrieve_context(market_state, top_k=3)
         matched_titles = rag_context.get("top_concept_titles", ["S&R Breakout", "Candle Rejection"])
         rules_text = rag_context.get("rules_summary", "")
 
-        # 4. If Laya Model is loaded, evaluate via Non-Autoregressive Forward Pass
+        # 5. If Laya Model is loaded, evaluate via Non-Autoregressive Forward Pass
         if self.is_ready:
             try:
                 state = {
@@ -167,6 +203,9 @@ class LayaOracle:
                     "session": session,
                     "trend_aligned": "Yes" if trend_aligned else "No",
                     "institutional_ict_principles": rules_text,
+                    "geopolitical_regime": pol_eval.regime.value,
+                    "macro_bias": pol_eval.macro_bias.value,
+                    "active_catalyst": pol_eval.active_catalyst,
                 }
 
                 questions = {
@@ -201,7 +240,7 @@ class LayaOracle:
 
                 is_valid = (trap_prob < 0.60) and (grade != "toxic_trap")
 
-                # Dynamic Compounding Multiplier with Empirical Priors:
+                # Dynamic Compounding Multiplier with Empirical & Political Priors:
                 if grade == "A_plus_prime" and conf_score >= 8.0 and trap_prob <= 0.25:
                     compounding_mult = 1.50
                 elif grade in ("A_plus_prime", "high_probability") and trap_prob <= 0.40:
@@ -216,6 +255,13 @@ class LayaOracle:
                     conf_score = max(conf_score, regime_eval.confluence_boost)
                     compounding_mult = max(compounding_mult, regime_eval.compounding_multiplier)
 
+                # Blend with Politician & Fundamental Brain (The Sword)
+                if pol_eval.alpha_boost_multiplier > 1.0:
+                    compounding_mult = max(compounding_mult, pol_eval.alpha_boost_multiplier)
+                if pol_eval.alpha_boost_multiplier >= 1.50 and grade in ("A_plus_prime", "high_probability"):
+                    grade = "macro_sovereign_titan"
+                    conf_score = min(10.0, max(conf_score, 9.8))
+
                 latency = (time.perf_counter() - t0) * 1000.0
                 decision = LayaDecision(
                     is_valid=is_valid,
@@ -226,17 +272,21 @@ class LayaOracle:
                     compounding_multiplier=compounding_mult,
                     decision_latency_ms=latency,
                     matched_ict_concepts=matched_titles,
-                    reasoning=f"Laya System 1: Grade {grade} (Conf: {confidence*100:.1f}%, Trap: {trap_prob*100:.1f}%, Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%)",
+                    reasoning=f"Laya System 1: Grade {grade} (Conf: {confidence*100:.1f}%, Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, Pol: {pol_eval.regime.value})",
                     empirical_win_rate_pct=regime_eval.empirical_win_rate_pct,
-                    regime_notes=regime_eval.regime_notes,
+                    regime_notes=f"{regime_eval.regime_notes} | {pol_eval.active_catalyst}",
+                    political_regime=pol_eval.regime.value,
+                    macro_bias=pol_eval.macro_bias.value,
+                    geopolitical_heat=pol_eval.geopolitical_heat_index,
+                    tp_expansion_multiplier=pol_eval.tp_expansion_multiplier,
                 )
                 self._last_decision = decision
                 return decision
             except Exception as e:
                 logger.debug("Laya forward pass error, falling back: %s", e)
 
-        # 5. Calibrated Mathematical RLCD Fallback Engine
-        # Strictly calibrated scoring based on geometric probabilities & 473-day empirical priors
+        # 6. Calibrated Mathematical RLCD Fallback Engine
+        # Strictly calibrated scoring based on geometric probabilities & 473-day empirical + political priors
         trap_prob = min(regime_eval.trap_probability, 0.15 if (wick_ratio >= 0.50 and trend_aligned) else 0.45)
         if not trend_aligned:
             trap_prob += 0.30
@@ -259,6 +309,14 @@ class LayaOracle:
             regime_eval.compounding_multiplier,
             1.50 if grade == "A_plus_prime" else 1.25 if grade == "high_probability" else 1.00 if is_valid else 0.00,
         )
+
+        # Blend with Politician & Fundamental Brain (The Sword)
+        if pol_eval.alpha_boost_multiplier > 1.0:
+            compounding_mult = max(compounding_mult, pol_eval.alpha_boost_multiplier)
+        if pol_eval.alpha_boost_multiplier >= 1.50 and grade in ("A_plus_prime", "high_probability"):
+            grade = "macro_sovereign_titan"
+            conf_score = min(10.0, max(conf_score, 9.8))
+
         latency = (time.perf_counter() - t0) * 1000.0
 
         decision = LayaDecision(
@@ -266,13 +324,17 @@ class LayaOracle:
             setup_grade=grade,
             trap_probability=trap_prob,
             confluence_score=conf_score,
-            confidence=0.92 if is_valid else 0.45,
+            confidence=0.95 if is_valid else 0.45,
             compounding_multiplier=compounding_mult,
             decision_latency_ms=latency,
             matched_ict_concepts=matched_titles,
-            reasoning=f"Laya Calibrated Engine: Grade {grade} (Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, ICT: {', '.join(matched_titles[:2])})",
+            reasoning=f"Laya Calibrated Engine: Grade {grade} (Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, Pol: {pol_eval.regime.value}, ICT: {', '.join(matched_titles[:2])})",
             empirical_win_rate_pct=regime_eval.empirical_win_rate_pct,
-            regime_notes=regime_eval.regime_notes,
+            regime_notes=f"{regime_eval.regime_notes} | {pol_eval.active_catalyst}",
+            political_regime=pol_eval.regime.value,
+            macro_bias=pol_eval.macro_bias.value,
+            geopolitical_heat=pol_eval.geopolitical_heat_index,
+            tp_expansion_multiplier=pol_eval.tp_expansion_multiplier,
         )
         self._last_decision = decision
         return decision
@@ -315,6 +377,11 @@ class LayaOracle:
             "empirical_win_rate": f"{last_dec.empirical_win_rate_pct:.1f}%" if last_dec else "79.5%",
             "regime_notes": last_dec.regime_notes if last_dec else "473-Day Continuous Macro Priors Active",
             "reasoning": last_dec.reasoning if last_dec else "Laya System 1 Surveillance Active",
+            "politician": self.politician.get_telemetry(),
+            "geopolitical_heat": f"{self.politician._geopolitical_heat_index:.1f}/100",
+            "political_regime": self.politician._current_regime.value,
+            "macro_bias": self.politician._current_bias.value,
+            "tp_expansion": f"{last_dec.tp_expansion_multiplier:.2f}x" if last_dec else "1.00x",
         }
 
 
