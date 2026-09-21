@@ -429,9 +429,15 @@ def _render_hft_terminal() -> str:
       <span class="k">sovereign guarantee shield</span>
       <span class="v" id="politician_shield" style="font-size:11px; color:var(--win);">SHIELD ARMED · Spread Protection Active</span>
     </div>
-    <div class="row" style="border:0;">
+    <div class="row">
       <span class="k">active parsed catalyst</span>
       <span class="v" id="politician_headline" style="font-size:10px; color:var(--txt2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px;">Trump Tariffs & Geopolitical Flow Active</span>
+    </div>
+    <div id="politician_news_container" style="border-top:1px dashed rgba(255,255,255,0.08); margin-top:6px; padding-top:6px;">
+      <div style="font-size:10px; color:#ffaa00; font-weight:700; margin-bottom:4px;">⚡ LIVE GEOPOLITICAL & MACRO NEWS WIRE:</div>
+      <div id="politician_news_list" style="display:flex; flex-direction:column; gap:4px;">
+        <div style="font-size:10px; color:var(--txt2);">Streaming live news feeds...</div>
+      </div>
     </div>
   </div>
 
@@ -771,6 +777,17 @@ def _render_hft_terminal() -> str:
       if (polHead) {
         polHead.textContent = pol.active_headline || 'Trump Tariff & Trade War Regime Active';
         polHead.title = pol.active_headline || '';
+      }
+      const pNewsList = document.getElementById('politician_news_list');
+      if (pNewsList && Array.isArray(pol.breaking_news) && pol.breaking_news.length > 0) {
+        pNewsList.innerHTML = pol.breaking_news.slice(0, 3).map(n => {
+          const sentColor = n.sentiment.includes('BULL') ? 'var(--win)' : n.sentiment.includes('BEAR') ? 'var(--loss)' : 'var(--gold)';
+          return `<div style="font-size:10px; line-height:1.3; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:3px;">
+            <span style="color:${sentColor}; font-weight:700; margin-right:4px;">${n.sentiment}</span>
+            <span style="color:var(--txt);">${n.title}</span>
+            <span style="color:var(--txt2); font-size:9px; margin-left:4px;">(${n.source} · ${n.age_min}m ago)</span>
+          </div>`;
+        }).join('');
       }
 
       // Autonomous LLM Doctor Telemetry

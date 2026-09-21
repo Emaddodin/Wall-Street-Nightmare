@@ -98,8 +98,18 @@ class PoliticianBrain:
 
     CALENDAR_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
     NEWS_RSS_URLS = [
-        "https://news.google.com/rss/search?q=Gold+OR+XAUUSD+OR+Trump+tariffs+when:24h&hl=en-US&gl=US&ceid=US:en",
-        "https://news.google.com/rss/search?q=geopolitics+OR+Federal+Reserve+inflation+when:24h&hl=en-US&gl=US&ceid=US:en",
+        # 1. Gold Bullion & Commodities direct feed (12h real-time)
+        "https://news.google.com/rss/search?q=XAUUSD+OR+%22gold+price%22+OR+%22gold+rally%22+OR+%22gold+slump%22+when:12h&hl=en-US&gl=US&ceid=US:en",
+        # 2. Trump Trade Wars, Tariffs, Sanctions & Executive Orders
+        "https://news.google.com/rss/search?q=Trump+AND+(tariffs+OR+%22trade+war%22+OR+%22trade+deficit%22+OR+%22sanctions%22)+when:12h&hl=en-US&gl=US&ceid=US:en",
+        # 3. Federal Reserve, Jerome Powell, CPI & Inflationary Waves
+        "https://news.google.com/rss/search?q=(%22Federal+Reserve%22+OR+%22Jerome+Powell%22+OR+%22rate+cut%22+OR+%22inflation%22+OR+%22CPI%22)+AND+(dollar+OR+yields)+when:12h&hl=en-US&gl=US&ceid=US:en",
+        # 4. Geopolitical Flashpoints (Middle East, Red Sea, Hormuz, Taiwan, Ukraine)
+        "https://news.google.com/rss/search?q=(%22Middle+East%22+OR+%22Hormuz%22+OR+%22Iran%22+OR+%22Red+Sea%22+OR+%22Taiwan%22+OR+%22Ukraine%22)+AND+(missile+OR+escalat+OR+strike+OR+war)+when:12h&hl=en-US&gl=US&ceid=US:en",
+        # 5. BRICS, De-Dollarization & Central Bank physical gold reserves
+        "https://news.google.com/rss/search?q=(%22central+bank%22+OR+%22PBOC%22+OR+%22BRICS%22+OR+%22de-dollarization%22)+AND+gold+when:24h&hl=en-US&gl=US&ceid=US:en",
+        # 6. ForexLive Real-Time Breaking Macro Wire
+        "https://www.forexlive.com/feed/news",
     ]
 
     # Empirical 473-Day Prior Distinctions
@@ -115,22 +125,25 @@ class PoliticianBrain:
         "rate cut": 1.5, "rate cuts": 1.5, "dovish": 1.5, "inflation cools": 1.2,
         "debt ceiling": 1.2, "deficit": 1.0, "middle east": 1.5, "conflict": 1.5,
         "ukraine": 1.2, "taiwan": 1.5, "pboc buys gold": 2.0, "gold rally": 1.2,
+        "gold surge": 1.5, "bullion": 1.2, "record high": 1.5, "geopolitical risk": 1.8,
+        "hormuz": 1.8, "red sea": 1.5, "attack": 1.5, "embargo": 1.5,
     }
 
     BEARISH_KEYWORDS = {
         "rate hike": 2.0, "rate hikes": 2.0, "hawkish": 1.8, "powell hawkish": 2.0,
         "hot cpi": 1.8, "inflation surges": 1.5, "strong dollar": 1.5, "dxy rally": 1.5,
         "ceasefire": 2.0, "peace deal": 2.0, "trade deal": 1.8, "tariffs lifted": 2.0,
-        "gold sells off": 1.2, "gold slumps": 1.2, "yields jump": 1.5, "higher for longer": 1.8,
+        "gold sells off": 1.5, "gold slumps": 1.5, "yields jump": 1.5, "higher for longer": 1.8,
+        "dollar surge": 1.5, "dollar index hits": 1.2, "treasury yields rise": 1.5,
     }
 
     HIGH_HEAT_KEYWORDS = {
         "war", "missile", "strike", "emergency", "attack", "invasion", "nuclear",
         "taiwan strait", "strait of hormuz", "martial law", "retaliatory tariffs",
-        "breaking", "escalates", "crisis", "threat", "sanction"
+        "breaking", "escalates", "crisis", "threat", "sanction", "red sea attack"
     }
 
-    def __init__(self, summary_path: Path = SUMMARY_FILE, update_interval_sec: int = 300):
+    def __init__(self, summary_path: Path = SUMMARY_FILE, update_interval_sec: int = 90):
         self.summary_path = summary_path
         self.update_interval_sec = update_interval_sec
         self.regime_stats: Dict[str, Any] = {}
@@ -681,6 +694,21 @@ class PoliticianBrain:
 
         is_frozen, freeze_reason = self.check_calendar_freeze(window_minutes=15)
         heat_grade = "CRITICAL 🔥" if heat >= 80.0 else "ELEVATED ⚠️" if heat >= 60.0 else "MODERATE ⚖️" if heat >= 40.0 else "CALM 🕊️"
+        now = time.time()
+        with self._lock:
+            cached_hl = list(self._cached_headlines)
+
+        breaking_list = []
+        for h in cached_hl[:5]:
+            sent_label = "BULLISH 🟢" if h.sentiment_score > 0.15 else "BEARISH 🔴" if h.sentiment_score < -0.15 else "NEUTRAL ⚖️"
+            breaking_list.append({
+                "title": h.title,
+                "source": h.source,
+                "sentiment": sent_label,
+                "sentiment_score": round(h.sentiment_score, 2),
+                "heat": round(h.heat_contribution, 1),
+                "age_min": max(1, int((now - h.epoch) / 60.0)) if h.epoch else 1,
+            })
 
         return {
             "heat_index": heat,
@@ -688,6 +716,7 @@ class PoliticianBrain:
             "political_regime": regime,
             "macro_bias": bias,
             "active_headline": headline,
+            "breaking_news": breaking_list,
             "shield_status": "FREEZE" if is_frozen else "ACTIVE_PROTECTION",
             "shield_reason": freeze_reason if is_frozen else "Zero spread-widening risk",
             "alpha_status": "TITAN_ACCELERATION_ARMED" if bias == MacroBias.STRONG_BULL.value else "STANDARD",
