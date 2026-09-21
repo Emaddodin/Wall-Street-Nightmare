@@ -169,16 +169,21 @@ class ApexBacktestEngine:
 
         trades: List[TradeRecord] = []
         ticket_counter = 1
+        daily_records: List[Dict[str, Any]] = []
 
         active_pos: Optional[ApexPosition] = None
         scaled_out_vol = 0.0
         realized_scale_pnl = 0.0
         last_sig_time = 0.0
 
-        for df in days:
+        for day_idx, df in enumerate(days, 1):
             n_rows = len(df)
             if n_rows < 30:
                 continue
+
+            day_start_balance = balance
+            trades_before_day = len(trades)
+            day_date = str(df["datetime"].iloc[0].date())
 
             # Numpy arrays for sub-microsecond row iteration
             o_arr = df["open"].to_numpy()
@@ -453,6 +458,28 @@ class ApexBacktestEngine:
                 dd = (peak_equity - balance) / peak_equity * 100.0 if peak_equity > 0 else 0.0
                 max_drawdown = max(max_drawdown, dd)
 
+            # End of day summary
+            day_trades = trades[trades_before_day:]
+            day_wins = [t for t in day_trades if t.is_win]
+            day_losses = [t for t in day_trades if not t.is_win]
+            day_pnl = balance - day_start_balance
+            day_ret_pct = (day_pnl / day_start_balance * 100.0) if day_start_balance > 0 else 0.0
+            day_wr = (len(day_wins) / len(day_trades) * 100.0) if len(day_trades) > 0 else 0.0
+
+            daily_records.append({
+                "day_num": day_idx,
+                "date": day_date,
+                "start_balance": round(day_start_balance, 2),
+                "end_balance": round(balance, 2),
+                "pnl": round(day_pnl, 2),
+                "day_return_pct": round(day_ret_pct, 2),
+                "trades": len(day_trades),
+                "wins": len(day_wins),
+                "losses": len(day_losses),
+                "win_rate": round(day_wr, 1),
+                "cum_pnl": round(balance - self.starting_balance, 2),
+            })
+
         # Performance summary
         total_trades = len(trades)
         wins = [t for t in trades if t.is_win]
@@ -476,11 +503,13 @@ class ApexBacktestEngine:
             "max_drawdown_pct": round(max_drawdown, 2),
             "big_trades_count": len(big_trades),
             "four_figure_trades_count": len(four_figure_trades),
+            "daily_stats": daily_records,
             "sample_trades": [t.__dict__ for t in trades[-10:]],
         }
 
 
 if __name__ == "__main__":
+    import json
     runner = ApexBacktestEngine()
     print("Starting Apex Engine 60-Day Historical Benchmark...")
     t0 = time.time()
@@ -489,6 +518,13 @@ if __name__ == "__main__":
 
     apex = res["apex"]
     base = res["baseline"]
+
+    # Save full results including daily breakdown
+    out_file = Path("data/backtest_60day_daily_stats.json")
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_file, "w") as f:
+        json.dump(res, f, indent=2, default=lambda o: bool(o) if isinstance(o, np.bool_) else (float(o) if isinstance(o, (np.floating, np.integer)) else str(o)))
+    print(f"\nSaved detailed 60-day daily stats to {out_file}")
 
     print("\n" + "=" * 65)
     print("           THE APEX ENGINE HISTORICAL BENCHMARK RESULTS")
@@ -508,3 +544,14 @@ if __name__ == "__main__":
     print(f"{'Big Trades (+$500+)':<25} | {base['big_trades_count']:<16} | {apex['big_trades_count']:<16}")
     print(f"{'Four-Figure (+$1,000+)':<25} | {base['four_figure_trades_count']:<16} | {apex['four_figure_trades_count']:<16}")
     print("=" * 65)
+
+    print("\n" + "=" * 90)
+    print("                      THE APEX ENGINE: FULL 60-DAY DAILY BREAKDOWN")
+    print("=" * 90)
+    print(f"{'Day':<4} | {'Date':<10} | {'Start Bal':<12} | {'End Bal':<14} | {'Daily PnL':<12} | {'Return %':<9} | {'Trades':<6} | {'WR %':<6}")
+    print("-" * 90)
+    for d in apex["daily_stats"]:
+        pnl_str = f"+${d['pnl']:,.2f}" if d['pnl'] >= 0 else f"-${abs(d['pnl']):,.2f}"
+        ret_str = f"+{d['day_return_pct']:.1f}%" if d['day_return_pct'] >= 0 else f"{d['day_return_pct']:.1f}%"
+        print(f"{d['day_num']:<4} | {d['date']:<10} | ${d['start_balance']:<11,.2f} | ${d['end_balance']:<13,.2f} | {pnl_str:<12} | {ret_str:<9} | {d['trades']:<6} | {d['win_rate']:<5.1f}%")
+    print("=" * 90)
