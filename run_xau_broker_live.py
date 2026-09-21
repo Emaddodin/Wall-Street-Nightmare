@@ -58,7 +58,7 @@ STATE_FILE_RELAPSE = DATA_DIR / "relapse_scalper_state.json"
 VAULT_FILE = DATA_DIR / "stratton_vault.json"
 DEFAULT_NTFY_URL = "https://ntfy.sh"
 NTFY_TOPIC = os.getenv("NTFY_TOPIC", "tbt-96c0dc08c297676b")
-WEB_PORT = int(os.getenv("SCALPER_APP_PORT", "8443"))
+WEB_PORT = int(os.getenv("SCALPER_APP_PORT", "443"))
 LLAMA_COMPLETION_URL = os.getenv("LLAMA_SERVER_URL", "http://127.0.0.1:8080/completion")
 
 MAX_RISK_STOP_USD = 15.00      # Hard -$15.00 loss cap (15% risk protection)
@@ -71,11 +71,10 @@ def start_stratton_oakmont_app(port: int = WEB_PORT) -> None:
         stratton_app.PORT = port
         t = threading.Thread(target=stratton_app.run_app, daemon=True)
         t.start()
-        token = getattr(stratton_app, "TOKEN", "7SQMRVRJ-VkD4lG3VXsb1Fc82oYUAP93")
-        http_port = getattr(stratton_app, "PORT_HTTP", 8088)
         logger.info("🏛️ Stratton Oakmont HFT Terminal live at:")
-        logger.info("   👉 Plain HTTP (Zero SSL warnings for friends): http://82.115.21.155:%d/", http_port)
-        logger.info("   👉 Secure HTTPS: https://82.115.21.155:%d/", port)
+        logger.info("   👉 Official HTTPS (Trusted SSL): https://82-115-21-155.sslip.io/")
+        logger.info("   👉 Standard HTTP (No port needed): http://82.115.21.155/")
+        logger.info("   👉 Alternative Ports: http://82.115.21.155:8088/ and https://82.115.21.155:8443/")
     except Exception as exc:
         logger.warning("Local terminal app start skipped (%s)", exc)
 
@@ -358,7 +357,7 @@ async def run_live_scalper():
 
     push_ntfy(
         title="🟢 Stratton Oakmont Broker LIVE Armed",
-        message=f"Connected to LiteFinance MT5 Demo #91456523. Initial Balance: ${acc_snap.balance:.2f} (1:1000 Leverage).\nLaya System 1 & ICT RAG Active.\nTerminal: http://82.115.21.155:8088/ (HTTPS: :8443)",
+        message=f"Connected to LiteFinance MT5 Demo #91456523. Initial Balance: ${acc_snap.balance:.2f} (1:1000 Leverage).\nLaya System 1 & ICT RAG Active.\nTerminal: https://82-115-21-155.sslip.io/ (HTTP: http://82.115.21.155/)",
         tags="rocket,white_check_mark",
     )
 

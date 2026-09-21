@@ -181,5 +181,6 @@ Audited across all 473 trading days from **January 21, 2025 to September 20, 202
 | **`stratton-llm-critic.service`** | `llama-server :8080` | `active` | Local Qwen2.5-1.5B-Instruct LLM |
 
 ### Terminal Access:
-- **Direct HTTP (Zero SSL Warnings)**: `http://82.115.21.155:8088/`
-- **Secure HTTPS**: `https://82.115.21.155:8443/`
+- **Official Trusted HTTPS (Valid Let's Encrypt SSL, Green Padlock)**: `https://82-115-21-155.sslip.io/`
+- **Standard HTTP (Port 80, No port number needed)**: `http://82.115.21.155/`
+- **Alternative/Backward-Compatible Ports**: `http://82.115.21.155:8088/` and `https://82.115.21.155:8443/`

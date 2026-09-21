@@ -8,10 +8,10 @@ User=root
 WorkingDirectory=/root/ict_sniper
 EnvironmentFile=/root/ict_sniper/.env
 Environment=SCALPER_APP_HOST=0.0.0.0
-Environment=SCALPER_APP_PORT=8443
-Environment=SCALPER_APP_HTTP_PORT=8088
-Environment=SCALPER_APP_CERT=/root/ict_sniper/tls/fullchain.pem
-Environment=SCALPER_APP_KEY=/root/ict_sniper/tls/privkey.pem
+Environment=SCALPER_APP_PORT=443
+Environment=SCALPER_APP_HTTP_PORT=80
+Environment=SCALPER_APP_CERT=/etc/letsencrypt/live/82-115-21-155.sslip.io/fullchain.pem
+Environment=SCALPER_APP_KEY=/etc/letsencrypt/live/82-115-21-155.sslip.io/privkey.pem
 ExecStart=/root/ict_sniper/venv/bin/python -u run_xau_broker_live.py
 Restart=always
 RestartSec=5

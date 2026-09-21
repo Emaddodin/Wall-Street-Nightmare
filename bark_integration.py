@@ -21,9 +21,8 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger("bark_integration")
 
 DEFAULT_BARK_SERVER = "https://api.day.app"
-DEFAULT_NTFY_URL = "https://ntfy.sh"
-DASHBOARD_URL = "http://82.115.21.155:8088/"
-ICON_URL = "http://82.115.21.155:8088/icon-180.png"
+DASHBOARD_URL = os.getenv("SCALPER_DASHBOARD_URL", "https://82-115-21-155.sslip.io/")
+ICON_URL = os.getenv("SCALPER_ICON_URL", "https://82-115-21-155.sslip.io/icon-180.png")
 
 
 def _read_env_value(key: str) -> str:

@@ -23,12 +23,22 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA = Path(os.getenv("SCALPER_DATA", "/root/ict_sniper/data" if Path("/root/ict_sniper").exists() else str(ROOT / "data")))
 HFT_STATE = DATA / "state" / "hft.json"
 
+LETSENCRYPT_CERT = Path("/etc/letsencrypt/live/82-115-21-155.sslip.io/fullchain.pem")
+LETSENCRYPT_KEY = Path("/etc/letsencrypt/live/82-115-21-155.sslip.io/privkey.pem")
+
+if LETSENCRYPT_CERT.exists() and LETSENCRYPT_KEY.exists():
+    DEFAULT_CERT = str(LETSENCRYPT_CERT)
+    DEFAULT_KEY = str(LETSENCRYPT_KEY)
+else:
+    DEFAULT_CERT = "/root/ict_sniper/tls/fullchain.pem"
+    DEFAULT_KEY = "/root/ict_sniper/tls/privkey.pem"
+
 TOKEN = os.getenv("SCALPER_APP_TOKEN", "7SQMRVRJ-VkD4lG3VXsb1Fc82oYUAP93")
-CERT = os.getenv("SCALPER_APP_CERT", "/root/ict_sniper/tls/fullchain.pem")
-KEY = os.getenv("SCALPER_APP_KEY", "/root/ict_sniper/tls/privkey.pem")
+CERT = os.getenv("SCALPER_APP_CERT", DEFAULT_CERT)
+KEY = os.getenv("SCALPER_APP_KEY", DEFAULT_KEY)
 HOST = os.getenv("SCALPER_APP_HOST", "0.0.0.0")
-PORT = int(os.getenv("SCALPER_APP_PORT", "8443"))
-PORT_HTTP = int(os.getenv("SCALPER_APP_HTTP_PORT", "8088"))
+PORT = int(os.getenv("SCALPER_APP_PORT", "443"))
+PORT_HTTP = int(os.getenv("SCALPER_APP_HTTP_PORT", "80"))
 
 SESSIONS: dict[str, float] = {}
 SESSION_TTL = 86400 * 30  # 30 days
@@ -1131,28 +1141,52 @@ class HFTHandler(BaseHTTPRequestHandler):
 
 def run_app():
     ThreadingHTTPServer.allow_reuse_address = True
-    if os.path.exists(CERT) and os.path.exists(KEY):
-        def _run_http():
-            try:
-                http_server = ThreadingHTTPServer((HOST, PORT_HTTP), HFTHandler)
-                print(f"Stratton Oakmont HTTP server running on http://{HOST}:{PORT_HTTP} (Zero SSL warnings for friends)")
-                http_server.serve_forever()
-            except Exception as e:
-                print(f"HTTP server on {PORT_HTTP} error: {e}")
+    http_ports = list(dict.fromkeys([PORT_HTTP, 80, 8088]))
+    for p in http_ports:
+        def _make_http_server(port_num):
+            def _serve():
+                try:
+                    s = ThreadingHTTPServer((HOST, port_num), HFTHandler)
+                    print(f"Stratton Oakmont HTTP server running on http://{HOST}:{port_num} (Zero SSL warnings for friends)")
+                    s.serve_forever()
+                except Exception as e:
+                    print(f"HTTP server on port {port_num} notice: {e}")
+            threading.Thread(target=_serve, daemon=True).start()
+        _make_http_server(p)
 
-        t_http = threading.Thread(target=_run_http, daemon=True)
-        t_http.start()
+    has_ssl = os.path.exists(CERT) and os.path.exists(KEY)
+    if has_ssl:
+        https_ports = list(dict.fromkeys([PORT, 443, 8443]))
+        for p in https_ports[:-1]:
+            def _make_https_server(port_num):
+                def _serve():
+                    try:
+                        s = ThreadingHTTPServer((HOST, port_num), HFTHandler)
+                        ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                        ctx.load_cert_chain(certfile=CERT, keyfile=KEY)
+                        s.socket = ctx.wrap_socket(s.socket, server_side=True)
+                        print(f"Stratton Oakmont HTTPS server running on https://{HOST}:{port_num}")
+                        s.serve_forever()
+                    except Exception as e:
+                        print(f"HTTPS server on port {port_num} notice: {e}")
+                threading.Thread(target=_serve, daemon=True).start()
+            _make_https_server(p)
 
-        https_server = ThreadingHTTPServer((HOST, PORT), HFTHandler)
-        ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        ctx.load_cert_chain(certfile=CERT, keyfile=KEY)
-        https_server.socket = ctx.wrap_socket(https_server.socket, server_side=True)
-        print(f"Stratton Oakmont HTTPS server running on https://{HOST}:{PORT}")
-        https_server.serve_forever()
+        last_port = https_ports[-1]
+        try:
+            s = ThreadingHTTPServer((HOST, last_port), HFTHandler)
+            ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ctx.load_cert_chain(certfile=CERT, keyfile=KEY)
+            s.socket = ctx.wrap_socket(s.socket, server_side=True)
+            print(f"Stratton Oakmont HTTPS server running on https://{HOST}:{last_port}")
+            s.serve_forever()
+        except Exception as e:
+            print(f"HTTPS main server on {last_port} error: {e}")
+            while True:
+                time.sleep(3600)
     else:
-        server = ThreadingHTTPServer((HOST, PORT), HFTHandler)
-        print(f"Stratton Oakmont HTTP server running on http://{HOST}:{PORT}")
-        server.serve_forever()
+        while True:
+            time.sleep(3600)
 
 
 if __name__ == "__main__":

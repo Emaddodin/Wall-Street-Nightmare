@@ -26,8 +26,9 @@ The VPS (`82.115.21.155`) runs 3 interdependent systemd services:
 | **`stratton-llm-critic.service`** | `llama-server -m models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf --port 8080` | **Local LLM Engine** (~50ms latency, runs offline on port `8080`). |
 
 ### Web Terminal Access:
-- **Direct HTTP (Clean, zero SSL warnings)**: `http://82.115.21.155:8088/`
-- **Secure HTTPS**: `https://82.115.21.155:8443/`
+- **Official Trusted HTTPS (Valid Let's Encrypt SSL, Green Padlock)**: `https://82-115-21-155.sslip.io/`
+- **Standard HTTP (Port 80, No port number needed)**: `http://82.115.21.155/`
+- **Alternative/Backward-Compatible Ports**: `http://82.115.21.155:8088/` and `https://82.115.21.155:8443/`
 
 ---
 
@@ -128,7 +129,7 @@ Audited from **January 21, 2025 (Trump Day 1) to September 20, 2026** starting f
 ssh root@82.115.21.155 "systemctl status stratton-xau-live.service stratton-auto-repair.service stratton-llm-critic.service --no-pager"
 
 # 2. Check live dashboard API state
-curl -s http://82.115.21.155:8088/api/hft | python3 -m json.tool
+curl -s http://82.115.21.155/api/hft | python3 -m json.tool
 
 # 3. Deploy a modified python file to VPS and restart live engine
 scp scalper/brain/politician_brain.py root@82.115.21.155:/root/ict_sniper/scalper/brain/
