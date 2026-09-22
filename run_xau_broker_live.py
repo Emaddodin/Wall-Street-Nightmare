@@ -2,12 +2,16 @@
 run_xau_broker_live.py
 ======================
 Production Live Trading Engine for XAUUSD executed directly on LiteFinance MT5 Demo.
-Features:
-- Real-time quote streaming from LiteFinance terminal
-- Wednesday Breakout -> Retest -> Rejection candle algorithm
-- Direct broker order execution via LiteFinanceGateway
-- Tight -$15 Risk Stop & Rapid Profit Spike (+ $50 - $100) exit
-- Real-time mobile dashboard sync (:8443) and ntfy push alerts
+Restored directly to the pure "To The Moon" Sovereign Compounding Architecture with:
+- Wednesday Breakout -> Retest -> Rejection candle algorithm (ApexTrinityStrategy)
+- Laya System 1 Decision & Politician Brain Macro Confluence
+- Sovereign Compounding Ladder (0.02 - 5.00 lots) calibrated for current demo balance ($35+)
+- Dynamic Peak Watermark Bag Protection (locks cash if profit pulls back 18% from peak)
+- Fast Breakeven Lock (+1.0 ATR) to guarantee risk-free cushion
+- Physical broker-side Stop-Loss injection via LiteFinance DOM
+- Spread blowout veto (> $0.45), 5-min post-loss cooldown, 60-min 2-loss lockout
+- Friday 18:00 UTC curfew and 20:30 UTC force-flatten
+- Real-time mobile dashboard sync (:443, :8088, :8443) and ntfy push alerts
 - Stratton Vault bankroll & tier persistence
 """
 
@@ -15,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import csv
 import json
 import logging
 import os
@@ -24,7 +29,6 @@ import time
 import urllib.request
 import threading
 from datetime import datetime, timezone
-from email.header import Header
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -42,13 +46,6 @@ import scalper.pa.candles as pa_candles
 from bark_integration import send_alert, push_bark
 from scalper.brain.laya_oracle import get_laya_oracle, LayaOracle
 from scalper.strategies.apex_trinity import ApexTrinityStrategy, ApexSignal
-from scalper.strategies.micro_exit_controller import (
-    MicroExitController,
-    MicroExitConfig,
-    get_default_config,
-    get_to_the_moon_config,
-    ExitDecision,
-)
 
 # Logging
 logging.basicConfig(
@@ -70,12 +67,12 @@ NTFY_TOPIC = os.getenv("NTFY_TOPIC", "tbt-96c0dc08c297676b")
 WEB_PORT = int(os.getenv("SCALPER_APP_PORT", "443"))
 LLAMA_COMPLETION_URL = os.getenv("LLAMA_SERVER_URL", "http://127.0.0.1:8080/completion")
 
-MAX_RISK_STOP_USD = 15.00      # Hard -$15.00 loss cap (15% risk protection)
+MAX_RISK_STOP_USD = 15.00      # Hard -$15.00 loss floor
 RAPID_SPIKE_TARGET_USD = 50.00 # Target rapid profit spike harvest (+50% / $50 per tier)
 
 
-def append_live_trade_journal(trade: Dict[str, Any]) -> None:
-    """Persistently records every completed live trade to CSV and JSON on disk."""
+def log_live_trade(trade: Dict[str, Any]) -> None:
+    """Logs executed trade to CSV and JSON journals on persistent storage."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     file_exists = LIVE_JOURNAL_CSV.exists()
     fieldnames = [
@@ -84,7 +81,6 @@ def append_live_trade_journal(trade: Dict[str, Any]) -> None:
         "realized_pnl", "exit_reason", "duration_min", "balance_after", "equity_after"
     ]
     try:
-        import csv
         with open(LIVE_JOURNAL_CSV, "a", newline="", encoding="utf-8") as f_csv:
             writer = csv.DictWriter(f_csv, fieldnames=fieldnames, extrasaction="ignore")
             if not file_exists:
@@ -108,7 +104,6 @@ def append_live_trade_journal(trade: Dict[str, Any]) -> None:
         logger.error("Error writing live trade to JSON: %s", ex)
 
 
-
 def start_stratton_oakmont_app(port: int = WEB_PORT) -> None:
     try:
         import scalper.app.app as stratton_app
@@ -121,45 +116,6 @@ def start_stratton_oakmont_app(port: int = WEB_PORT) -> None:
         logger.info("   👉 Alternative Ports: http://82.115.21.155:8088/ and https://82.115.21.155:8443/")
     except Exception as exc:
         logger.warning("Local terminal app start skipped (%s)", exc)
-
-
-def query_llama_validation(context: Dict[str, Any]) -> Tuple[bool, str]:
-    prompt = (
-        "<|im_start|>system\n"
-        "You are the Micro-Structure Momentum Validation Brain for high-frequency Gold (XAUUSD) scalping.\n"
-        "Evaluate the Breakout -> Retest -> Rejection candle geometry.\n"
-        "Respond in strict JSON with keys 'decision' ('GO' or 'NO_GO') and 'reasoning'.\n"
-        "<|im_end|>\n"
-        f"<|im_start|>user\n{json.dumps(context, indent=2)}\n<|im_end|>\n"
-        "<|im_start|>assistant\n"
-    )
-
-    payload = {
-        "prompt": prompt,
-        "n_predict": 64,
-        "temperature": 0.1,
-        "stream": False,
-        "stop": ["<|im_end|>", "\n\n"],
-    }
-
-    try:
-        data_bytes = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            LLAMA_COMPLETION_URL,
-            data=data_bytes,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=1.5) as resp:
-            if resp.status == 200:
-                res_json = json.loads(resp.read().decode("utf-8"))
-                content = res_json.get("content", "").strip()
-                parsed = json.loads(content)
-                return (parsed.get("decision") == "GO", parsed.get("reasoning", "Llama GO"))
-    except Exception:
-        pass
-    return (True, "Rule-Based Geometry Confirmed (Local Llama Bypass)")
-
 
 
 def get_vault_state() -> Dict[str, Any]:
@@ -255,58 +211,52 @@ def sync_dashboard_state(
 
 class LiveBrokerScalper:
     """
-    Manages live candle generation, Order Stacking Burst ("MrPFx Model" from scalp.mp4),
-    and Adaptive Intuitive Micro-Exit ("بازی با پوزیشن").
-    Supports both XAUUSD and EURUSD.
+    Manages live candle generation, "To The Moon" ICT Sovereign strategy, and order dispatch via LiteFinanceGateway.
     """
 
     def __init__(self, gateway: LiteFinanceGateway, symbol: str = "XAUUSD"):
         self.gw = gateway
-        self.symbol = "XAUUSD"  # Dedicated 100% to Gold Hyper-Scalp
-        self.exit_cfg = get_to_the_moon_config(self.symbol)
-        self.exit_controller = MicroExitController(self.exit_cfg)
+        self.symbol = symbol
         self.apex = ApexTrinityStrategy(min_candles_warmup=30)
-        
         self.active_stack: Optional[Dict[str, Any]] = None
         self.candles_1m: List[Dict[str, Any]] = []
-        self.candles_5m: List[Dict[str, Any]] = []
         self.current_1m_bar: Optional[Dict[str, Any]] = None
-        self.current_5m_bar: Optional[Dict[str, Any]] = None
         self.last_latency_ms: float = 0.0
         self.last_wick_ratio: float = 0.50
         self.last_trend_aligned: bool = True
         self.daily_date: str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         self.daily_start_balance: float = 0.0
-        self.peak_balance: float = 0.0
         self.milestone_notified: set[int] = set()
 
-        # Institutional Risk & Safeguard State
+        # Institutional Risk Hardening
         self.cooldown_until: float = 0.0
         self.lockout_until: float = 0.0
         self.consecutive_losses: int = 0
         self.daily_realized_loss: float = 0.0
         self.circuit_breaker_active: bool = False
+        self.trading_paused: bool = False
 
     def compute_daily_withdrawal(self, current_balance: float) -> Dict[str, Any]:
         """
-        Computes recommended daily profit withdrawal according to Sovereign schedule.
+        Computes recommended daily profit withdrawal according to the "To The Moon" Sovereign schedule:
+        - Under $1,000 balance: 30% daily profit cash-out.
+        - $1,000 - $5,000 balance: 50% daily profit cash-out.
+        - $5,000+ balance: 70% daily profit cash-out.
         """
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if self.daily_date != today_str:
             self.daily_date = today_str
             self.daily_start_balance = current_balance
             self.daily_realized_loss = 0.0
-            self.circuit_breaker_active = False
             self.consecutive_losses = 0
-            self.cooldown_until = 0.0
-            self.lockout_until = 0.0
+            self.circuit_breaker_active = False
             self.milestone_notified.clear()
         elif self.daily_start_balance <= 0.0:
             self.daily_start_balance = current_balance
 
         daily_profit = max(0.0, current_balance - self.daily_start_balance)
         if current_balance < 1000.0:
-            rate = 0.35  # Vault 35% of daily profits above $100
+            rate = 0.30
         elif current_balance < 5000.0:
             rate = 0.50
         else:
@@ -326,34 +276,6 @@ class LiveBrokerScalper:
             "status": "READY_FOR_CASH_OUT" if cashout_target >= 50.0 else "ACCUMULATING",
         }
 
-    def is_in_killzone(self) -> bool:
-        """
-        High-probability liquidity windows matching the optimized 473-day Trump backtest:
-        - London Drive: 07:00 to 11:30 UTC
-        - NY Overlap / US Data: 12:30 to 16:30 UTC
-        - NY Afternoon Rebalance Sweep: 18:00 to 20:00 UTC
-        - Friday Curfew: Block all entries after 18:00 UTC on Friday to prevent weekend gap risk
-        - Weekend Curfew: Block Saturday and Sunday before 22:00 UTC market open
-        """
-        now = datetime.now(timezone.utc)
-        # Friday Curfew
-        if now.weekday() == 4 and now.hour >= 18:
-            return False
-        # Weekend Curfew
-        if now.weekday() == 5:
-            return False
-        if now.weekday() == 6 and now.hour < 22:
-            return False
-
-        time_float = now.hour + (now.minute / 60.0)
-        if 7.0 <= time_float <= 11.5:
-            return True
-        if 12.5 <= time_float <= 16.5:
-            return True
-        if 18.0 <= time_float <= 20.0:
-            return True
-        return False
-
     def get_current_session_label(self) -> str:
         """Returns ICT session killzone based on current UTC hour."""
         now = datetime.now(timezone.utc)
@@ -364,102 +286,65 @@ class LiveBrokerScalper:
 
         hr = now.hour
         if 0 <= hr < 6:
-            return "Asian Range Accumulation (Chop - Trading Paused)"
+            return "Asian Range Accumulation"
         elif 6 <= hr < 11:
-            return "London Open Judas / Silver Bullet (Active)"
+            return "London Open Judas / Silver Bullet"
         elif 11 <= hr < 17:
-            return "New York AM Silver Bullet Expansion (Active)"
-        elif 17 <= hr < 20:
-            return "New York Afternoon Rebalance Sweep (Active)"
+            return "New York AM Silver Bullet Expansion"
         else:
-            return "London Close / Asian Pre-Market (Chop - Trading Paused)"
+            return "London Close / Asian Pre-Market"
+
+    def compute_lot_size(self, balance: float) -> float:
+        """
+        "To The Moon" Sovereign Compounding Ladder:
+        Calibrated with micro-balance safety:
+          - Balance < $50:    0.02 lots (safe for current demo balance $35.11)
+          - $50 - $200 Tier:  0.05 lots
+          - $200 - $400 Tier: 0.10 lots
+          - $400 - $800 Tier: 0.20 lots (0.33 with Titan boost)
+          - $800 - $1500:     0.40 lots (0.66 with Titan boost)
+          - $1500 - $3000:    0.80 lots (1.32 with Titan boost)
+          - $3000+ Tier:      min(5.00, round(balance / 2000.0, 2))
+        """
+        if balance < 50.0:
+            return 0.02
+        elif balance < 200.0:
+            return 0.05
+        elif balance < 400.0:
+            return 0.10
+        elif balance < 800.0:
+            return 0.20
+        elif balance < 1500.0:
+            return 0.40
+        elif balance < 3000.0:
+            return 0.80
+        else:
+            return min(5.00, round(balance / 2000.0, 2))
+
+    def is_in_killzone(self, hour_utc: Optional[int] = None) -> bool:
+        hr = hour_utc if hour_utc is not None else datetime.now(timezone.utc).hour
+        now = datetime.now(timezone.utc)
+        if now.weekday() == 4 and hr >= 18:
+            return False
+        if now.weekday() == 5 or (now.weekday() == 6 and hr < 22):
+            return False
+        return (6 <= hr < 11) or (11 <= hr < 17)
 
     def compute_stack_sizing(self, balance: float, stop_distance: float = 2.50, mode: str = "TO_THE_MOON") -> Tuple[int, float, float]:
-        """
-        Calculates position stack sizing.
-        - "TO_THE_MOON" (Default): Sovereign Compounding Ladder ($10k-$25k/day).
-        - "CONSERVATIVE_PROP_FIRM": Strict 2% mathematical equity risk cap.
-        Returns: (stack_count, lot_per_order, total_volume)
-        """
-        if self.peak_balance <= 0.0:
-            self.peak_balance = balance
-        self.peak_balance = max(self.peak_balance, balance)
-
-        effective_balance = max(25.0, balance)
-        dd_pct = ((self.peak_balance - balance) / self.peak_balance * 100.0) if self.peak_balance > 0 else 0.0
-
         if mode == "CONSERVATIVE_PROP_FIRM":
-            if dd_pct > 18.0:
-                effective_balance = effective_balance * 0.70
-            risk_pct = 0.02
-            dollar_risk = min(effective_balance * risk_pct, 250.0)
-            safe_stop_dist = max(1.50, stop_distance)
-            target_volume = round(dollar_risk / (safe_stop_dist * 100.0), 2)
-            min_vol = 0.02
-            max_vol = round(min(5.0, max(0.04, (effective_balance / 700.0) * 0.08)), 2)
-            total_volume = max(min_vol, min(max_vol, target_volume))
-            lot_per_order = 0.01 if total_volume < 0.10 else round(total_volume / 5.0, 2)
-            lot_per_order = max(0.01, lot_per_order)
-            stack_count = max(1, min(10, int(round(total_volume / lot_per_order))))
-            total_volume = round(stack_count * lot_per_order, 2)
-            return stack_count, lot_per_order, total_volume
-
-        # Default: "TO_THE_MOON" Sovereign Compounding Ladder
-        if dd_pct > 25.0:
-            effective_balance = effective_balance * 0.75  # Defensive scaling during severe drawdown
-
-        # Base Sovereign Compounding Ladder
-        if effective_balance < 25.0:
-            base_lot = 0.01
-        elif effective_balance < 200.0:
-            base_lot = 0.05
-        elif effective_balance < 400.0:
-            base_lot = 0.10
-        elif effective_balance < 800.0:
-            base_lot = 0.20
-        elif effective_balance < 1500.0:
-            base_lot = 0.40
-        elif effective_balance < 3000.0:
-            base_lot = 0.80
-        else:
-            base_lot = min(5.0, round(effective_balance / 2000.0, 2))
-
-        # Politician Titan Alpha Boost (up to 1.65x for A+ prime setups)
-        compounding_mult = 1.0
-        try:
-            from scalper.brain.politician_brain import get_politician_brain
-            pol_brain = get_politician_brain()
-            eval_res = pol_brain.evaluate_entry_macro_fit("BUY", "BREAKOUT_RETEST")
-            if eval_res.alpha_boost_multiplier >= 1.50:
-                compounding_mult = 1.65
-        except Exception:
-            pass
-
-        total_volume = round(min(5.0, max(0.02, base_lot * compounding_mult)), 2)
-
-        # Split total_volume into order stack (max 5 orders to prevent broker order flood)
-        if total_volume <= 0.05:
-            stack_count = 1
-            lot_per_order = total_volume
-        elif total_volume <= 0.20:
-            stack_count = max(1, min(4, int(round(total_volume / 0.05))))
-            lot_per_order = round(total_volume / stack_count, 2)
-        else:
-            stack_count = max(2, min(5, int(round(total_volume / 0.10))))
-            lot_per_order = round(total_volume / stack_count, 2)
-
-        total_volume = round(stack_count * lot_per_order, 2)
-        return stack_count, lot_per_order, total_volume
-
+            vol = round(min(0.08, max(0.02, (balance * 0.02) / (stop_distance * 100.0))), 2)
+            lot = 0.01
+            count = int(vol / lot)
+            return count, lot, vol
+        vol = self.compute_lot_size(balance)
+        return 1, vol, vol
 
     def update_tick(self, quote: QuoteSnapshot) -> None:
-        """Accumulates ticks into 1-minute and 5-minute OHLCV candles."""
+        """Accumulates ticks into 1-minute OHLCV candles."""
         px = quote.mid
         t = quote.timestamp
         current_minute_ts = int(t // 60) * 60
-        current_5m_ts = int(t // 300) * 300
 
-        # Accumulate 1m bar
         if self.current_1m_bar is None or self.current_1m_bar["minute_ts"] != current_minute_ts:
             if self.current_1m_bar is not None:
                 self.candles_1m.append(self.current_1m_bar)
@@ -480,100 +365,48 @@ class LiveBrokerScalper:
             self.current_1m_bar["close"] = px
             self.current_1m_bar["volume"] += 1
 
-        # Accumulate 5m bar
-        if self.current_5m_bar is None or self.current_5m_bar["5m_ts"] != current_5m_ts:
-            if self.current_5m_bar is not None:
-                self.candles_5m.append(self.current_5m_bar)
-                if len(self.candles_5m) > 100:
-                    self.candles_5m = self.candles_5m[-100:]
-            self.current_5m_bar = {
-                "5m_ts": current_5m_ts,
-                "open_time": current_5m_ts * 1000,
-                "open": px,
-                "high": px,
-                "low": px,
-                "close": px,
-                "volume": 1,
-            }
-        else:
-            self.current_5m_bar["high"] = max(self.current_5m_bar["high"], px)
-            self.current_5m_bar["low"] = min(self.current_5m_bar["low"], px)
-            self.current_5m_bar["close"] = px
-            self.current_5m_bar["volume"] += 1
-
-    def evaluate_strategy(self, quote: QuoteSnapshot, account_balance: float) -> Optional[Dict[str, Any]]:
+    def evaluate_strategy(self, quote: Optional[QuoteSnapshot] = None, account_balance: Optional[float] = None) -> Optional[ApexSignal]:
         """
-        Evaluates active Gold hyper-scalp setup with killzone, volatility, spread, and circuit breaker filters.
-        Strictly aligned with the 473-day Trump regime optimization.
+        Evaluates "To The Moon" (Apex Sovereign Trinity Matrix):
+        1. 5m S&R Breakout + 1m Retest + Pin Wick
+        2. Multi-Session Silver Bullet FVG CE Tap (London 07-08 UTC & NY 14-15 UTC)
+        3. London Turtle Soup Asian Liquidity Sweep (06-09 UTC)
         """
-        now_ts = time.time()
-        # Circuit Breaker & Cooldown Vetoes
-        if self.circuit_breaker_active:
+        if self.circuit_breaker_active or time.time() < self.cooldown_until or time.time() < self.lockout_until:
             return None
-        if now_ts < self.lockout_until:
+        if quote and (quote.ask - quote.bid) > 0.45:
             return None
-        if now_ts < self.cooldown_until:
+        now_utc = datetime.now(timezone.utc)
+        if now_utc.weekday() == 4 and now_utc.hour >= 18:
             return None
-
-        # 0. Live Spread Veto: Avoid news blowout & illiquid rollover (Max 45 cents on Gold)
-        spread = round(quote.ask - quote.bid, 2)
-        if spread > 0.45:
-            logger.warning("🛡️ SPREAD BLOWOUT VETO: Current spread is $%.2f (max allowed $0.45). Signal suppressed.", spread)
-            return None
-
-        # 1. Killzone Filter: Avoid dead Asian/late-night chop & Friday weekend close
-        if not self.is_in_killzone():
-            return None
-
         if len(self.candles_1m) < 30:
             return None
-
-        sig = self.apex.evaluate(self.candles_1m)
-        if not sig:
-            return None
-
-        # 2. Volatility Filter: Ensure minimum ATR for fast impulse explosion
-        if getattr(sig, "atr_1m", 1.5) < 1.10:
-            return None
-
-        return {
-            "direction": sig.direction,
-            "entry_price": sig.entry_price,
-            "sl_price": sig.sl_price,
-            "tp_price": sig.spike_target,
-            "strategy_type": sig.strategy_type,
-            "concept": ", ".join(sig.ict_concepts),
-            "atr_1m": sig.atr_1m,
-            "confluence_score": sig.confidence_score,
-        }
+        return self.apex.evaluate(self.candles_1m)
 
 
-async def run_live_scalper(symbol: str = "XAUUSD"):
-
+async def run_live_scalper():
     """Main async execution loop."""
-    target_symbol = symbol.upper().replace("/", "")
-    logger.info("Initializing Live Broker Hyper-Scalper for %s...", target_symbol)
+    logger.info("Initializing Live Broker Scalper ('To The Moon' Sovereign Architecture)...")
 
-    # Start Stratton Oakmont HFT Web Terminal on background thread (:8443)
+    # Start Stratton Oakmont HFT Web Terminal on background thread (:443 / :8088 / :80)
     start_stratton_oakmont_app(port=WEB_PORT)
 
-    gw = LiteFinanceGateway(symbol=target_symbol)
+    gw = LiteFinanceGateway()
     connected = await gw.initialize()
     if not connected:
         logger.error("Could not connect to LiteFinance. Exiting.")
         return
 
     acc_snap = await gw.get_account_snapshot()
-    logger.info("🏦 LIVE BROKER CONNECTED: Balance: $%.2f | Assets Used: $%.2f | Instrument: %s",
-                acc_snap.balance, acc_snap.assets_used, target_symbol)
+    logger.info("🏦 LIVE BROKER CONNECTED: Balance: $%.2f | Assets Used: $%.2f", acc_snap.balance, acc_snap.assets_used)
 
     vault = get_vault_state()
     laya_oracle = get_laya_oracle()
-    scalper = LiveBrokerScalper(gw, symbol=target_symbol)
+    scalper = LiveBrokerScalper(gw)
 
     push_ntfy(
-        title=f"🟢 Hyper-Scalper LIVE Armed ({target_symbol})",
-        message=f"Connected to LiteFinance MT5 Demo #91456523.\nInitial Balance: ${acc_snap.balance:.2f} (1:1000 Leverage).\nExecution Model: Order Stacking Burst + Dynamic Intuitive Exit.\nTerminal: https://82-115-21-155.sslip.io/",
+        title="🟢 Stratton Oakmont Broker LIVE Armed",
+        message=f"Connected to LiteFinance MT5 Demo #91456523. Initial Balance: ${acc_snap.balance:.2f} (1:1000 Leverage).\nLaya System 1 & Politician Brain Active.\nDynamic Peak Bag Protection Armed.\nTerminal: https://82-115-21-155.sslip.io/",
         tags="rocket,white_check_mark",
     )
 
@@ -583,7 +416,7 @@ async def run_live_scalper(symbol: str = "XAUUSD"):
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: stop_event.set())
 
-    logger.info("Entering live trading loop with MicroExitController & Order Stacking Burst Surveillance...")
+    logger.info("Entering live trading loop with Laya System 1 Surveillance...")
     tick_count = 0
     last_quote_time = time.time()
 
@@ -635,185 +468,257 @@ async def run_live_scalper(symbol: str = "XAUUSD"):
             tick_count += 1
             scalper.update_tick(quote)
 
-            # 2. Check position state if in trade (Every tick < 20ms: "بازی با پوزیشن")
+            # 2. Check position state if in trade
             if scalper.active_stack:
                 acc = await gw.get_account_snapshot(force_fresh=True)
                 floating_pnl = acc.floating_pnl
                 current_mid = quote.mid
                 scalper.active_stack["floating_pnl"] = floating_pnl
                 scalper.active_stack["current_price"] = current_mid
+                if floating_pnl > scalper.active_stack.get("peak_pnl", 0.0):
+                    scalper.active_stack["peak_pnl"] = floating_pnl
 
-                # Microsecond intuitive evaluation of the live position
-                exit_dec: ExitDecision = scalper.exit_controller.evaluate_tick(
-                    current_price=current_mid,
-                    floating_pnl=floating_pnl,
-                )
+                entry_px = scalper.active_stack["entry_price"]
+                direction = scalper.active_stack["direction"]
+                atr = scalper.active_stack.get("atr_1m", 1.50)
 
-                scalper.active_stack["peak_pnl"] = exit_dec.peak_pnl
-                scalper.active_stack["current_gain"] = exit_dec.current_gain
-                scalper.active_stack["time_in_trade"] = exit_dec.time_in_trade_sec
-                scalper.active_stack["sl_price"] = scalper.exit_controller.sl_price
+                # Distance moved in favorable direction in points ($/oz)
+                gain_pts = (current_mid - entry_px) if direction == "BUY" else (entry_px - current_mid)
 
-                if exit_dec.should_exit:
-                    logger.info(
-                        "🚨 DYNAMIC MICRO-EXIT TRIGGERED: %s | PnL: $%.2f | Gain: %+.2f %s | Duration: %.1fs",
-                        exit_dec.reason, floating_pnl, exit_dec.current_gain,
-                        scalper.exit_controller.cfg.point_scale_label, exit_dec.time_in_trade_sec
-                    )
+                # --- "To The Moon" Sovereign Trailing Ratchets & Bag Protection ---
+
+                # EDGE FIX 1: Dynamic Peak Watermark Bag Protection
+                # If floating profit reached >= $35 (or >= 6% of balance) and drops by >= 18% of peak -> LOCK CASH & EXIT!
+                peak_pnl = scalper.active_stack.get("peak_pnl", 0.0)
+                min_peak_threshold = max(30.0, 0.06 * acc.balance)
+                watermark_exit = False
+                if peak_pnl >= min_peak_threshold:
+                    pullback_usd = peak_pnl - floating_pnl
+                    pullback_pct = pullback_usd / peak_pnl
+                    if pullback_pct >= 0.18:
+                        watermark_exit = True
+
+                # Ratchet 1: Fast Breakeven Lock at +1.0 ATR (Guarantees Risk-Free Cushion)
+                if not scalper.active_stack.get("be_ratchet_hit", False) and gain_pts >= 1.0 * atr:
+                    scalper.active_stack["be_ratchet_hit"] = True
+                    new_sl = entry_px + 0.30 if direction == "BUY" else entry_px - 0.30
+                    scalper.active_stack["sl_price"] = new_sl
+                    logger.info("🛡️ 'TO THE MOON' BE RATCHET LOCKED: SL moved to BE+0.30 ($%.2f) at +%.2f pts", new_sl, gain_pts)
+
+                # Ratchet 2: Profit Lock at +2.5 ATR (TP1 Zone) -> Ratchet SL to +1.5 ATR
+                if not scalper.active_stack.get("tp1_ratchet_hit", False) and gain_pts >= 2.5 * atr:
+                    scalper.active_stack["tp1_ratchet_hit"] = True
+                    locked_sl = entry_px + (1.5 * atr) if direction == "BUY" else entry_px - (1.5 * atr)
+                    scalper.active_stack["sl_price"] = locked_sl
+                    logger.info("💰 'TO THE MOON' PROFIT LOCK: SL ratcheted to +1.5 ATR ($%.2f) at +%.2f pts", locked_sl, gain_pts)
+
+                # Check if price hit current active software Stop Loss
+                sl_hit = (direction == "BUY" and current_mid <= scalper.active_stack["sl_price"]) or \
+                         (direction == "SELL" and current_mid >= scalper.active_stack["sl_price"])
+
+                # Hard single-trade loss ceiling (Never exceed 20% of account balance or $15 minimum)
+                tier_mult = max(1.0, acc.balance / 100.0)
+                dynamic_risk_stop = max(MAX_RISK_STOP_USD, min(tier_mult * 15.0, 0.20 * acc.balance))
+                dynamic_spike_target = max(RAPID_SPIKE_TARGET_USD, tier_mult * 50.0)
+
+                # Check Friday 20:30 UTC force-flatten
+                now_utc = datetime.now(timezone.utc)
+                friday_force_flatten = (now_utc.weekday() == 4 and (now_utc.hour > 20 or (now_utc.hour == 20 and now_utc.minute >= 30)))
+
+                # Check Macro Spike Harvest (+5.0 ATR or dynamic spike target)
+                hit_macro_spike = gain_pts >= 5.0 * atr or floating_pnl >= dynamic_spike_target
+
+                # Exit Handling
+                if watermark_exit:
+                    logger.info("💰 PEAK WATERMARK BAG PROTECTION: Locked +$%.2f (Peak was +$%.2f, -18%% pullback)", floating_pnl, peak_pnl)
                     res = await gw.flatten_all_positions()
-                    tag = "moneybag,rocket" if floating_pnl > 0 else "octagonal_sign,warning"
-                    prio = "urgent" if floating_pnl < 0 else "high"
+                    scalper.consecutive_losses = 0
+                    log_live_trade({
+                        "timestamp": time.time(),
+                        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                        "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+                        "symbol": "XAUUSD",
+                        "direction": direction,
+                        "strategy": scalper.active_stack.get("strategy_type", "TO_THE_MOON"),
+                        "entry_price": entry_px,
+                        "exit_price": current_mid,
+                        "volume": scalper.active_stack["volume"],
+                        "peak_floating_pnl": peak_pnl,
+                        "realized_pnl": floating_pnl,
+                        "exit_reason": "BAG_PROTECTION_WATERMARK_LOCK",
+                        "duration_min": max(1, int((time.time() - scalper.active_stack["open_time"]) // 60)),
+                        "balance_after": res.get("balance", acc.balance),
+                        "equity_after": res.get("balance", acc.balance),
+                    })
                     push_ntfy(
-                        title=f"{'🚀 HARVEST' if floating_pnl >= 0 else '🛑 RISK CUT'}: ${floating_pnl:+.2f} ({exit_dec.metric_label})",
-                        message=f"Reason: {exit_dec.reason}\nGain: {exit_dec.current_gain:+.2f} {scalper.exit_controller.cfg.point_scale_label} in {exit_dec.time_in_trade_sec:.1f}s\nNew Balance: ${res.get('balance', acc.balance):.2f}",
-                        tags=tag,
-                        priority=prio,
+                        title=f"💰 Bag Protection Harvest (+${floating_pnl:.2f})",
+                        message=f"Locked +${floating_pnl:.2f} (Peak was +${peak_pnl:.2f}). Never let a winner become a loss!\nNew Balance: ${res.get('balance', acc.balance):.2f}",
+                        tags="moneybag,shield",
+                        priority="high",
                     )
+                    scalper.active_stack = None
 
-                    # Institutional Risk Management: Cooldown & Circuit Breaker Tracking
+                elif sl_hit or floating_pnl <= -dynamic_risk_stop or friday_force_flatten:
+                    is_trailing = scalper.active_stack.get("be_ratchet_hit", False)
+                    reason_label = "Friday Weekend Force-Flatten" if friday_force_flatten else ("Trailing Profit Lock" if (is_trailing and floating_pnl > 0) else ("Trailing BE Hit" if is_trailing else "Risk Stop Hit"))
+                    logger.warning("🛑 %s: Mid: $%.2f, SL: $%.2f, Floating PnL: $%.2f", reason_label, current_mid, scalper.active_stack["sl_price"], floating_pnl)
+                    res = await gw.flatten_all_positions()
+                    
                     if floating_pnl < 0:
                         scalper.consecutive_losses += 1
                         scalper.daily_realized_loss += abs(floating_pnl)
-                        scalper.cooldown_until = time.time() + 300.0  # 5 min post-loss freeze
-                        logger.warning("🧊 POST-LOSS COOLDOWN ARMED: Freezing entries for 300s (Losses: %d, Loss Today: -$%.2f)",
-                                       scalper.consecutive_losses, scalper.daily_realized_loss)
+                        scalper.cooldown_until = time.time() + 300.0  # 5 min cooldown
                         if scalper.consecutive_losses >= 2:
-                            scalper.lockout_until = time.time() + 3600.0  # 60 min whipsaw lockout
-                            logger.warning("🚨 CONSECUTIVE LOSS LOCKOUT: 2 losses in a row. Pausing auto-trading for 60m.")
-                            push_ntfy(
-                                title="🛡️ Consecutive Loss Lockout",
-                                message=f"2 losses in a row (-${abs(floating_pnl):.2f}). Auto-trade paused for 60m to prevent whipsaw churn.",
-                                tags="shield,warning",
-                                priority="high",
-                            )
-
-                        # Daily Max Drawdown Circuit Breaker
-                        max_allowed_loss = min(50.0, max(20.0, scalper.daily_start_balance * 0.08))
-                        if scalper.daily_realized_loss >= max_allowed_loss:
+                            scalper.lockout_until = time.time() + 3600.0  # 60 min lockout
+                        
+                        max_day_loss = min(50.0, max(20.0, scalper.daily_start_balance * 0.08))
+                        if scalper.daily_realized_loss >= max_day_loss:
                             scalper.circuit_breaker_active = True
                             scalper.trading_paused = True
-                            logger.critical("🛑 DAILY CIRCUIT BREAKER TRIGGERED: Loss -$%.2f today (Cap: $%.2f). Halting auto-trade until 00:00 UTC.",
-                                            scalper.daily_realized_loss, max_allowed_loss)
-                            push_ntfy(
-                                title="🛑 Daily Drawdown Circuit Breaker",
-                                message=f"Realized loss reached -${scalper.daily_realized_loss:.2f} today (Limit: ${max_allowed_loss:.2f}). Trading halted until 00:00 UTC to preserve capital.",
-                                tags="rotating_light,octagonal_sign",
-                                priority="urgent",
-                            )
                     else:
                         scalper.consecutive_losses = 0
 
-                    journal_entry = {
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    log_live_trade({
+                        "timestamp": time.time(),
                         "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
                         "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
-                        "symbol": scalper.symbol,
-                        "direction": scalper.active_stack["direction"],
-                        "strategy": scalper.active_stack["strategy_type"],
-                        "entry_price": scalper.active_stack["entry_price"],
+                        "symbol": "XAUUSD",
+                        "direction": direction,
+                        "strategy": scalper.active_stack.get("strategy_type", "TO_THE_MOON"),
+                        "entry_price": entry_px,
                         "exit_price": current_mid,
                         "volume": scalper.active_stack["volume"],
-                        "peak_floating_pnl": exit_dec.peak_pnl,
+                        "peak_floating_pnl": peak_pnl,
                         "realized_pnl": floating_pnl,
-                        "exit_reason": exit_dec.reason,
-                        "duration_min": round(exit_dec.time_in_trade_sec / 60.0, 2),
+                        "exit_reason": reason_label,
+                        "duration_min": max(1, int((time.time() - scalper.active_stack["open_time"]) // 60)),
                         "balance_after": res.get("balance", acc.balance),
-                        "equity_after": res.get("equity", acc.equity),
-                    }
-                    append_live_trade_journal(journal_entry)
+                        "equity_after": res.get("balance", acc.balance),
+                    })
+
+                    push_ntfy(
+                        title=f"🛑 {reason_label} (${floating_pnl:+.2f})",
+                        message=f"Strategy: {scalper.active_stack.get('strategy_type')}\nClosed @ ${current_mid:.2f}. New Balance: ${res.get('balance', acc.balance):.2f}",
+                        tags="warning,octagonal_sign" if floating_pnl < 0 else "moneybag,shield",
+                        priority="urgent" if floating_pnl < 0 else "default",
+                    )
                     scalper.active_stack = None
 
-            # Friday Curfew Force-Flatten (20:30 UTC) to eliminate weekend gap risks
-            now_utc = datetime.now(timezone.utc)
-            if now_utc.weekday() == 4 and now_utc.hour == 20 and now_utc.minute >= 30 and scalper.active_stack:
-                logger.warning("🚨 FRIDAY 20:30 UTC WEEKEND CURFEW: Force-flattening open position before market close...")
-                res = await gw.flatten_all_positions()
-                push_ntfy(
-                    title="🛑 Friday Weekend Force-Flatten",
-                    message="Closed open position before Friday market close to prevent weekend gap risk.",
-                    tags="hourglass,warning",
-                    priority="urgent",
-                )
-                scalper.active_stack = None
+                elif hit_macro_spike:
+                    logger.info("🌕 'TO THE MOON' MACRO SPIKE HARVEST: Mid: $%.2f | Gain: +%.2f pts | Floating PnL: +$%.2f", current_mid, gain_pts, floating_pnl)
+                    res = await gw.flatten_all_positions()
+                    scalper.consecutive_losses = 0
 
-            # 3. Check for Strategy Entry if Flat (evaluated every ~100ms)
-            elif tick_count % 5 == 0 and not getattr(scalper, "trading_paused", False) and not scalper.circuit_breaker_active:
-                current_bal = acc.balance if ('acc' in locals() and acc and acc.balance > 0) else acc_snap.balance
-                sig_dict = scalper.evaluate_strategy(quote, current_bal)
-                if sig_dict:
-                    acc = await gw.get_account_snapshot(force_fresh=True)
-                    stop_dist = abs(sig_dict["entry_price"] - sig_dict["sl_price"]) if sig_dict.get("sl_price") else 2.50
-                    stack_count, lot_per_order, total_vol = scalper.compute_stack_sizing(acc.balance, stop_distance=stop_dist)
+                    log_live_trade({
+                        "timestamp": time.time(),
+                        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                        "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+                        "symbol": "XAUUSD",
+                        "direction": direction,
+                        "strategy": scalper.active_stack.get("strategy_type", "TO_THE_MOON"),
+                        "entry_price": entry_px,
+                        "exit_price": current_mid,
+                        "volume": scalper.active_stack["volume"],
+                        "peak_floating_pnl": peak_pnl,
+                        "realized_pnl": floating_pnl,
+                        "exit_reason": "MACRO_SPIKE_HARVEST",
+                        "duration_min": max(1, int((time.time() - scalper.active_stack["open_time"]) // 60)),
+                        "balance_after": res.get("balance", acc.balance),
+                        "equity_after": res.get("balance", acc.balance),
+                    })
 
-                    # --- LAYA SYSTEM 1 DECISION & ICT RAG VALIDATION ---
-                    market_state = {
-                        "direction": sig_dict["direction"],
-                        "entry_price": sig_dict["entry_price"],
-                        "sl_price": sig_dict["sl_price"],
-                        "wick_ratio": getattr(scalper, "last_wick_ratio", 0.65),
-                        "session": sig_dict["strategy_type"],
-                        "setup_type": sig_dict["strategy_type"],
-                        "hour_utc": datetime.now(timezone.utc).hour,
-                        "trend_aligned": True,
-                    }
-                    laya_decision = laya_oracle.evaluate_setup_sync(market_state)
+                    push_ntfy(
+                        title=f"🌕 Macro Spike Harvest (+${floating_pnl:+.2f})",
+                        message=f"Strategy: {scalper.active_stack.get('strategy_type')}\nGain: +{gain_pts:.2f} pts (${floating_pnl:+.2f})\nNew Balance: ${res.get('balance', acc.balance):.2f}",
+                        tags="rocket,moneybag,trophy",
+                        priority="high",
+                    )
+                    scalper.active_stack = None
 
-                    if not laya_decision.is_valid:
-                        logger.warning("🛡️ LAYA / POLITICIAN SHIELD VETOED SETUP: %s (Trap Prob: %.1f%%)",
-                                       laya_decision.reasoning, laya_decision.trap_probability * 100)
-                        push_ntfy(
-                            title="🛡️ System Guarantee Shield Veto",
-                            message=f"Vetoed {sig_dict['direction']} ({sig_dict['strategy_type']}) @ ${sig_dict['entry_price']:.2f} | Trap Risk: {laya_decision.trap_probability*100:.1f}%\nReason: {laya_decision.reasoning}",
-                            tags="shield,no_entry_sign",
-                            priority="default",
-                        )
-                    else:
-                        logger.info("🎯 EXECUTING ORDER STACK BURST [%s]: %s %d orders x %.2f lots (= %.2f lots) @ $%.2f",
-                                    sig_dict["strategy_type"], sig_dict["direction"], stack_count, lot_per_order, total_vol, sig_dict["entry_price"])
+            # 3. Check for Strategy Entry if Flat (evaluated every ~250ms)
+            elif (
+                tick_count % 5 == 0
+                and not getattr(scalper, "trading_paused", False)
+                and time.time() >= scalper.cooldown_until
+                and time.time() >= scalper.lockout_until
+                and not scalper.circuit_breaker_active
+            ):
+                now_utc = datetime.now(timezone.utc)
+                # Friday Curfew (No new trades after Friday 18:00 UTC)
+                if now_utc.weekday() == 4 and now_utc.hour >= 18:
+                    pass
+                # Live Spread Filter (Skip if spread > $0.45/oz)
+                elif (quote.ask - quote.bid) > 0.45:
+                    pass
+                else:
+                    sig: Optional[ApexSignal] = scalper.evaluate_strategy()
+                    if sig:
+                        acc = await gw.get_account_snapshot(force_fresh=True)
+                        base_lot_size = scalper.compute_lot_size(acc.balance)
 
-                        burst_res = await gw.execute_order_burst(
-                            direction=sig_dict["direction"],
-                            total_volume=total_vol,
-                            stack_count=stack_count,
-                            lot_per_order=lot_per_order,
-                            sl_price=sig_dict["sl_price"],
-                        )
+                        # --- LAYA SYSTEM 1 DECISION & ICT RAG VALIDATION ---
+                        market_state = {
+                            "direction": sig.direction,
+                            "entry_price": sig.entry_price,
+                            "sl_price": sig.sl_price,
+                            "wick_ratio": getattr(scalper, "last_wick_ratio", 0.65),
+                            "session": sig.strategy_type,
+                            "setup_type": sig.strategy_type,
+                            "hour_utc": datetime.now(timezone.utc).hour,
+                            "trend_aligned": True,
+                        }
+                        laya_decision = laya_oracle.evaluate_setup_sync(market_state)
 
-                        if burst_res.get("success"):
-                            scalper.last_latency_ms = burst_res.get("latency_ms", 0.0)
-                            actual_vol = burst_res.get("total_volume", total_vol)
-                            actual_orders = burst_res.get("orders_dispatched", stack_count)
-                            
-                            # Arm the Intuitive Micro-Exit Controller for this trade
-                            scalper.exit_controller.arm_position(
-                                entry_price=sig_dict["entry_price"],
-                                direction=sig_dict["direction"],
-                                total_volume=actual_vol,
-                                sl_price=sig_dict["sl_price"],
-                                open_time=time.time(),
-                            )
-
-                            scalper.active_stack = {
-                                "direction": sig_dict["direction"],
-                                "volume": actual_vol,
-                                "stack_count": actual_orders,
-                                "lot_per_order": lot_per_order,
-                                "entry_price": sig_dict["entry_price"],
-                                "sl_price": sig_dict["sl_price"],
-                                "strategy_type": sig_dict["strategy_type"],
-                                "open_time": time.time(),
-                                "floating_pnl": 0.0,
-                                "peak_pnl": 0.0,
-                                "laya_grade": laya_decision.setup_grade,
-                                "political_regime": laya_decision.political_regime,
-                                "macro_bias": laya_decision.macro_bias,
-                            }
+                        if not laya_decision.is_valid:
+                            logger.warning("🛡️ LAYA / POLITICIAN SHIELD VETOED SETUP: %s (Trap Prob: %.1f%%)", laya_decision.reasoning, laya_decision.trap_probability * 100)
                             push_ntfy(
-                                title=f"⚡ BURST ENTERED: {sig_dict['direction']} {actual_vol} Lots ({actual_orders}x{lot_per_order})",
-                                message=f"Symbol: {scalper.symbol} @ ${sig_dict['entry_price']:.2f}\nStrategy: {sig_dict['strategy_type']}\nLaya Grade: {laya_decision.setup_grade} | Latency: {scalper.last_latency_ms:.1f}ms",
-                                tags="zap,rocket,fire",
-                                priority="high",
+                                title="🛡️ System Guarantee Shield Veto",
+                                message=f"Vetoed {sig.direction} ({sig.strategy_type}) @ ${sig.entry_price:.2f} | Trap Risk: {laya_decision.trap_probability*100:.1f}%\nReason: {laya_decision.reasoning}",
+                                tags="shield,no_entry_sign",
+                                priority="default",
                             )
+                        else:
+                            # Apply dynamic compounding multiplier (up to 1.65x on Macro Sovereign Titan)
+                            lot_size = round(base_lot_size * max(1.0, laya_decision.compounding_multiplier), 2)
+                            boost_tag = f" (Laya {laya_decision.setup_grade} {laya_decision.compounding_multiplier:.2f}x Boost | TP {laya_decision.tp_expansion_multiplier:.2f}x)" if laya_decision.compounding_multiplier > 1.0 else ""
+                            
+                            # Apply Macro Target Expansion (The Sword)
+                            effective_spike_target = sig.spike_target
+                            if laya_decision.tp_expansion_multiplier > 1.0 and sig.atr_1m > 0:
+                                expansion_dist = sig.atr_1m * (laya_decision.tp_expansion_multiplier - 1.0) * 2.5
+                                effective_spike_target = (sig.spike_target + expansion_dist) if sig.direction == "BUY" else (sig.spike_target - expansion_dist)
+
+                            logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f | TP1: $%.2f | Spike: $%.2f | Lots: %.2f%s | Confluence: %.1f/10",
+                                        sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, sig.tp1_price, effective_spike_target, lot_size, boost_tag, laya_decision.confluence_score)
+
+                            order_res = await gw.open_market_order(sig.direction, lot_size, sl_price=sig.sl_price)
+                            if order_res.get("success"):
+                                scalper.last_latency_ms = order_res.get("latency_ms", 0.0)
+                                scalper.active_stack = {
+                                    "direction": sig.direction,
+                                    "volume": lot_size,
+                                    "entry_price": sig.entry_price,
+                                    "sl_price": sig.sl_price,
+                                    "tp1_price": sig.tp1_price,
+                                    "spike_target": effective_spike_target,
+                                    "atr_1m": sig.atr_1m,
+                                    "strategy_type": sig.strategy_type,
+                                    "open_time": time.time(),
+                                    "floating_pnl": 0.0,
+                                    "peak_pnl": 0.0,
+                                    "be_ratchet_hit": False,
+                                    "tp1_ratchet_hit": False,
+                                    "laya_grade": laya_decision.setup_grade,
+                                    "ict_concepts": sig.ict_concepts,
+                                    "political_regime": laya_decision.political_regime,
+                                    "macro_bias": laya_decision.macro_bias,
+                                }
+                                push_ntfy(
+                                    title=f"🌕 {laya_decision.setup_grade.upper()}: {sig.direction} {lot_size} Lots [{sig.strategy_type}]",
+                                    message=f"Entry: ${sig.entry_price:.2f} | SL: ${sig.sl_price:.2f} | Spike: ${effective_spike_target:.2f}\nSizing: {laya_decision.compounding_multiplier:.2f}x | TP Exp: {laya_decision.tp_expansion_multiplier:.2f}x\nPolitician: {laya_decision.political_regime} ({laya_decision.macro_bias})\nLatency: {scalper.last_latency_ms:.1f}ms",
+                                    tags="zap,rocket,shield",
+                                    priority="high",
+                                )
 
             # 4. Sync telemetry to mobile dashboard (every ~1s)
             if tick_count % 20 == 0:
@@ -828,8 +733,8 @@ async def run_live_scalper(symbol: str = "XAUUSD"):
                         push_ntfy(
                             title=f"🏦 Daily Cash-Out Milestone: ${milestone_bracket}",
                             message=f"Today's Profit: +${withdrawal_info['daily_profit']:.2f}\n"
-                                     f"Available Cash-Out: ${withdrawal_info['recommended_cashout_today']:.2f} ({withdrawal_info['withdrawal_rate_pct']}%)\n"
-                                     f"Retained for Compounding: ${withdrawal_info['retained_compounding_balance']:.2f}",
+                                    f"Available Cash-Out: ${withdrawal_info['recommended_cashout_today']:.2f} ({withdrawal_info['withdrawal_rate_pct']}%)\n"
+                                    f"Retained for Compounding: ${withdrawal_info['retained_compounding_balance']:.2f}",
                             tags="moneybag,gem",
                             priority="high",
                         )
@@ -846,7 +751,7 @@ async def run_live_scalper(symbol: str = "XAUUSD"):
                     laya_telemetry=laya_oracle.get_telemetry(),
                     daily_withdrawal=withdrawal_info,
                     bot_running=not getattr(scalper, "trading_paused", False),
-                    message=(f"Trading {scalper.symbol} on LiteFinance" if not scalper.active_stack else f"In {scalper.active_stack['direction']} stack ({scalper.active_stack['volume']} lots)") if not getattr(scalper, "trading_paused", False) else "Auto-trade paused via dashboard",
+                    message=("Trading on LiteFinance MT5 Demo" if not scalper.active_stack else f"In {scalper.active_stack['direction']} position ({scalper.active_stack['volume']} lots)") if not getattr(scalper, "trading_paused", False) else "Auto-trade paused via dashboard",
                 )
 
             # Micro-yield (20ms) to keep CPU cool while maintaining sub-millisecond reactivity
@@ -865,13 +770,4 @@ async def run_live_scalper(symbol: str = "XAUUSD"):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Stratton Oakmont Hyper-Scalp Live Execution Engine (XAUUSD)")
-    parser.add_argument("--symbol", default="XAUUSD", help="Trading instrument (Dedicated to XAUUSD)")
-    parser.add_argument("--port", type=int, default=WEB_PORT, help="Web terminal port")
-    args = parser.parse_args()
-    
-    if args.port != WEB_PORT:
-        WEB_PORT = args.port
-        
-    asyncio.run(run_live_scalper(symbol="XAUUSD"))
-
+    asyncio.run(run_live_scalper())
