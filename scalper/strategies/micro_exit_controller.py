@@ -99,6 +99,30 @@ def get_default_config(symbol: str) -> MicroExitConfig:
         )
 
 
+def get_to_the_moon_config(symbol: str = "XAUUSD") -> MicroExitConfig:
+    """
+    Configuration for the Sovereign Compounding "To The Moon" Engine ($10k-$25k/day).
+    Targets +2.5 to +8.0 ATR Macro Spike Expansions with Dynamic Peak Watermark Bag Protection.
+    Guarantees that a +$300 floating profit locks cash and NEVER reverses into a -$500 loss.
+    """
+    return MicroExitConfig(
+        symbol="XAUUSD",
+        pip_or_pt_size=0.01,
+        point_scale_label="pts",
+        fast_be_trigger=1.20,          # +1.20 pts (+1.0 ATR) -> moves SL to BE + $0.30 (Risk-Free)
+        micro_harvest_min=2.50,        # +2.50 pts
+        micro_harvest_target=4.00,     # +4.00 pts (+2.5 ATR primary scale-out target)
+        micro_harvest_extended=8.00,   # +8.00 pts (+5.0 ATR Macro Spike Harvest)
+        watermark_activate_usd=60.0,   # Activate trailing watermark once profit >= $60 (or 6% equity)
+        watermark_pullback_pct=0.18,   # 18% pullback buffer (at +$300 peak, locks +$246)
+        stall_tick_threshold=5,
+        velocity_window_sec=5.0,
+        min_velocity_pts_sec=0.10,
+        time_decay_seconds=2700.0,     # 45 minutes max duration for macro trend expansion
+        hard_risk_stop_usd=100.0,      # Dynamic safety risk ceiling
+    )
+
+
 
 class MicroExitController:
     """

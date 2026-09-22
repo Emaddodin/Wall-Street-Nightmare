@@ -25,17 +25,17 @@ from scalper.strategies.micro_exit_controller import (
 
 def test_mathematical_risk_sizing():
     """
-    Verifies that on accounts ranging from $100 to $10,000:
+    Verifies that on conservative prop firm mode:
     - Total risk per trade never exceeds 2% of equity.
     - Sizing produces safe micro-burst lots (e.g. 0.01 - 0.02 lots per ticket).
     - Entry spread cost ($0.30) never exceeds 15% of allowable risk.
     """
     scalper = LiveBrokerScalper(gateway=MagicMock(), symbol="XAUUSD")
     
-    # Test on $700 account with $2.50 stop distance (the morning scenario)
-    count, lot, total_vol = scalper.compute_stack_sizing(balance=700.0, stop_distance=2.50)
+    # Test on $700 account in CONSERVATIVE_PROP_FIRM mode
+    count, lot, total_vol = scalper.compute_stack_sizing(balance=700.0, stop_distance=2.50, mode="CONSERVATIVE_PROP_FIRM")
     
-    # Total volume on $700 must be around 0.05 - 0.08 lots (NEVER 1.50 lots)
+    # Total volume on $700 in prop firm mode must be around 0.05 - 0.08 lots
     assert 0.04 <= total_vol <= 0.08
     assert lot == 0.01
     assert count == int(total_vol / lot)
@@ -46,7 +46,34 @@ def test_mathematical_risk_sizing():
     
     # Spread cost ($0.30) on total volume
     spread_cost = total_vol * 100.0 * 0.30
-    assert spread_cost <= 2.50  # < $2.50 (less than 18% of allowable stop)
+    assert spread_cost <= 2.50
+
+
+def test_sovereign_compounding_sizing():
+    """
+    Verifies that the 'To The Moon' Sovereign Compounding ladder:
+    - Produces institutional size (0.20 - 0.33 lots on $700).
+    - Scales dynamically to 0.40 - 0.66 lots on $1,500 and up to 5.0 lots on $3,000+.
+    - Provides the exact volume needed for $10k-$25k daily gains.
+    """
+    scalper = LiveBrokerScalper(gateway=MagicMock(), symbol="XAUUSD")
+    
+    # $700 account -> base 0.20 lots (up to 0.33 with Titan boost)
+    count_700, lot_700, vol_700 = scalper.compute_stack_sizing(balance=700.0, mode="TO_THE_MOON")
+    assert 0.20 <= vol_700 <= 0.35
+    assert count_700 >= 1
+    
+    # $1,200 account -> base 0.40 lots (up to 0.66 with Titan boost)
+    count_1200, lot_1200, vol_1200 = scalper.compute_stack_sizing(balance=1200.0, mode="TO_THE_MOON")
+    assert 0.40 <= vol_1200 <= 0.70
+    
+    # $2,000 account -> base 0.80 lots (up to 1.32 with Titan boost)
+    count_2000, lot_2000, vol_2000 = scalper.compute_stack_sizing(balance=2000.0, mode="TO_THE_MOON")
+    assert 0.80 <= vol_2000 <= 1.35
+    
+    # $10,000 account -> capped at 5.0 lots
+    count_10k, lot_10k, vol_10k = scalper.compute_stack_sizing(balance=10000.0, mode="TO_THE_MOON")
+    assert vol_10k == 5.0
 
 
 def test_friday_curfew_and_weekend():

@@ -46,6 +46,7 @@ from scalper.strategies.micro_exit_controller import (
     MicroExitController,
     MicroExitConfig,
     get_default_config,
+    get_to_the_moon_config,
     ExitDecision,
 )
 
@@ -262,7 +263,7 @@ class LiveBrokerScalper:
     def __init__(self, gateway: LiteFinanceGateway, symbol: str = "XAUUSD"):
         self.gw = gateway
         self.symbol = "XAUUSD"  # Dedicated 100% to Gold Hyper-Scalp
-        self.exit_cfg = get_default_config(self.symbol)
+        self.exit_cfg = get_to_the_moon_config(self.symbol)
         self.exit_controller = MicroExitController(self.exit_cfg)
         self.apex = ApexTrinityStrategy(min_candles_warmup=30)
         
@@ -373,44 +374,81 @@ class LiveBrokerScalper:
         else:
             return "London Close / Asian Pre-Market (Chop - Trading Paused)"
 
-    def compute_stack_sizing(self, balance: float, stop_distance: float = 2.50) -> Tuple[int, float, float]:
+    def compute_stack_sizing(self, balance: float, stop_distance: float = 2.50, mode: str = "TO_THE_MOON") -> Tuple[int, float, float]:
         """
-        Mathematical Institutional Risk Sizing (Wall Street / Prop-Firm Standard).
-        Calculates lot sizing from strict 2% max equity risk.
-        Guarantees that entry spread ($0.25 - $0.35) never consumes > 12-15% of the stop loss.
+        Calculates position stack sizing.
+        - "TO_THE_MOON" (Default): Sovereign Compounding Ladder ($10k-$25k/day).
+        - "CONSERVATIVE_PROP_FIRM": Strict 2% mathematical equity risk cap.
         Returns: (stack_count, lot_per_order, total_volume)
         """
         if self.peak_balance <= 0.0:
             self.peak_balance = balance
         self.peak_balance = max(self.peak_balance, balance)
 
-        effective_balance = max(50.0, balance)
+        effective_balance = max(25.0, balance)
         dd_pct = ((self.peak_balance - balance) / self.peak_balance * 100.0) if self.peak_balance > 0 else 0.0
-        if dd_pct > 18.0:
-            effective_balance = effective_balance * 0.70  # Defensive scaling during drawdown
 
-        # Strict 2% maximum equity risk per trade
-        risk_pct = 0.02
-        dollar_risk = min(effective_balance * risk_pct, 250.0)
+        if mode == "CONSERVATIVE_PROP_FIRM":
+            if dd_pct > 18.0:
+                effective_balance = effective_balance * 0.70
+            risk_pct = 0.02
+            dollar_risk = min(effective_balance * risk_pct, 250.0)
+            safe_stop_dist = max(1.50, stop_distance)
+            target_volume = round(dollar_risk / (safe_stop_dist * 100.0), 2)
+            min_vol = 0.02
+            max_vol = round(min(5.0, max(0.04, (effective_balance / 700.0) * 0.08)), 2)
+            total_volume = max(min_vol, min(max_vol, target_volume))
+            lot_per_order = 0.01 if total_volume < 0.10 else round(total_volume / 5.0, 2)
+            lot_per_order = max(0.01, lot_per_order)
+            stack_count = max(1, min(10, int(round(total_volume / lot_per_order))))
+            total_volume = round(stack_count * lot_per_order, 2)
+            return stack_count, lot_per_order, total_volume
 
-        # Sizing formula: Total Volume (lots) = Dollar_Risk / (Stop_Distance * 100)
-        safe_stop_dist = max(1.50, stop_distance)
-        target_volume = round(dollar_risk / (safe_stop_dist * 100.0), 2)
+        # Default: "TO_THE_MOON" Sovereign Compounding Ladder
+        if dd_pct > 25.0:
+            effective_balance = effective_balance * 0.75  # Defensive scaling during severe drawdown
 
-        # Dynamic sanity boundaries:
-        # On a $100 account -> ~0.02 - 0.03 lots
-        # On a $700 account -> ~0.05 - 0.08 lots
-        # On a $2000 account -> ~0.15 - 0.25 lots
-        min_vol = 0.02
-        max_vol = round(min(5.0, max(0.04, (effective_balance / 700.0) * 0.08)), 2)
-        total_volume = max(min_vol, min(max_vol, target_volume))
+        # Base Sovereign Compounding Ladder
+        if effective_balance < 25.0:
+            base_lot = 0.01
+        elif effective_balance < 200.0:
+            base_lot = 0.05
+        elif effective_balance < 400.0:
+            base_lot = 0.10
+        elif effective_balance < 800.0:
+            base_lot = 0.20
+        elif effective_balance < 1500.0:
+            base_lot = 0.40
+        elif effective_balance < 3000.0:
+            base_lot = 0.80
+        else:
+            base_lot = min(5.0, round(effective_balance / 2000.0, 2))
 
-        # Order Stacking Burst: distribute total_volume into micro-orders (0.01 - 0.02 lots each)
-        lot_per_order = 0.01 if total_volume < 0.10 else round(total_volume / 5.0, 2)
-        lot_per_order = max(0.01, lot_per_order)
-        stack_count = max(1, min(10, int(round(total_volume / lot_per_order))))
+        # Politician Titan Alpha Boost (up to 1.65x for A+ prime setups)
+        compounding_mult = 1.0
+        try:
+            from scalper.brain.politician_brain import get_politician_brain
+            pol_brain = get_politician_brain()
+            eval_res = pol_brain.evaluate_entry_macro_fit("BUY", "BREAKOUT_RETEST")
+            if eval_res.alpha_boost_multiplier >= 1.50:
+                compounding_mult = 1.65
+        except Exception:
+            pass
+
+        total_volume = round(min(5.0, max(0.02, base_lot * compounding_mult)), 2)
+
+        # Split total_volume into order stack (max 5 orders to prevent broker order flood)
+        if total_volume <= 0.05:
+            stack_count = 1
+            lot_per_order = total_volume
+        elif total_volume <= 0.20:
+            stack_count = max(1, min(4, int(round(total_volume / 0.05))))
+            lot_per_order = round(total_volume / stack_count, 2)
+        else:
+            stack_count = max(2, min(5, int(round(total_volume / 0.10))))
+            lot_per_order = round(total_volume / stack_count, 2)
+
         total_volume = round(stack_count * lot_per_order, 2)
-
         return stack_count, lot_per_order, total_volume
 
 
