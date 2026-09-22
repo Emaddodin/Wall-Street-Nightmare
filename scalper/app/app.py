@@ -215,9 +215,9 @@ class HFTHandler(BaseHTTPRequestHandler):
                 b"  if (e.data) {\n"
                 b"    try { data = e.data.json(); } catch(err) { data = { body: e.data.text() }; }\n"
                 b"  }\n"
-                b"  const title = data.title || 'Stratton Oakmont Desk';\n"
+                b"  const title = data.title || 'Stratton';\n"
                 b"  const options = {\n"
-                b"    body: data.body || 'Live Market Update',\n"
+                b"    body: data.body || 'Live trade update',\n"
                 b"    icon: data.icon || '/icon-180.png',\n"
                 b"    badge: '/icon-180.png',\n"
                 b"    tag: data.tag || 'stratton-trade',\n"
@@ -423,8 +423,8 @@ class HFTHandler(BaseHTTPRequestHandler):
             try:
                 from scalper.web_push import send_web_push
                 sent = send_web_push(
-                    title="🟢 Stratton Push Active",
-                    message="Direct 1-line stream connected · Zero lag verified",
+                    title="Stratton Alert",
+                    message="Notifications active · You will receive instant 1-line trade alerts",
                     tag="test-push",
                 )
                 res = json.dumps({"ok": True, "sent": sent, "msg": f"Dispatched to {sent} active device(s)"}).encode("utf-8")

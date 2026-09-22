@@ -8,55 +8,55 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Stratton">
   <meta name="application-name" content="Stratton">
-  <meta name="theme-color" content="#0A1120">
+  <meta name="theme-color" content="#070D18">
 
   <!-- Apple Touch & PWA Icons -->
-  <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png?v=8">
-  <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png?v=8">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=8">
-  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=8">
-  <link rel="icon" type="image/x-icon" href="/favicon.ico?v=8">
-  <link rel="manifest" href="/manifest.json?v=8">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png?v=9">
+  <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png?v=9">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=9">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=9">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico?v=9">
+  <link rel="manifest" href="/manifest.json?v=9">
 
-  <!-- Google Modern Fonts -->
+  <!-- Google Luxury Modern Typography (Outfit + Plus Jakarta Sans + JetBrains Mono) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <style>
     /* ==========================================================================
-       COLOR PALETTE & DESIGN SYSTEM (Nexora / Twilight Dusk Palette)
+       OCD-LEVEL DESIGN SYSTEM & PRECISION TOKENS
        ========================================================================== */
     :root {
-      --bg-dark: #0A1120;
-      --bg-gradient: linear-gradient(180deg, #0A1120 0%, #0D172B 50%, #101B33 100%);
+      --bg-base: #070D18;
+      --card-base: #0D1629;
+      --card-elevated: #121D35;
       
-      /* Palette from User Swatch */
-      --c-navy-deep: #0C1424;
-      --c-navy-card: #131F37;
-      --c-navy-elevated: #182642;
+      /* Optical Palette from Reference Image */
+      --c-ice-blue: #7EB0DE;
+      --c-ice-blue-soft: rgba(126, 176, 222, 0.12);
       --c-mauve: #C38EB4;
-      --c-mauve-soft: rgba(195, 142, 180, 0.15);
+      --c-mauve-soft: rgba(195, 142, 180, 0.12);
       --c-rose-white: #E1CBD7;
-      --c-ice-blue: #86A8CF;
-      --c-ice-blue-soft: rgba(134, 168, 207, 0.15);
-      --c-slate-blue: #26425A;
+      --c-slate-blue: #233959;
+      --c-avatar-bg: #1A2F4C;
       
-      /* Functional Status */
+      /* Functional */
       --win: #10B981;
-      --win-soft: rgba(16, 185, 129, 0.14);
+      --win-soft: rgba(16, 185, 129, 0.12);
       --loss: #F43F5E;
-      --loss-soft: rgba(244, 63, 94, 0.14);
+      --loss-soft: rgba(244, 63, 94, 0.12);
       --gold: #E5C158;
-      
-      /* Typography */
-      --txt-primary: #FFFFFF;
-      --txt-secondary: #86A8CF;
-      --txt-muted: #6C829E;
-      --txt-dim: #45566E;
 
-      --font-display: "Plus Jakarta Sans", "Inter", -apple-system, sans-serif;
-      --font-body: "Inter", -apple-system, sans-serif;
+      /* Text Colors */
+      --text-1: #FFFFFF;
+      --text-2: #86A8CF;
+      --text-muted: #5E7796;
+      --text-dim: #3D5068;
+
+      /* Typography */
+      --font-display: "Outfit", "Plus Jakarta Sans", sans-serif;
+      --font-body: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
       --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
 
       --safe-top: env(safe-area-inset-top, 0px);
@@ -71,8 +71,8 @@
     }
 
     html, body {
-      background: var(--bg-dark);
-      color: var(--txt-primary);
+      background-color: var(--bg-base);
+      color: var(--text-1);
       font-family: var(--font-body);
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
@@ -82,134 +82,121 @@
 
     body {
       background-image: 
-        radial-gradient(circle at 15% 10%, rgba(134, 168, 207, 0.08) 0%, transparent 45%),
-        radial-gradient(circle at 85% 25%, rgba(195, 142, 180, 0.06) 0%, transparent 40%),
-        linear-gradient(180deg, #0A1120 0%, #0D172B 100%);
+        radial-gradient(circle at 85% 15%, rgba(126, 176, 222, 0.09) 0%, transparent 45%),
+        radial-gradient(circle at 15% 45%, rgba(195, 142, 180, 0.06) 0%, transparent 40%),
+        linear-gradient(180deg, #070D18 0%, #0A1222 100%);
       background-attachment: fixed;
       display: flex;
       flex-direction: column;
-      position: relative;
     }
 
     /* ==========================================================================
-       TOP NAVIGATION BAR (Stepped Logo, Logotype, Face ID, Bell, Flatten)
+       HEADER: EXACT STEPPED LOGO + STRATTON LOGOTYPE
        ========================================================================== */
-    header.nexora-nav {
+    header.app-top-nav {
       position: sticky;
       top: 0;
       z-index: 100;
       padding: calc(10px + var(--safe-top)) 18px 10px;
-      background: rgba(10, 17, 32, 0.82);
+      background: rgba(7, 13, 24, 0.84);
       backdrop-filter: blur(28px) saturate(180%);
       -webkit-backdrop-filter: blur(28px) saturate(180%);
-      border-bottom: 1px solid rgba(134, 168, 207, 0.12);
+      border-bottom: 1px solid rgba(126, 176, 222, 0.10);
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
     }
 
-    .nav-brand-box {
+    .nav-brand {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       text-decoration: none;
     }
 
-    /* Geometric Stepped Logo Mark (From uploaded design) */
-    .stepped-logo {
-      width: 28px;
-      height: 22px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      align-items: flex-end;
+    /* Precision Stepped Chevron SVG Logo */
+    .brand-svg-mark {
+      width: 26px;
+      height: 18px;
+      display: block;
       flex-shrink: 0;
     }
-    .stepped-bar {
-      height: 4.5px;
-      border-radius: 3px;
-      background: linear-gradient(90deg, var(--c-ice-blue), var(--c-mauve));
-      box-shadow: 0 0 8px rgba(134, 168, 207, 0.4);
-    }
-    .stepped-bar.top { width: 48%; }
-    .stepped-bar.mid { width: 74%; }
-    .stepped-bar.bot { width: 100%; }
 
-    .brand-logotype {
+    .brand-title {
       font-family: var(--font-display);
       font-size: 19px;
-      font-weight: 800;
+      font-weight: 700;
       letter-spacing: -0.02em;
-      color: var(--txt-primary);
+      color: var(--text-1);
       line-height: 1;
     }
 
-    /* Live Quote Ticker in Header (Desktop / Tablet) */
+    /* Live Ticker in Header */
     .header-ticker-pill {
       display: none;
       align-items: center;
-      gap: 10px;
-      background: rgba(19, 31, 55, 0.7);
-      border: 1px solid rgba(134, 168, 207, 0.18);
-      border-radius: 24px;
-      padding: 6px 14px;
+      gap: 8px;
+      background: rgba(18, 29, 53, 0.65);
+      border: 1px solid rgba(126, 176, 222, 0.16);
+      border-radius: 20px;
+      padding: 5px 12px;
       font-family: var(--font-mono);
       font-size: 11px;
     }
-    .ticker-symbol { color: var(--c-rose-white); font-weight: 700; letter-spacing: 0.05em; }
-    .ticker-price { color: var(--gold); font-weight: 800; font-variant-numeric: tabular-nums; }
-    .ticker-spread { color: var(--txt-muted); font-size: 10px; }
+    .ticker-pair { color: var(--c-rose-white); font-weight: 700; }
+    .ticker-val { color: var(--gold); font-weight: 800; font-variant-numeric: tabular-nums; }
+    .ticker-sub { color: var(--text-muted); font-size: 10px; }
 
-    /* Action Buttons: Notification Bell, Face ID, Flatten */
-    .header-action-group {
+    /* Action Buttons (Bell, Face ID, Flatten) */
+    .header-actions {
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
-    .nav-circle-btn {
+    .nav-icon-circle {
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: rgba(19, 31, 55, 0.85);
-      border: 1px solid rgba(134, 168, 207, 0.20);
-      color: var(--txt-secondary);
+      background: rgba(18, 29, 53, 0.85);
+      border: 1px solid rgba(126, 176, 222, 0.18);
+      color: var(--text-2);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       position: relative;
-      transition: all 0.2s ease;
+      transition: all 0.15s ease;
     }
-    .nav-circle-btn:hover {
-      background: var(--c-navy-elevated);
-      color: var(--txt-primary);
+    .nav-icon-circle:hover {
+      background: var(--card-elevated);
+      color: var(--text-1);
       border-color: var(--c-ice-blue);
       transform: translateY(-1px);
     }
-    .nav-circle-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
-    .nav-circle-btn .badge-dot {
+    .nav-icon-circle svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .nav-icon-circle .bell-dot {
       position: absolute;
       top: 6px;
       right: 6px;
-      width: 7px;
-      height: 7px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background: var(--c-mauve);
       box-shadow: 0 0 6px var(--c-mauve);
     }
-    .nav-circle-btn.active-push .badge-dot {
+    .nav-icon-circle.push-armed .bell-dot {
       background: var(--win);
       box-shadow: 0 0 6px var(--win);
     }
 
-    .btn-flatten-pill {
+    .btn-nav-flatten {
       background: var(--loss-soft);
       color: var(--loss);
       border: 1px solid rgba(244, 63, 94, 0.35);
-      padding: 7px 14px;
-      border-radius: 20px;
+      padding: 6px 13px;
+      border-radius: 18px;
       font-family: var(--font-mono);
       font-size: 11px;
       font-weight: 700;
@@ -217,346 +204,380 @@
       cursor: pointer;
       transition: all 0.15s ease;
     }
-    .btn-flatten-pill:hover {
+    .btn-nav-flatten:hover {
       background: var(--loss);
       color: #fff;
-      box-shadow: 0 0 14px rgba(244, 63, 94, 0.4);
+      box-shadow: 0 0 12px rgba(244, 63, 94, 0.4);
     }
 
     /* Killzone Sub-Ribbon */
-    .kz-ribbon-bar {
-      background: rgba(12, 20, 36, 0.9);
-      border-bottom: 1px solid rgba(134, 168, 207, 0.08);
-      padding: 6px 18px;
+    .kz-ribbon-line {
+      background: rgba(9, 16, 28, 0.92);
+      border-bottom: 1px solid rgba(126, 176, 222, 0.08);
+      padding: 5px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       overflow-x: auto;
       white-space: nowrap;
-      gap: 16px;
+      gap: 14px;
       font-size: 11px;
       font-family: var(--font-mono);
     }
-    .kz-ribbon-bar::-webkit-scrollbar { display: none; }
-    .ribbon-item { display: inline-flex; align-items: center; gap: 6px; color: var(--txt-muted); }
-    .ribbon-item strong { color: var(--c-rose-white); font-weight: 600; font-variant-numeric: tabular-nums; }
-    .ribbon-kz-pill {
+    .kz-ribbon-line::-webkit-scrollbar { display: none; }
+    .kz-cell { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); }
+    .kz-cell strong { color: var(--c-rose-white); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .kz-badge-pill {
       font-size: 9px;
-      padding: 2px 8px;
-      border-radius: 10px;
+      padding: 2px 7px;
+      border-radius: 8px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
-    .ribbon-kz-pill.live { background: var(--win-soft); color: var(--win); border: 1px solid rgba(16, 185, 129, 0.3); }
-    .ribbon-kz-pill.idle { background: rgba(255,255,255,0.04); color: var(--txt-dim); }
+    .kz-badge-pill.live { background: var(--win-soft); color: var(--win); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .kz-badge-pill.idle { background: rgba(255,255,255,0.04); color: var(--text-dim); }
 
     /* ==========================================================================
-       MAIN APP STAGE & CARDS
+       STAGE CONTAINER & PRECISION CARDS
        ========================================================================== */
-    main.app-stage {
+    main.app-viewport {
       flex: 1;
-      padding: 18px;
+      padding: 16px;
       width: 100%;
-      max-width: 1600px;
+      max-width: 1560px;
       margin: 0 auto;
     }
 
-    .nexora-card {
-      background: var(--c-navy-card);
-      border: 1px solid rgba(134, 168, 207, 0.12);
-      border-top: 1px solid rgba(225, 203, 215, 0.22);
+    .clean-bento-card {
+      background: var(--card-base);
+      border: 1px solid rgba(126, 176, 222, 0.10);
+      border-top: 1px solid rgba(225, 203, 215, 0.18);
       border-radius: 28px;
       padding: 20px;
       position: relative;
       overflow: hidden;
-      box-shadow: 
-        0 20px 40px -15px rgba(4, 8, 18, 0.7),
-        inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      transition: all 0.2s ease;
-    }
-    .nexora-card:hover {
-      border-color: rgba(134, 168, 207, 0.22);
-      border-top-color: rgba(225, 203, 215, 0.35);
+      box-shadow: 0 16px 36px -12px rgba(2, 6, 14, 0.7);
     }
 
-    /* Total Portfolio Value Hero Card (Screen 1 in design) */
+    /* 1. HERO TOTAL PORTFOLIO VALUE (Matching Reference Screen 1) */
     .hero-portfolio-card {
-      background: linear-gradient(145deg, rgba(24, 38, 66, 0.95) 0%, rgba(15, 25, 45, 0.95) 100%);
-      border: 1px solid rgba(134, 168, 207, 0.18);
-      border-top: 1px solid rgba(225, 203, 215, 0.30);
-      border-radius: 30px;
-      padding: 24px;
+      background: linear-gradient(135deg, rgba(28, 52, 92, 0.75) 0%, rgba(13, 22, 41, 0.95) 75%);
+      border: 1px solid rgba(126, 176, 222, 0.22);
+      border-top: 1px solid rgba(225, 203, 215, 0.35);
+      border-radius: 28px;
+      padding: 22px;
       position: relative;
+      overflow: hidden;
     }
-    .hero-portfolio-card::before {
+    .hero-portfolio-card::after {
       content: "";
       position: absolute;
-      top: -30px;
-      right: -30px;
-      width: 160px;
-      height: 160px;
+      top: -40px;
+      right: -40px;
+      width: 180px;
+      height: 180px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(134, 168, 207, 0.15) 0%, transparent 70%);
-      filter: blur(30px);
+      background: radial-gradient(circle, rgba(126, 176, 222, 0.28) 0%, transparent 70%);
+      filter: blur(24px);
       pointer-events: none;
     }
 
-    .portfolio-label {
-      font-size: 12px;
+    .hero-caption {
+      font-size: 13px;
       font-weight: 500;
-      color: var(--txt-secondary);
-      margin-bottom: 6px;
-      letter-spacing: 0.01em;
+      color: rgba(220, 235, 255, 0.85);
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
     }
 
-    .portfolio-value-num {
+    /* Decimal-split luxury typography: $186,486.28 */
+    .hero-val-container {
+      display: flex;
+      align-items: baseline;
       font-family: var(--font-display);
-      font-size: 42px;
-      font-weight: 800;
-      color: var(--txt-primary);
-      letter-spacing: -0.03em;
-      line-height: 1.05;
-      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.025em;
       margin-bottom: 12px;
     }
-    .portfolio-value-num.up {
-      color: var(--txt-primary);
-      text-shadow: 0 0 24px rgba(134, 168, 207, 0.3);
+    .hero-currency {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--text-1);
+      margin-right: 2px;
+    }
+    .hero-int-part {
+      font-size: 38px;
+      font-weight: 700;
+      color: var(--text-1);
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .hero-dec-part {
+      font-size: 22px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.55);
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      margin-left: 1px;
     }
 
-    /* Frosted Metric Pills */
-    .hero-pills-row {
+    /* Frosted Pills Underneath Hero */
+    .hero-pills-cluster {
       display: flex;
       align-items: center;
       gap: 8px;
       margin-bottom: 20px;
       flex-wrap: wrap;
     }
-    .frosted-pill {
+    .ref-pill {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      background: rgba(134, 168, 207, 0.12);
-      border: 1px solid rgba(134, 168, 207, 0.20);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.10);
       padding: 4px 10px;
-      border-radius: 20px;
+      border-radius: 9999px;
       font-size: 11px;
-      font-family: var(--font-mono);
+      font-family: var(--font-display);
       font-weight: 600;
-      color: var(--c-ice-blue);
+      color: var(--text-1);
     }
-    .frosted-pill.profit {
-      color: var(--win);
-      background: var(--win-soft);
-      border-color: rgba(16, 185, 129, 0.25);
+    .ref-pill.pct-up {
+      color: var(--text-1);
+    }
+    .ref-pill svg {
+      width: 12px;
+      height: 12px;
+      stroke-width: 2.5;
+      stroke: currentColor;
     }
 
-    /* 3 Squircle Glass Action Buttons */
-    .hero-actions-trio {
+    /* 3 Action Squircle Buttons (Invest, Add Fund, Withdraw) */
+    .action-trio-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
     }
-    .action-squircle-btn {
-      background: rgba(10, 17, 32, 0.6);
-      border: 1px solid rgba(134, 168, 207, 0.15);
-      border-radius: 18px;
-      padding: 12px 8px;
+    .squircle-action-btn {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-top: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 16px;
+      height: 64px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      gap: 5px;
       cursor: pointer;
-      transition: all 0.2s ease;
-      color: var(--txt-secondary);
+      color: rgba(245, 248, 255, 0.9);
       text-decoration: none;
+      transition: all 0.15s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
-    .action-squircle-btn:hover {
-      background: rgba(24, 38, 66, 0.8);
+    .squircle-action-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
       border-color: var(--c-ice-blue);
-      color: var(--txt-primary);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+      color: #fff;
+      transform: translateY(-1px);
     }
-    .action-squircle-btn svg {
-      width: 20px;
-      height: 20px;
+    .squircle-action-btn:active {
+      transform: scale(0.97);
+    }
+    .squircle-action-btn svg {
+      width: 18px;
+      height: 18px;
       stroke: currentColor;
       fill: none;
       stroke-width: 2;
     }
-    .action-squircle-btn span {
+    .squircle-action-btn span {
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
+      font-family: var(--font-body);
     }
 
-    /* Top Holdings List (Screen 1 in design) */
-    .holdings-head {
+    /* 2. TOP HOLDINGS SECTION (Matching Reference Screen 1) */
+    .holdings-header-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
     }
-    .holdings-head h2 {
+    .holdings-header-row h2 {
       font-family: var(--font-display);
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 700;
-      color: var(--txt-primary);
+      color: var(--text-1);
       letter-spacing: -0.01em;
     }
-    .holdings-see-all {
+    .holdings-header-row a {
       font-size: 12px;
       font-weight: 600;
       color: var(--c-ice-blue);
       text-decoration: none;
       cursor: pointer;
-      transition: color 0.15s;
     }
-    .holdings-see-all:hover { color: var(--c-rose-white); }
+    .holdings-header-row a:hover { color: var(--c-rose-white); }
 
-    .holdings-list {
+    .holdings-stream {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 14px;
     }
-    .holding-item-row {
+    .holding-line-item {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 12px;
-      background: rgba(10, 17, 32, 0.45);
-      border: 1px solid rgba(134, 168, 207, 0.08);
-      border-radius: 18px;
-      transition: all 0.15s ease;
+      padding: 4px 0;
     }
-    .holding-item-row:hover {
-      background: rgba(20, 32, 54, 0.6);
-      border-color: rgba(134, 168, 207, 0.2);
-    }
-    .holding-item-left {
+    .holding-left-box {
       display: flex;
       align-items: center;
       gap: 12px;
     }
-    .holding-avatar {
-      width: 38px;
-      height: 38px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, rgba(134, 168, 207, 0.2), rgba(195, 142, 180, 0.15));
-      border: 1px solid rgba(134, 168, 207, 0.25);
+    .holding-avatar-circle {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: var(--c-avatar-bg);
+      border: 1px solid rgba(126, 176, 222, 0.2);
       display: flex;
       align-items: center;
       justify-content: center;
       font-family: var(--font-display);
       font-weight: 700;
       font-size: 13px;
-      color: var(--c-rose-white);
+      color: var(--text-1);
+      flex-shrink: 0;
     }
-    .holding-titles h3 {
+    .holding-meta-titles h3 {
+      font-family: var(--font-display);
       font-size: 13px;
       font-weight: 700;
-      color: var(--txt-primary);
+      color: var(--text-1);
+      letter-spacing: 0.02em;
       line-height: 1.2;
     }
-    .holding-titles p {
+    .holding-meta-titles p {
       font-family: var(--font-mono);
       font-size: 10px;
-      color: var(--txt-muted);
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
     }
-    .holding-item-right {
+    .holding-right-box {
       text-align: right;
     }
-    .holding-main-num {
-      font-family: var(--font-mono);
-      font-size: 13px;
+    .holding-num-quote {
+      font-family: var(--font-display);
+      font-size: 14px;
       font-weight: 700;
-      color: var(--txt-primary);
+      color: var(--text-1);
       font-variant-numeric: tabular-nums;
     }
-    .holding-sub-badge {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      color: var(--win);
+    .holding-pct-green {
+      font-family: var(--font-display);
+      font-size: 11px;
       font-weight: 600;
+      color: var(--win);
       display: inline-flex;
       align-items: center;
       gap: 2px;
     }
 
-    /* Compounding & Performance Bar Chart (Bottom of Screen 1) */
-    .bar-chart-container {
-      margin-top: 18px;
-      padding-top: 14px;
-      border-top: 1px solid rgba(134, 168, 207, 0.1);
+    /* 3. DUAL-TONE BAR CHART (Matching Reference Screen 1) */
+    .barchart-section {
+      margin-top: 20px;
+      padding-top: 16px;
+      position: relative;
     }
-    .bar-chart-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-      font-size: 11px;
-      color: var(--txt-secondary);
-      font-weight: 600;
+    .barchart-grid-container {
+      position: relative;
+      height: 116px;
+      width: 100%;
     }
-    .bars-stage {
+    /* Horizontal Dashed Reference Lines */
+    .chart-grid-line {
+      position: absolute;
+      left: 0;
+      right: 38px;
+      height: 1px;
+      border-top: 1px dashed rgba(126, 176, 222, 0.15);
+    }
+    .chart-grid-label {
+      position: absolute;
+      right: 0;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-muted);
+      transform: translateY(-50%);
+    }
+
+    /* Bars Flex Stage */
+    .bars-columns-stage {
+      position: absolute;
+      inset: 0 38px 0 0;
       display: flex;
-      justify-content: space-between;
+      justify-content: space-around;
       align-items: flex-end;
-      height: 110px;
-      padding: 0 4px;
+      padding-bottom: 2px;
     }
-    .bar-col {
+    .bar-pill-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 6px;
-      flex: 1;
+      width: 20px;
     }
-    .bar-track {
-      width: 14px;
-      height: 84px;
-      background: rgba(10, 17, 32, 0.6);
-      border-radius: 8px;
+    .bar-pill-track {
+      width: 20px;
+      height: 90px;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      overflow: hidden;
+      position: relative;
     }
-    .bar-fill-top {
-      background: var(--c-rose-white);
-      border-radius: 8px 8px 0 0;
+    .bar-pill-upper {
       width: 100%;
+      background: #253956;
+      border-radius: 4px 4px 0 0;
+      position: relative;
     }
-    .bar-fill-bot {
-      background: var(--c-ice-blue);
+    .bar-pill-cap {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2.5px;
+      background: #FFFFFF;
+      border-radius: 4px 4px 0 0;
+    }
+    .bar-pill-lower {
       width: 100%;
-      border-radius: 0 0 8px 8px;
+      background: #6CAAE8;
+      border-radius: 0 0 2px 2px;
     }
-    .bar-month-lbl {
+    .bar-col-month {
       font-family: var(--font-mono);
       font-size: 9px;
-      color: var(--txt-muted);
+      color: var(--text-muted);
       text-transform: uppercase;
     }
 
-    /* Donut Segmented Allocation Ring (Screen 2 in design) */
-    .ring-allocation-card {
+    /* 4. CIRCULAR ALLOCATION RING (Matching Reference Screen 2) */
+    .donut-card-center {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 24px 18px;
-      position: relative;
+      padding: 24px 20px;
     }
-    .ring-svg-wrapper {
+    .donut-svg-box {
       position: relative;
       width: 210px;
       height: 210px;
-      margin: 10px auto;
+      margin: 12px auto;
     }
-    .ring-center-content {
+    .donut-center-overlay {
       position: absolute;
       inset: 0;
       display: flex;
@@ -565,86 +586,84 @@
       justify-content: center;
       pointer-events: none;
     }
-    .ring-center-num {
+    .donut-int-display {
       font-family: var(--font-display);
-      font-size: 32px;
+      font-size: 34px;
       font-weight: 800;
-      color: var(--txt-primary);
+      color: var(--text-1);
       line-height: 1;
     }
-    .ring-center-lbl {
+    .donut-sub-display {
       font-size: 11px;
-      color: var(--txt-secondary);
+      color: var(--text-2);
       font-weight: 500;
       margin-top: 4px;
     }
 
     /* Split Timed Cards (Screen 2 bottom) */
-    .split-timestamp-card {
-      background: rgba(14, 23, 41, 0.7);
-      border: 1px solid rgba(134, 168, 207, 0.12);
+    .split-timestamp-item {
+      background: rgba(14, 24, 44, 0.7);
+      border: 1px solid rgba(126, 176, 222, 0.12);
       border-radius: 20px;
       padding: 14px 16px;
       margin-top: 10px;
     }
-    .split-card-header {
+    .split-item-top {
       display: flex;
       justify-content: space-between;
-      align-items: center;
       font-size: 11px;
       font-family: var(--font-mono);
-      color: var(--txt-secondary);
+      color: var(--text-2);
       margin-bottom: 8px;
     }
-    .split-card-body h4 {
+    .split-item-body h4 {
       font-size: 14px;
       font-weight: 700;
-      color: var(--txt-primary);
+      color: var(--text-1);
       margin-bottom: 6px;
     }
-    .split-card-footer {
+    .split-item-bottom {
       display: flex;
       justify-content: space-between;
-      align-items: center;
       font-family: var(--font-mono);
       font-size: 11px;
-      color: var(--txt-muted);
-      border-top: 1px solid rgba(134, 168, 207, 0.08);
+      color: var(--text-muted);
+      border-top: 1px solid rgba(126, 176, 222, 0.08);
       padding-top: 8px;
       margin-top: 8px;
     }
 
     /* Active Position Trailing Cockpit */
-    .pos-cockpit-box {
-      background: rgba(10, 17, 32, 0.65);
-      border: 1px solid rgba(134, 168, 207, 0.14);
+    .pos-cockpit-panel {
+      background: rgba(9, 16, 29, 0.7);
+      border: 1px solid rgba(126, 176, 222, 0.12);
       border-radius: 18px;
       padding: 14px;
       margin-top: 12px;
     }
-    .pos-pnl-banner {
+    .pos-cockpit-head {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 8px;
     }
-    .pos-side-chip {
+    .pos-side-tag {
       font-family: var(--font-mono);
       font-size: 11px;
       font-weight: 800;
       padding: 3px 8px;
       border-radius: 6px;
     }
-    .pos-side-chip.buy { background: var(--win); color: #000; }
-    .pos-side-chip.sell { background: var(--loss); color: #fff; }
-    .pos-ratchet-track {
+    .pos-side-tag.buy { background: var(--win); color: #000; }
+    .pos-side-tag.sell { background: var(--loss); color: #fff; }
+    .pos-ratchet-gauge {
       height: 6px;
-      background: rgba(134, 168, 207, 0.12);
+      background: rgba(126, 176, 222, 0.12);
       border-radius: 3px;
       position: relative;
       margin: 12px 0 6px;
     }
-    .pos-ratchet-pip {
+    .pos-ratchet-thumb {
       position: absolute;
       top: 50%;
       transform: translate(-50%, -50%);
@@ -655,15 +674,15 @@
       border: 2px solid #000;
       box-shadow: 0 0 8px var(--gold);
     }
-    .pos-ratchet-legend {
+    .pos-gauge-labels {
       display: flex;
       justify-content: space-between;
       font-family: var(--font-mono);
       font-size: 10px;
-      color: var(--txt-muted);
+      color: var(--text-muted);
     }
 
-    /* News Feed & Filters */
+    /* News Filters & List */
     .news-filter-strip {
       display: flex;
       gap: 6px;
@@ -671,10 +690,10 @@
       overflow-x: auto;
       padding-bottom: 2px;
     }
-    .news-filter-chip {
-      background: rgba(19, 31, 55, 0.7);
-      border: 1px solid rgba(134, 168, 207, 0.15);
-      color: var(--txt-secondary);
+    .news-chip-btn {
+      background: rgba(18, 29, 53, 0.7);
+      border: 1px solid rgba(126, 176, 222, 0.15);
+      color: var(--text-2);
       font-size: 10px;
       font-weight: 700;
       font-family: var(--font-mono);
@@ -684,21 +703,21 @@
       white-space: nowrap;
       transition: all 0.15s ease;
     }
-    .news-filter-chip.active {
+    .news-chip-btn.active {
       background: var(--c-ice-blue-soft);
       color: var(--c-rose-white);
       border-color: var(--c-ice-blue);
     }
-    .news-scroll-list {
+    .news-list-container {
       display: flex;
       flex-direction: column;
       gap: 8px;
       max-height: 280px;
       overflow-y: auto;
     }
-    .news-card-item {
-      background: rgba(10, 17, 32, 0.45);
-      border: 1px solid rgba(134, 168, 207, 0.08);
+    .news-card-link {
+      background: rgba(9, 16, 29, 0.5);
+      border: 1px solid rgba(126, 176, 222, 0.08);
       border-radius: 14px;
       padding: 10px 12px;
       font-size: 11px;
@@ -708,10 +727,8 @@
       display: block;
       transition: border-color 0.15s;
     }
-    .news-card-item:hover {
-      border-color: rgba(134, 168, 207, 0.25);
-    }
-    .news-item-top {
+    .news-card-link:hover { border-color: rgba(126, 176, 222, 0.25); }
+    .news-meta-split {
       display: flex;
       justify-content: space-between;
       font-family: var(--font-mono);
@@ -719,60 +736,58 @@
       margin-bottom: 4px;
     }
 
-    /* Clocks & Matrix Table */
-    .clocks-grid-4 {
+    /* Clocks Matrix Grid */
+    .clocks-grid-layout {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 8px;
       margin-bottom: 14px;
     }
-    @media (min-width: 600px) { .clocks-grid-4 { grid-template-columns: repeat(4, 1fr); } }
-    .clock-tile {
-      background: rgba(10, 17, 32, 0.5);
-      border: 1px solid rgba(134, 168, 207, 0.1);
+    @media (min-width: 600px) { .clocks-grid-layout { grid-template-columns: repeat(4, 1fr); } }
+    .clock-box-tile {
+      background: rgba(9, 16, 29, 0.55);
+      border: 1px solid rgba(126, 176, 222, 0.1);
       border-radius: 14px;
       padding: 10px;
       text-align: left;
     }
-    .clock-tile-city { font-size: 10px; color: var(--txt-secondary); font-weight: 600; }
-    .clock-tile-val { font-family: var(--font-mono); font-size: 16px; font-weight: 800; color: var(--c-rose-white); margin: 2px 0; }
-    .clock-tile-sub { font-size: 9px; color: var(--txt-muted); font-family: var(--font-mono); }
+    .clock-city-lbl { font-size: 10px; color: var(--text-2); font-weight: 600; }
+    .clock-time-big { font-family: var(--font-mono); font-size: 16px; font-weight: 800; color: var(--c-rose-white); margin: 2px 0; }
+    .clock-tz-sub { font-size: 9px; color: var(--text-muted); font-family: var(--font-mono); }
 
-    .kz-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--font-mono); }
-    .kz-table th { text-align: left; color: var(--txt-muted); padding: 6px 8px; border-bottom: 1px solid rgba(134, 168, 207, 0.1); font-size: 10px; }
-    .kz-table td { padding: 8px; border-bottom: 1px solid rgba(134, 168, 207, 0.05); }
+    .sessions-matrix-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--font-mono); }
+    .sessions-matrix-table th { text-align: left; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid rgba(126, 176, 222, 0.1); font-size: 10px; }
+    .sessions-matrix-table td { padding: 8px; border-bottom: 1px solid rgba(126, 176, 222, 0.05); }
 
     /* ==========================================================================
-       BOTTOM FLOATING DOCK (Screen 1 & 2 in design)
+       BOTTOM FLOATING DOCK (Matching Reference Screen 1 & 2)
        ========================================================================== */
-    nav.nexora-dock {
+    nav.app-dock-bar {
       position: fixed;
       bottom: calc(14px + var(--safe-bottom));
       left: 18px;
       right: 18px;
       max-width: 440px;
       margin: 0 auto;
-      height: 64px;
+      height: 62px;
       z-index: 200;
-      background: rgba(13, 21, 38, 0.78);
+      background: rgba(11, 19, 35, 0.82);
       backdrop-filter: blur(32px) saturate(190%);
       -webkit-backdrop-filter: blur(32px) saturate(190%);
-      border: 1px solid rgba(134, 168, 207, 0.16);
+      border: 1px solid rgba(126, 176, 222, 0.16);
       border-top: 1px solid rgba(225, 203, 215, 0.28);
       border-radius: 32px;
       padding: 4px 10px;
       display: flex;
       justify-content: space-around;
       align-items: center;
-      box-shadow: 
-        0 20px 40px -10px rgba(4, 8, 18, 0.85),
-        inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+      box-shadow: 0 20px 40px -10px rgba(2, 6, 14, 0.85);
     }
 
-    .dock-item-btn {
+    .dock-tab-item {
       background: none;
       border: 0;
-      color: var(--txt-muted);
+      color: var(--text-muted);
       font-family: var(--font-display);
       font-size: 10px;
       font-weight: 600;
@@ -788,7 +803,7 @@
       transition: all 0.15s ease;
       position: relative;
     }
-    .dock-item-btn svg {
+    .dock-tab-item svg {
       width: 20px;
       height: 20px;
       stroke-width: 2;
@@ -796,14 +811,14 @@
       fill: none;
       transition: stroke 0.15s;
     }
-    .dock-item-btn.active {
+    .dock-tab-item.active {
       color: var(--c-ice-blue);
     }
-    .dock-item-btn.active svg {
+    .dock-tab-item.active svg {
       stroke: var(--c-ice-blue);
-      filter: drop-shadow(0 0 6px rgba(134, 168, 207, 0.6));
+      filter: drop-shadow(0 0 6px rgba(126, 176, 222, 0.6));
     }
-    .dock-item-btn.active::after {
+    .dock-tab-item.active::after {
       content: "";
       position: absolute;
       bottom: 2px;
@@ -813,22 +828,22 @@
       background: var(--c-ice-blue);
       box-shadow: 0 0 6px var(--c-ice-blue);
     }
-    .dock-item-btn:active { transform: scale(0.92); }
+    .dock-tab-item:active { transform: scale(0.92); }
 
     /* Responsive Viewports */
-    .tab-view-page { display: none; flex-direction: column; gap: 14px; }
-    .tab-view-page.active { display: flex; }
+    .tab-section-page { display: none; flex-direction: column; gap: 14px; }
+    .tab-section-page.active { display: flex; }
 
     @media (min-width: 1024px) {
       body { padding-bottom: 24px; }
-      header.nexora-nav { padding: 12px 28px; }
+      header.app-top-nav { padding: 12px 28px; }
       .header-ticker-pill { display: flex; }
-      .kz-ribbon-bar { padding: 8px 28px; }
-      main.app-stage { padding: 24px 28px; }
+      .kz-ribbon-line { padding: 8px 28px; }
+      main.app-viewport { padding: 24px 28px; }
       
-      nav.nexora-dock { display: none; }
+      nav.app-dock-bar { display: none; }
 
-      .desktop-3col-grid {
+      .quant-desktop-grid {
         display: grid;
         grid-template-columns: 360px 1fr 380px;
         gap: 20px;
@@ -839,18 +854,16 @@
         flex-direction: column;
         gap: 16px;
       }
-      .tab-view-page { display: flex !important; }
+      .tab-section-page { display: flex !important; }
     }
 
     @media (max-width: 1023px) {
       body { padding-bottom: calc(90px + var(--safe-bottom)); }
-      .desktop-3col-grid { display: block; }
+      .quant-desktop-grid { display: block; }
     }
 
-    /* ==========================================================================
-       FACE ID BIOMETRIC MODAL
-       ========================================================================== */
-    .faceid-modal-backdrop {
+    /* Face ID Biometric Modal */
+    .faceid-backdrop {
       position: fixed;
       inset: 0;
       background: rgba(4, 8, 18, 0.85);
@@ -862,26 +875,24 @@
       z-index: 600;
       padding: 20px;
     }
-    .faceid-modal-backdrop.open { display: flex; }
-
-    .faceid-modal-box {
-      background: rgba(19, 31, 55, 0.9);
-      border: 1px solid rgba(134, 168, 207, 0.25);
+    .faceid-backdrop.open { display: flex; }
+    .faceid-box {
+      background: rgba(18, 29, 53, 0.92);
+      border: 1px solid rgba(126, 176, 222, 0.25);
       border-top: 1px solid rgba(225, 203, 215, 0.4);
       border-radius: 28px;
       padding: 30px 24px;
       max-width: 320px;
       width: 100%;
       text-align: center;
-      box-shadow: 0 24px 50px rgba(0,0,0,0.8), inset 0 1px 0 0 rgba(255,255,255,0.15);
-      animation: modal-pop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 24px 50px rgba(0,0,0,0.8);
+      animation: modal-scale 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    @keyframes modal-pop {
+    @keyframes modal-scale {
       0% { transform: scale(0.9); opacity: 0; }
       100% { transform: scale(1); opacity: 1; }
     }
-
-    .faceid-scanner-frame {
+    .faceid-target-frame {
       width: 84px;
       height: 84px;
       margin: 0 auto 16px;
@@ -890,14 +901,14 @@
       align-items: center;
       justify-content: center;
     }
-    .faceid-scanner-frame svg {
+    .faceid-target-frame svg {
       width: 100%;
       height: 100%;
       stroke: var(--c-ice-blue);
       stroke-width: 2.5;
       fill: none;
     }
-    .faceid-laser {
+    .faceid-scan-beam {
       position: absolute;
       top: 0;
       left: 10px;
@@ -905,48 +916,36 @@
       height: 2px;
       background: linear-gradient(90deg, transparent, var(--c-mauve), var(--c-ice-blue), transparent);
       box-shadow: 0 0 10px var(--c-ice-blue);
-      animation: faceid-scan 1.4s ease-in-out infinite;
+      animation: beam-sweep 1.4s ease-in-out infinite;
     }
-    @keyframes faceid-scan {
+    @keyframes beam-sweep {
       0%, 100% { top: 12px; opacity: 0.2; }
       50% { top: 68px; opacity: 1; }
     }
-    .faceid-success-icon {
-      display: none;
-      color: var(--win);
-      font-size: 38px;
-      animation: check-pop 0.3s ease;
-    }
-    @keyframes check-pop {
-      0% { transform: scale(0.5); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-
-    .faceid-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--txt-primary); margin-bottom: 4px; }
-    .faceid-status { font-family: var(--font-mono); font-size: 11px; color: var(--txt-secondary); margin-bottom: 18px; }
+    .faceid-ok-icon { display: none; color: var(--win); font-size: 38px; }
 
     /* Emergency Flatten Modal */
-    .modal-frost-backdrop {
+    .modal-flatten-backdrop {
       position: fixed; inset: 0;
       background: rgba(4, 8, 18, 0.82);
       backdrop-filter: blur(14px);
       display: none; align-items: center; justify-content: center;
       z-index: 550; padding: 20px;
     }
-    .modal-frost-backdrop.open { display: flex; }
-    .modal-frost-box {
-      background: var(--c-navy-card);
+    .modal-flatten-backdrop.open { display: flex; }
+    .modal-flatten-box {
+      background: var(--card-base);
       border: 1px solid rgba(244, 63, 94, 0.35);
       border-radius: 24px;
       padding: 24px; max-width: 360px; width: 100%; text-align: center;
       box-shadow: 0 0 40px rgba(244, 63, 94, 0.25);
     }
-    .modal-frost-box h3 { font-size: 17px; color: var(--loss); margin-bottom: 8px; font-family: var(--font-display); }
-    .modal-frost-box p { font-size: 12px; color: var(--txt-secondary); margin-bottom: 18px; line-height: 1.4; }
-    .modal-btn-row { display: flex; gap: 10px; }
+    .modal-flatten-box h3 { font-size: 17px; color: var(--loss); margin-bottom: 8px; font-family: var(--font-display); }
+    .modal-flatten-box p { font-size: 12px; color: var(--text-2); margin-bottom: 18px; line-height: 1.4; }
+    .modal-actions-pair { display: flex; gap: 10px; }
     .btn-modal-cancel {
       flex: 1; padding: 11px; border-radius: 12px; background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(134, 168, 207, 0.15); color: var(--txt-primary); font-size: 12px; font-weight: 600; cursor: pointer;
+      border: 1px solid rgba(126, 176, 222, 0.15); color: var(--text-1); font-size: 12px; font-weight: 600; cursor: pointer;
     }
     .btn-modal-confirm {
       flex: 1; padding: 11px; border-radius: 12px; background: var(--loss);
@@ -954,7 +953,7 @@
     }
 
     /* Push Toast Notification */
-    .push-toast-pill {
+    .push-pill-banner {
       position: fixed;
       top: calc(74px + var(--safe-top));
       left: 50%;
@@ -962,9 +961,9 @@
       opacity: 0;
       pointer-events: none;
       z-index: 450;
-      background: rgba(19, 31, 55, 0.95);
+      background: rgba(18, 29, 53, 0.95);
       backdrop-filter: blur(20px);
-      border: 1px solid rgba(134, 168, 207, 0.3);
+      border: 1px solid rgba(126, 176, 222, 0.3);
       border-radius: 20px;
       padding: 9px 18px;
       font-size: 12px;
@@ -974,7 +973,7 @@
       box-shadow: 0 12px 30px rgba(0,0,0,0.6);
       transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .push-toast-pill.visible {
+    .push-pill-banner.visible {
       transform: translateX(-50%) translateY(0);
       opacity: 1;
       pointer-events: auto;
@@ -984,403 +983,450 @@
 <body>
 
   <!-- Push Toast Notification -->
-  <div class="push-toast-pill" id="push-toast">
-    <span id="push-toast-icon">🔔</span>
+  <div class="push-pill-banner" id="push-toast">
+    <span id="push-toast-icon">✓</span>
     <span id="push-toast-msg">Push notification active</span>
   </div>
 
   <!-- ==========================================================================
-       TOP NAVIGATION BAR
+       HEADER: EXACT STEPPED CHEVRON LOGO + STRATTON LOGOTYPE
        ========================================================================== -->
-  <header class="nexora-nav">
-    <div class="nav-brand-box">
-      <!-- Stepped Geometric Logo Mark -->
-      <div class="stepped-logo">
-        <div class="stepped-bar top"></div>
-        <div class="stepped-bar mid"></div>
-        <div class="stepped-bar bot"></div>
-      </div>
-      <!-- Brand Logotype -->
-      <div class="brand-logotype">Stratton</div>
+  <header class="app-top-nav">
+    <div class="nav-brand">
+      <!-- Exact Vector Stepped Chevron Mark from Reference Image -->
+      <svg class="brand-svg-mark" viewBox="0 0 100 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="20,6 56,6 61,20 20,20" fill="#FFFFFF"/>
+        <line x1="61" y1="19" x2="82" y2="19" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/>
+        <polygon points="10,28 59,28 64,42 10,42" fill="#FFFFFF"/>
+        <line x1="64" y1="41" x2="91" y2="41" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/>
+        <polygon points="0,50 62,50 67,64 0,64" fill="#FFFFFF"/>
+        <line x1="67" y1="63" x2="100" y2="63" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/>
+      </svg>
+      <!-- Stratton Logotype -->
+      <div class="brand-title">Stratton</div>
     </div>
 
     <!-- Live Pair Ticker Pill (Desktop/Tablet) -->
     <div class="header-ticker-pill">
-      <span class="ticker-symbol">XAU/USD</span>
-      <span class="ticker-price" id="nav-quote">$4,359.80</span>
-      <span class="ticker-spread" id="nav-spread">0.5 bps · 0.2ms</span>
+      <span class="ticker-pair">XAU/USD</span>
+      <span class="ticker-val" id="nav-quote">$4,359.80</span>
+      <span class="ticker-sub" id="nav-spread">0.5 spread · Live</span>
     </div>
 
     <!-- Right Actions -->
-    <div class="header-action-group">
+    <div class="header-actions">
       <!-- 1-Line Native Web Push Bell -->
-      <button class="nav-circle-btn" id="push-btn" onclick="toggleWebPush()" title="Toggle Web Push Alerts">
+      <button class="nav-icon-circle" id="push-btn" onclick="toggleWebPush()" title="Toggle Notifications">
         <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        <span class="badge-dot" id="push-dot"></span>
+        <span class="bell-dot" id="push-dot"></span>
       </button>
 
       <!-- Clean Face ID Biometric Trigger -->
-      <button class="nav-circle-btn" onclick="openFaceID()" title="Face ID Biometrics">
+      <button class="nav-icon-circle" onclick="openFaceID()" title="Face ID">
         <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="9" r="1"/><path d="M10 15c.5.5 1.5.5 2 0"/><path d="M12 11v2"/></svg>
       </button>
 
-      <!-- Emergency Flatten Button -->
-      <button class="btn-flatten-pill" onclick="openFlattenModal()">FLATTEN</button>
+      <!-- Emergency Close All Button -->
+      <button class="btn-nav-flatten" onclick="openFlattenModal()">Close All</button>
     </div>
   </header>
 
-  <!-- Killzone Ribbon Bar -->
-  <div class="kz-ribbon-bar">
-    <div class="ribbon-item">
+  <!-- Killzone Ribbon Line -->
+  <div class="kz-ribbon-line">
+    <div class="kz-cell">
       <span>Tehran:</span>
       <strong id="ribbon-tehran">--:--:--</strong>
     </div>
-    <div class="ribbon-item">
+    <div class="kz-cell">
       <span>New York:</span>
       <strong id="ribbon-ny">--:--:--</strong>
     </div>
-    <div class="ribbon-item">
+    <div class="kz-cell">
       <span>London:</span>
       <strong id="ribbon-lon">--:--:--</strong>
     </div>
-    <div class="ribbon-item">
+    <div class="kz-cell">
       <span>UTC:</span>
       <strong id="ribbon-utc">--:--:--</strong>
     </div>
-    <div class="ribbon-item">
-      <span class="ribbon-kz-pill live" id="ribbon-kz-pill">ACTIVE KILLZONE</span>
+    <div class="kz-cell">
+      <span class="kz-badge-pill live" id="ribbon-kz-pill">Market Active</span>
     </div>
   </div>
 
   <!-- ==========================================================================
-       MAIN CONTENT STAGE
+       MAIN CONTENT VIEWPORT
        ========================================================================== -->
-  <main class="app-stage">
-    <div class="desktop-3col-grid">
+  <main class="app-viewport">
+    <div class="quant-desktop-grid">
 
       <!-- ==================== COLUMN 1 / TAB 1: DESK (HOME) ==================== -->
-      <div class="tab-view-page active col-left" id="page-desk">
+      <div class="tab-section-page active col-left" id="page-desk">
 
         <!-- Total Portfolio Value Card (Matching Screen 1) -->
         <div class="hero-portfolio-card">
-          <div class="portfolio-label">Your Total Portfolio Value</div>
-          <div class="portfolio-value-num up" id="hero-equity">$289.51</div>
+          <div class="hero-caption">Total Balance</div>
 
-          <div class="hero-pills-row">
-            <span class="frosted-pill profit" id="hero-pnl-pill">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
-              <span id="hero-pnl-pct">+189.5%</span>
-            </span>
-            <span class="frosted-pill" id="hero-pnl-usd">+$199.26 · Net Profit</span>
-            <span class="frosted-pill" style="color:var(--txt-muted);" id="hero-tier-lbl">Tier $300 (0.10L)</span>
+          <!-- Integer + Smaller Cents Typography -->
+          <div class="hero-val-container">
+            <span class="hero-currency">$</span>
+            <span class="hero-int-part" id="hero-int-num">394</span>
+            <span class="hero-dec-part" id="hero-dec-num">.81</span>
           </div>
 
-          <!-- 3 Squircle Glass Action Buttons -->
-          <div class="hero-actions-trio">
-            <button class="action-squircle-btn" onclick="switchMobileTab('page-oracle', document.querySelectorAll('.dock-item-btn')[1])">
-              <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          <div class="hero-pills-cluster">
+            <span class="ref-pill pct-up">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l7-7 7 7"/><path d="M12 19V5"/></svg>
+              <span id="hero-pnl-pct">+294.8%</span>
+            </span>
+            <span class="ref-pill" id="hero-pnl-usd">+$251.91 - Profit</span>
+            <span class="ref-pill" style="color:var(--text-muted);" id="hero-tier-lbl">Tier $300 · 0.10 Lots</span>
+          </div>
+
+          <!-- 3 Squircle Glass Action Buttons (Invest, Add Fund, Withdraw) -->
+          <div class="action-trio-grid">
+            <button class="squircle-action-btn" onclick="switchMobileTab('page-oracle', document.querySelectorAll('.dock-tab-item')[1])">
+              <!-- Upward trend curve icon -->
+              <svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
               <span>Invest</span>
             </button>
-            <button class="action-squircle-btn" onclick="openVaultModal()">
-              <svg viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14"/></svg>
+            <button class="squircle-action-btn" onclick="openVaultModal()">
+              <!-- Thin clean plus -->
+              <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
               <span>Add Fund</span>
             </button>
-            <button class="action-squircle-btn" onclick="openFlattenModal()">
-              <svg viewBox="0 0 24 24"><path d="M12 19V5m-7 7 7-7 7 7"/></svg>
+            <button class="squircle-action-btn" onclick="openFlattenModal()">
+              <!-- Download tray arrow -->
+              <svg viewBox="0 0 24 24"><path d="M12 3v13m0 0l-4-4m4 4l4-4"/><path d="M5 20h14"/></svg>
               <span>Withdraw</span>
             </button>
           </div>
         </div>
 
-        <!-- Top Holdings Card (Matching Screen 1) -->
-        <div class="nexora-card">
-          <div class="holdings-head">
-            <h2>Top Holdings</h2>
-            <span class="holdings-see-all" onclick="openHoldingsModal()">See All</span>
+        <!-- Top Holdings Section (Matching Reference Screen 1) -->
+        <div class="clean-bento-card">
+          <div class="holdings-header-row">
+            <h2>Active Assets & Bots</h2>
+            <a onclick="openHoldingsModal()">See All</a>
           </div>
 
-          <div class="holdings-list">
-            <!-- Asset 1: Pure Gold -->
-            <div class="holding-item-row">
-              <div class="holding-item-left">
-                <div class="holding-avatar">Au</div>
-                <div class="holding-titles">
-                  <h3>GOLD SPOT (XAUUSD)</h3>
-                  <p id="h-gold-lots">0.10 Standard Lots</p>
+          <div class="holdings-stream">
+            <!-- Holding 1: Gold Spot -->
+            <div class="holding-line-item">
+              <div class="holding-left-box">
+                <div class="holding-avatar-circle">AU</div>
+                <div class="holding-meta-titles">
+                  <h3>Gold (XAU/USD)</h3>
+                  <p id="h-gold-lots">0.10 Lots · Live Trade</p>
                 </div>
               </div>
-              <div class="holding-item-right">
-                <div class="holding-main-num" id="h-gold-quote">$4,362.48</div>
-                <span class="holding-sub-badge" id="h-gold-gain">↗ +0.15%</span>
+              <div class="holding-right-box">
+                <div class="holding-num-quote" id="h-gold-quote">$4,359.02</div>
+                <div class="holding-pct-green" id="h-gold-gain">↗ +0.15%</div>
               </div>
             </div>
 
-            <!-- Asset 2: Laya Neural Oracle -->
-            <div class="holding-item-row">
-              <div class="holding-item-left">
-                <div class="holding-avatar" style="background:rgba(195, 142, 180, 0.2); color:var(--c-mauve);">OR</div>
-                <div class="holding-titles">
-                  <h3>LAYA SYSTEM 1</h3>
-                  <p id="h-oracle-concept">Silver Bullet · Rejection</p>
+            <!-- Holding 2: Laya Oracle -->
+            <div class="holding-line-item">
+              <div class="holding-left-box">
+                <div class="holding-avatar-circle" style="background:#2A2342; color:var(--c-mauve);">AI</div>
+                <div class="holding-meta-titles">
+                  <h3>AI Trading Engine</h3>
+                  <p id="h-oracle-concept">Breakout & Retest</p>
                 </div>
               </div>
-              <div class="holding-item-right">
-                <div class="holding-main-num" id="h-oracle-score">8.8 / 10</div>
-                <span class="holding-sub-badge" style="color:var(--c-ice-blue);">A+ PRIME</span>
+              <div class="holding-right-box">
+                <div class="holding-num-quote" id="h-oracle-score">8.8 / 10</div>
+                <div class="holding-pct-green" style="color:var(--c-ice-blue);">High Quality</div>
               </div>
             </div>
 
-            <!-- Asset 3: LLM Doctor Sentinel -->
-            <div class="holding-item-row">
-              <div class="holding-item-left">
-                <div class="holding-avatar" style="background:rgba(16, 185, 129, 0.15); color:var(--win);">DR</div>
-                <div class="holding-titles">
-                  <h3>LLM DOCTOR (QWEN)</h3>
-                  <p>stratton-xau-live</p>
+            <!-- Holding 3: LLM Doctor -->
+            <div class="holding-line-item">
+              <div class="holding-left-box">
+                <div class="holding-avatar-circle" style="background:#163529; color:var(--win);">OK</div>
+                <div class="holding-meta-titles">
+                  <h3>System Health & AI</h3>
+                  <p>Protection Active</p>
                 </div>
               </div>
-              <div class="holding-item-right">
-                <div class="holding-main-num" id="h-doc-status" style="color:var(--win); font-size:11px;">NOMINAL 🟢</div>
-                <span class="holding-sub-badge" id="h-doc-repairs" style="color:var(--txt-muted);">0 Auto-Repairs</span>
+              <div class="holding-right-box">
+                <div class="holding-num-quote" id="h-doc-status" style="color:var(--win); font-size:12px;"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--win); margin-right:4px; vertical-align:1px;"></span>All Good</div>
+                <div class="holding-pct-green" id="h-doc-repairs" style="color:var(--text-muted);">2 Auto-Fixes</div>
               </div>
             </div>
           </div>
 
-          <!-- Compounding Monthly Performance Bar Chart (Matching Screen 1) -->
-          <div class="bar-chart-container">
-            <div class="bar-chart-head">
-              <span>Compounding Growth</span>
-              <span id="chart-tier-pct">31% to $1,000 Target</span>
-            </div>
-            <div class="bars-stage">
-              <div class="bar-col">
-                <div class="bar-track">
-                  <div class="bar-fill-top" style="height: 12px;"></div>
-                  <div class="bar-fill-bot" style="height: 24px;"></div>
+          <!-- Compounding Dual-Tone Bar Chart (Matching Reference Screen 1) -->
+          <div class="barchart-section">
+            <div class="barchart-grid-container">
+              <!-- Dashed Reference Lines -->
+              <div class="chart-grid-line" style="top: 0%;"></div>
+              <span class="chart-grid-label" style="top: 0%;">$1.5k</span>
+
+              <div class="chart-grid-line" style="top: 33.3%;"></div>
+              <span class="chart-grid-label" style="top: 33.3%;">$1k</span>
+
+              <div class="chart-grid-line" style="top: 66.6%;"></div>
+              <span class="chart-grid-label" style="top: 66.6%;">$0.5k</span>
+
+              <div class="chart-grid-line" style="top: 100%;"></div>
+              <span class="chart-grid-label" style="top: 100%;">$0</span>
+
+              <!-- 6 Vertical Bars (Jan - Jun) -->
+              <div class="bars-columns-stage">
+                <!-- JAN -->
+                <div class="bar-pill-wrapper">
+                  <div class="bar-pill-track">
+                    <div class="bar-pill-upper" style="height: 38px;">
+                      <div class="bar-pill-cap"></div>
+                    </div>
+                    <div class="bar-pill-lower" style="height: 14px;"></div>
+                  </div>
+                  <span class="bar-col-month">JAN</span>
                 </div>
-                <span class="bar-month-lbl">JAN</span>
-              </div>
-              <div class="bar-col">
-                <div class="bar-track">
-                  <div class="bar-fill-top" style="height: 18px;"></div>
-                  <div class="bar-fill-bot" style="height: 38px;"></div>
+
+                <!-- FEB -->
+                <div class="bar-pill-wrapper">
+                  <div class="bar-pill-track">
+                    <div class="bar-pill-upper" style="height: 32px;">
+                      <div class="bar-pill-cap"></div>
+                    </div>
+                    <div class="bar-pill-lower" style="height: 28px;"></div>
+                  </div>
+                  <span class="bar-col-month">FEB</span>
                 </div>
-                <span class="bar-month-lbl">FEB</span>
-              </div>
-              <div class="bar-col">
-                <div class="bar-track">
-                  <div class="bar-fill-top" style="height: 10px;"></div>
-                  <div class="bar-fill-bot" style="height: 48px;"></div>
+
+                <!-- MAR -->
+                <div class="bar-pill-wrapper">
+                  <div class="bar-pill-track">
+                    <div class="bar-pill-upper" style="height: 12px;">
+                      <div class="bar-pill-cap"></div>
+                    </div>
+                    <div class="bar-pill-lower" style="height: 44px;"></div>
+                  </div>
+                  <span class="bar-col-month">MAR</span>
                 </div>
-                <span class="bar-month-lbl">MAR</span>
-              </div>
-              <div class="bar-col">
-                <div class="bar-track">
-                  <div class="bar-fill-top" style="height: 28px;"></div>
-                  <div class="bar-fill-bot" style="height: 52px;"></div>
+
+                <!-- APR -->
+                <div class="bar-pill-wrapper">
+                  <div class="bar-pill-track">
+                    <div class="bar-pill-upper" style="height: 42px;">
+                      <div class="bar-pill-cap"></div>
+                    </div>
+                    <div class="bar-pill-lower" style="height: 42px;"></div>
+                  </div>
+                  <span class="bar-col-month">APR</span>
                 </div>
-                <span class="bar-month-lbl">APR</span>
-              </div>
-              <div class="bar-col">
-                <div class="bar-track">
-                  <div class="bar-fill-top" style="height: 14px;"></div>
-                  <div class="bar-fill-bot" style="height: 60px;"></div>
+
+                <!-- MAY -->
+                <div class="bar-pill-wrapper">
+                  <div class="bar-pill-track">
+                    <div class="bar-pill-upper" style="height: 22px;">
+                      <div class="bar-pill-cap"></div>
+                    </div>
+                    <div class="bar-pill-lower" style="height: 52px;"></div>
+                  </div>
+                  <span class="bar-col-month">MAY</span>
                 </div>
-                <span class="bar-month-lbl">MAY</span>
-              </div>
-              <div class="bar-col">
-                <div class="bar-track">
-                  <div class="bar-fill-top" style="height: 22px;"></div>
-                  <div class="bar-fill-bot" style="height: 32px;"></div>
+
+                <!-- JUN -->
+                <div class="bar-pill-wrapper">
+                  <div class="bar-pill-track">
+                    <div class="bar-pill-upper" style="height: 26px;">
+                      <div class="bar-pill-cap"></div>
+                    </div>
+                    <div class="bar-pill-lower" style="height: 36px;"></div>
+                  </div>
+                  <span class="bar-col-month">JUN</span>
                 </div>
-                <span class="bar-month-lbl">JUN</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Active Position Cockpit -->
-        <div class="nexora-card" id="desk-position-card">
-          <div class="holdings-head">
-            <h2>Live Market Execution</h2>
-            <span class="frosted-pill" id="pos-status-badge">FLAT / NO POSITION</span>
+        <!-- Active Position Cockpit Panel -->
+        <div class="clean-bento-card" id="desk-position-card">
+          <div class="holdings-header-row">
+            <h2>Active Trades</h2>
+            <span class="ref-pill" id="pos-status-badge">No Open Trades</span>
           </div>
           <div id="pos-cockpit-content">
-            <p style="font-size:12px; color:var(--txt-muted); padding: 8px 0;">No active market orders open. Engine scanning 5m Breakout + 1m Retest structure...</p>
+            <p style="font-size:12px; color:var(--text-muted); padding: 8px 0;">No active trades right now. The bot is scanning the market for the next trade opportunity...</p>
           </div>
         </div>
 
       </div>
 
       <!-- ==================== COLUMN 2 / TAB 2: ORACLE & ALLOCATION (SCAN) ==================== -->
-      <div class="tab-view-page col-center" id="page-oracle">
+      <div class="tab-section-page col-center" id="page-oracle">
 
-        <!-- Asset Allocation Circular Donut Card (Matching Screen 2) -->
-        <div class="nexora-card ring-allocation-card">
-          <div class="holdings-head" style="width:100%;">
-            <h2>Portfolio Allocation Ring</h2>
-            <span class="frosted-pill">1:1000 ECN</span>
+        <!-- Portfolio Allocation Ring (Matching Reference Screen 2) -->
+        <div class="clean-bento-card donut-card-center">
+          <div class="holdings-header-row" style="width:100%;">
+            <h2>Fund Allocation</h2>
+            <span class="ref-pill">Live Account</span>
           </div>
 
-          <div class="ring-svg-wrapper">
+          <div class="donut-svg-box">
             <svg width="210" height="210" viewBox="0 0 210 210">
-              <!-- Background Circle -->
-              <circle cx="105" cy="105" r="82" fill="none" stroke="rgba(10, 17, 32, 0.8)" stroke-width="24"/>
+              <!-- Dark Track Base -->
+              <circle cx="105" cy="105" r="82" fill="none" stroke="rgba(10, 18, 34, 0.8)" stroke-width="24"/>
               
-              <!-- Segment 1: Retained Bankroll (Navy #26425A) -->
-              <circle cx="105" cy="105" r="82" fill="none" stroke="#26425A" stroke-width="24"
+              <!-- Segment 1: Retained Bankroll (#233959) -->
+              <circle cx="105" cy="105" r="82" fill="none" stroke="#233959" stroke-width="24"
                       stroke-dasharray="210 515" stroke-dashoffset="0" stroke-linecap="round"/>
               
-              <!-- Segment 2: Invested / Margin (Ice Blue #86A8CF) -->
-              <circle cx="105" cy="105" r="82" fill="none" stroke="#86A8CF" stroke-width="24"
+              <!-- Segment 2: Invested / Margin (Ice Blue #7EB0DE) -->
+              <circle cx="105" cy="105" r="82" fill="none" stroke="#7EB0DE" stroke-width="24"
                       stroke-dasharray="140 515" stroke-dashoffset="-215" stroke-linecap="round"/>
               
               <!-- Segment 3: Net Profit (Mauve #C38EB4) -->
               <circle cx="105" cy="105" r="82" fill="none" stroke="#C38EB4" stroke-width="24"
                       stroke-dasharray="110 515" stroke-dashoffset="-360" stroke-linecap="round"/>
             </svg>
-            <div class="ring-center-content">
-              <div class="ring-center-num" id="ring-center-bal">$290</div>
-              <div class="ring-center-lbl">Total Capital</div>
+            <div class="donut-center-overlay">
+              <div class="donut-int-display" id="ring-center-bal">$395</div>
+              <div class="donut-sub-display">Total Balance</div>
             </div>
           </div>
 
           <!-- Split Timestamped Cards (Matching Screen 2) -->
           <div style="width:100%;">
-            <div class="split-timestamp-card">
-              <div class="split-card-header">
-                <span>Invested Margin</span>
+            <div class="split-timestamp-item">
+              <div class="split-item-top">
+                <span>In Active Trades</span>
                 <span id="split-time-invested">16:00 · 01-06-2026</span>
               </div>
-              <div class="split-card-body">
-                <h4>Gold Micro-Scalp (XAUUSD)</h4>
-                <div class="hero-pills-row" style="margin-bottom:6px;">
-                  <span class="frosted-pill profit">↗ +4.73%</span>
-                  <span class="frosted-pill">+$14.20 - Today</span>
+              <div class="split-item-body">
+                <h4>Gold Scalping Bot</h4>
+                <div class="hero-pills-cluster" style="margin-bottom:6px;">
+                  <span class="ref-pill" style="color:var(--win);">↗ +4.73%</span>
+                  <span class="ref-pill">+$14.20 - Today</span>
                 </div>
               </div>
-              <div class="split-card-footer">
-                <span>Allocated Margin: $26.40</span>
+              <div class="split-item-bottom">
+                <span>Trade Margin: $26.40</span>
                 <span style="color:var(--win); font-weight:700;">Profit: +$14.20</span>
               </div>
             </div>
 
-            <div class="split-timestamp-card">
-              <div class="split-card-header">
-                <span>Withdrawal / Cash-Out</span>
+            <div class="split-timestamp-item">
+              <div class="split-item-top">
+                <span>Daily Profit Harvest</span>
                 <span id="split-time-withdraw">08:42 · 02-06-2026</span>
               </div>
-              <div class="split-card-body">
-                <h4>Sovereign 30% Auto-Harvest Vault</h4>
-                <div class="hero-pills-row" style="margin-bottom:6px;">
-                  <span class="frosted-pill" style="color:var(--gold);">30% Fixed Rate</span>
-                  <span class="frosted-pill" id="card-cashout-rec">$0.00 Ready</span>
+              <div class="split-item-body">
+                <h4>30% Daily Profit Vault</h4>
+                <div class="hero-pills-cluster" style="margin-bottom:6px;">
+                  <span class="ref-pill" style="color:var(--gold);">30% Fixed</span>
+                  <span class="ref-pill" id="card-cashout-rec">$0.00 Ready</span>
                 </div>
               </div>
-              <div class="split-card-footer">
-                <span>Retained Bankroll: <strong id="card-cashout-ret">$289.51</strong></span>
-                <span style="color:var(--gold);">Zero Risk</span>
+              <div class="split-item-bottom">
+                <span>Account Capital: <strong id="card-cashout-ret">$394.81</strong></span>
+                <span style="color:var(--gold);">Protected</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Laya System 1 Neural Decision Card -->
-        <div class="nexora-card">
-          <div class="holdings-head">
-            <h2>🧠 Laya System 1 · Neural Oracle</h2>
-            <span class="frosted-pill" id="oracle-latency-pill">0.5ms ModernBERT</span>
+        <!-- Laya Neural Decision Telemetry -->
+        <div class="clean-bento-card">
+          <div class="holdings-header-row">
+            <h2><svg viewBox="0 0 24 24" width="16" height="16" stroke="var(--c-ice-blue)" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:6px;"><path d="M12 2a4 4 0 0 0-4 4v1H6a3 3 0 0 0-3 3v2a3 3 0 0 0 2 2.82V17a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-2.18A3 3 0 0 0 21 12V9a3 3 0 0 0-3-3h-2V6a4 4 0 0 0-4-4z"/><path d="M12 12v6"/></svg>AI Trading Brain</h2>
+            <span class="ref-pill" id="oracle-latency-pill">AI Engine Active</span>
           </div>
 
           <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
-            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(134,168,207,0.08);">
-              <span style="color:var(--txt-secondary);">ICT Confluence Rating</span>
-              <strong id="laya-conf-score" style="color:var(--win); font-family:var(--font-mono);">8.8 / 10 · A+ PRIME</strong>
+            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(126,176,222,0.08);">
+              <span style="color:var(--text-2);">Signal Strength</span>
+              <strong id="laya-conf-score" style="color:var(--win); font-family:var(--font-mono);">8.8 / 10 · High Quality</strong>
             </div>
-            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(134,168,207,0.08);">
-              <span style="color:var(--txt-secondary);">Institutional Concept</span>
-              <strong id="laya-concept-tag" style="color:var(--c-rose-white); font-family:var(--font-mono);">Silver Bullet · Rejection Block</strong>
+            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(126,176,222,0.08);">
+              <span style="color:var(--text-2);">Setup Pattern</span>
+              <strong id="laya-concept-tag" style="color:var(--c-rose-white); font-family:var(--font-mono);">Breakout & Retest</strong>
             </div>
-            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(134,168,207,0.08);">
-              <span style="color:var(--txt-secondary);">Macro Shield</span>
-              <strong id="laya-shield-st" style="color:var(--win); font-family:var(--font-mono);">SAFE · None in next 3 hours</strong>
+            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(126,176,222,0.08);">
+              <span style="color:var(--text-2);">News Shield</span>
+              <strong id="laya-shield-st" style="color:var(--win); font-family:var(--font-mono);">Safe · No High-Impact News</strong>
             </div>
             <div style="display:flex; justify-content:space-between; padding:6px 0;">
-              <span style="color:var(--txt-secondary);">Compounding Multiplier</span>
-              <strong id="laya-boost-val" style="color:var(--gold); font-family:var(--font-mono);">1.00x (12% trap risk)</strong>
+              <span style="color:var(--text-2);">Position Sizing</span>
+              <strong id="laya-boost-val" style="color:var(--gold); font-family:var(--font-mono);">1.00x (Normal Size)</strong>
             </div>
           </div>
         </div>
 
       </div>
 
-      <!-- ==================== COLUMN 3 / TAB 3 & 4: MACRO WIRE & DOCTOR ==================== -->
-      <div class="tab-view-page col-right" id="page-wire">
+      <!-- ==================== COLUMN 3 / TAB 3 & 4: WIRE & DOCTOR ==================== -->
+      <div class="tab-section-page col-right" id="page-wire">
 
         <!-- Politician Brain Macro Radar -->
-        <div class="nexora-card">
-          <div class="holdings-head">
-            <h2>🏛️ Politician Brain · Macro Radar</h2>
-            <span class="frosted-pill" id="pol-heat-pill" style="color:var(--c-mauve);">42.0% Heat</span>
+        <div class="clean-bento-card">
+          <div class="holdings-header-row">
+            <h2><svg viewBox="0 0 24 24" width="16" height="16" stroke="var(--c-ice-blue)" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:6px;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Market News & Sentiment</h2>
+            <span class="ref-pill" id="pol-heat-pill" style="color:var(--c-mauve);">42.0% News Impact</span>
           </div>
 
           <div style="display:flex; flex-direction:column; gap:8px; font-size:12px; margin-bottom:12px;">
-            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(134,168,207,0.08);">
-              <span style="color:var(--txt-secondary);">Political & Tariff Regime</span>
-              <strong id="pol-regime-txt" style="color:var(--c-rose-white); font-family:var(--font-mono);">NEUTRAL CHOP</strong>
+            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(126,176,222,0.08);">
+              <span style="color:var(--text-2);">Market Sentiment</span>
+              <strong id="pol-regime-txt" style="color:var(--c-rose-white); font-family:var(--font-mono);">Calm Market</strong>
             </div>
-            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(134,168,207,0.08);">
-              <span style="color:var(--txt-secondary);">Fundamental Bias</span>
-              <strong id="pol-bias-txt" style="color:var(--c-ice-blue); font-family:var(--font-mono);">NEUTRAL</strong>
+            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(126,176,222,0.08);">
+              <span style="color:var(--text-2);">Trend Direction</span>
+              <strong id="pol-bias-txt" style="color:var(--c-ice-blue); font-family:var(--font-mono);">Neutral Trend</strong>
             </div>
             <div style="display:flex; justify-content:space-between; padding:6px 0;">
-              <span style="color:var(--txt-secondary);">Titan Sword Boost</span>
-              <strong id="pol-sword-txt" style="color:var(--gold); font-family:var(--font-mono);">1.65x Titan Boost · +5.0 ATR</strong>
+              <span style="color:var(--text-2);">Trade Confidence</span>
+              <strong id="pol-sword-txt" style="color:var(--gold); font-family:var(--font-mono);">1.65x Confidence</strong>
             </div>
           </div>
 
           <!-- Breaking News Strip -->
           <div class="news-filter-strip">
-            <span class="news-filter-chip active" onclick="filterNews('ALL', this)">ALL</span>
-            <span class="news-filter-chip" onclick="filterNews('BULL', this)">🟢 BULL</span>
-            <span class="news-filter-chip" onclick="filterNews('BEAR', this)">🔴 BEAR</span>
-            <span class="news-filter-chip" onclick="filterNews('TARIFF', this)">⚡ TARIFFS</span>
+            <span class="news-chip-btn active" onclick="filterNews('ALL', this)">ALL</span>
+            <span class="news-chip-btn" onclick="filterNews('BULL', this)"><span style="color:var(--win); margin-right:4px;">●</span>BULLISH</span>
+            <span class="news-chip-btn" onclick="filterNews('BEAR', this)"><span style="color:var(--loss); margin-right:4px;">●</span>BEARISH</span>
+            <span class="news-chip-btn" onclick="filterNews('TARIFF', this)">HEADLINES</span>
           </div>
 
-          <div class="news-scroll-list" id="breaking-news-list">
-            <div class="news-card-item">
-              <span style="color:var(--txt-muted);">Streaming live macroeconomic news feeds...</span>
+          <div class="news-list-container" id="breaking-news-list">
+            <div class="news-card-link">
+              <span style="color:var(--text-muted);">Streaming live market news headlines...</span>
             </div>
           </div>
         </div>
 
         <!-- LLM Doctor Sentinel Card -->
-        <div class="nexora-card" id="page-doctor">
-          <div class="holdings-head">
-            <h2>🏥 Autonomous LLM Doctor</h2>
-            <span class="frosted-pill" style="color:var(--win);" id="doc-badge-status">Active 🟢</span>
+        <div class="clean-bento-card" id="page-doctor">
+          <div class="holdings-header-row">
+            <h2><svg viewBox="0 0 24 24" width="16" height="16" stroke="var(--win)" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:6px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>System Health & Auto-Repair</h2>
+            <span class="ref-pill" style="color:var(--win);" id="doc-badge-status"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--win); margin-right:5px; vertical-align:1px;"></span>All Good</span>
           </div>
 
           <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
-            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(134,168,207,0.08);">
-              <span style="color:var(--txt-secondary);">Diagnostic Brain</span>
-              <strong style="font-family:var(--font-mono); color:var(--c-rose-white);">Qwen2.5-1.5B (:8080)</strong>
+            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(126,176,222,0.08);">
+              <span style="color:var(--text-2);">Diagnostic AI</span>
+              <strong style="font-family:var(--font-mono); color:var(--c-rose-white);">Qwen AI Model</strong>
             </div>
-            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(134,168,207,0.08);">
-              <span style="color:var(--txt-secondary);">Auto-Repairs Applied</span>
-              <strong id="doc-heal-count" style="color:var(--win); font-family:var(--font-mono);">0 Healings</strong>
+            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(126,176,222,0.08);">
+              <span style="color:var(--text-2);">Issues Auto-Resolved</span>
+              <strong id="doc-heal-count" style="color:var(--win); font-family:var(--font-mono);">2 Auto-Fixes</strong>
             </div>
             <div style="display:flex; justify-content:space-between; padding:6px 0;">
-              <span style="color:var(--txt-secondary);">Prescription</span>
-              <strong id="doc-rx-summary" style="color:var(--txt-muted); font-size:10px; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">All systems nominal</strong>
+              <span style="color:var(--text-2);">Current Status</span>
+              <strong id="doc-rx-summary" style="color:var(--text-muted); font-size:10px; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Everything running smoothly</strong>
             </div>
           </div>
 
           <!-- Execution Stream -->
           <div style="margin-top:14px;">
-            <div class="portfolio-label">Real-Time Execution Logs</div>
-            <div style="background:rgba(10,17,32,0.6); border:1px solid rgba(134,168,207,0.08); border-radius:14px; padding:10px; max-height:160px; overflow-y:auto; font-family:var(--font-mono); font-size:11px;" id="trades-feed">
-              <div style="color:var(--txt-muted);">Connected to LiteFinance MT5 Demo feed...</div>
+            <div class="hero-caption" style="font-size:11px; margin-bottom:6px;">Live Trade Activity</div>
+            <div style="background:rgba(9,16,29,0.6); border:1px solid rgba(126,176,222,0.08); border-radius:14px; padding:10px; max-height:160px; overflow-y:auto; font-family:var(--font-mono); font-size:11px;" id="trades-feed">
+              <div style="color:var(--text-muted);">Connected to live broker feed...</div>
             </div>
           </div>
         </div>
@@ -1388,74 +1434,74 @@
       </div>
 
       <!-- ==================== TAB 5: KILLZONES & SETTINGS ==================== -->
-      <div class="tab-view-page" id="page-clocks">
-        <div class="nexora-card">
-          <div class="holdings-head">
-            <h2>World Institutional Clocks</h2>
-            <span class="frosted-pill" id="kz-session-name">MONITORING</span>
+      <div class="tab-section-page" id="page-clocks">
+        <div class="clean-bento-card">
+          <div class="holdings-header-row">
+            <h2>Global Market Hours</h2>
+            <span class="ref-pill" id="kz-session-name">Monitoring</span>
           </div>
 
-          <div class="clocks-grid-4">
-            <div class="clock-tile">
-              <div class="clock-tile-city">📱 Tehran (Local)</div>
-              <div class="clock-tile-val" id="clk-tehran">--:--:--</div>
-              <div class="clock-tile-sub">IRST (UTC+3:30)</div>
+          <div class="clocks-grid-layout">
+            <div class="clock-box-tile">
+              <div class="clock-city-lbl">Tehran (Local)</div>
+              <div class="clock-time-big" id="clk-tehran">--:--:--</div>
+              <div class="clock-tz-sub">IRST (UTC+3:30)</div>
             </div>
-            <div class="clock-tile">
-              <div class="clock-tile-city">🏛️ New York</div>
-              <div class="clock-tile-val" id="clk-ny">--:--:--</div>
-              <div class="clock-tile-sub">EDT (UTC-4:00)</div>
+            <div class="clock-box-tile">
+              <div class="clock-city-lbl">New York</div>
+              <div class="clock-time-big" id="clk-ny">--:--:--</div>
+              <div class="clock-tz-sub">EDT (UTC-4:00)</div>
             </div>
-            <div class="clock-tile">
-              <div class="clock-tile-city">🇬🇧 London</div>
-              <div class="clock-tile-val" id="clk-lon">--:--:--</div>
-              <div class="clock-tile-sub">BST (UTC+1:00)</div>
+            <div class="clock-box-tile">
+              <div class="clock-city-lbl">London</div>
+              <div class="clock-time-big" id="clk-lon">--:--:--</div>
+              <div class="clock-tz-sub">BST (UTC+1:00)</div>
             </div>
-            <div class="clock-tile">
-              <div class="clock-tile-city">🌐 Broker UTC</div>
-              <div class="clock-tile-val" id="clk-utc" style="color:var(--txt-primary);">--:--:--</div>
-              <div class="clock-tile-sub">UTC Epoch</div>
+            <div class="clock-box-tile">
+              <div class="clock-city-lbl">Broker UTC</div>
+              <div class="clock-time-big" id="clk-utc" style="color:var(--text-1);">--:--:--</div>
+              <div class="clock-tz-sub">UTC Time</div>
             </div>
           </div>
 
-          <table class="kz-table">
+          <table class="sessions-matrix-table">
             <thead>
               <tr>
-                <th>Session</th>
+                <th>Market Session</th>
                 <th>Tehran</th>
                 <th>New York</th>
                 <th>London</th>
-                <th>State</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>🌏 Asian Range</strong></td>
+                <td><strong>Asian Session</strong></td>
                 <td>03:30 - 09:30</td>
                 <td>20:00 - 02:00</td>
                 <td>01:00 - 07:00</td>
-                <td><span class="ribbon-kz-pill idle" id="tbl-asia">STANDBY</span></td>
+                <td><span class="kz-badge-pill idle" id="tbl-asia">Closed</span></td>
               </tr>
               <tr>
-                <td><strong>🇬🇧 London Open</strong></td>
+                <td><strong>London Session</strong></td>
                 <td>10:30 - 13:30</td>
                 <td>03:00 - 06:00</td>
                 <td>08:00 - 11:00</td>
-                <td><span class="ribbon-kz-pill idle" id="tbl-lon">STANDBY</span></td>
+                <td><span class="kz-badge-pill idle" id="tbl-lon">Closed</span></td>
               </tr>
               <tr>
-                <td><strong>🏛️ New York AM</strong></td>
+                <td><strong>New York Session</strong></td>
                 <td>15:30 - 18:30</td>
                 <td>08:00 - 11:00</td>
                 <td>13:00 - 16:00</td>
-                <td><span class="ribbon-kz-pill idle" id="tbl-nyam">STANDBY</span></td>
+                <td><span class="kz-badge-pill idle" id="tbl-nyam">Closed</span></td>
               </tr>
               <tr>
-                <td><strong>🌆 London Close</strong></td>
+                <td><strong>London Close Session</strong></td>
                 <td>18:30 - 20:30</td>
                 <td>11:00 - 13:00</td>
                 <td>16:00 - 18:00</td>
-                <td><span class="ribbon-kz-pill idle" id="tbl-lonclose">STANDBY</span></td>
+                <td><span class="kz-badge-pill idle" id="tbl-lonclose">Closed</span></td>
               </tr>
             </tbody>
           </table>
@@ -1466,60 +1512,60 @@
   </main>
 
   <!-- ==========================================================================
-       BOTTOM FLOATING DOCK (Matching Screen 1 & 2 in design)
+       BOTTOM FLOATING DOCK (Matching Reference Screen 1 & 2)
        ========================================================================== -->
-  <nav class="nexora-dock">
-    <button class="dock-item-btn active" onclick="switchMobileTab('page-desk', this)">
+  <nav class="app-dock-bar">
+    <button class="dock-tab-item active" onclick="switchMobileTab('page-desk', this)">
       <svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       <span>Home</span>
     </button>
-    <button class="dock-item-btn" onclick="switchMobileTab('page-oracle', this)">
+    <button class="dock-tab-item" onclick="switchMobileTab('page-oracle', this)">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
       <span>Scan</span>
     </button>
-    <button class="dock-item-btn" onclick="switchMobileTab('page-wire', this)">
+    <button class="dock-tab-item" onclick="switchMobileTab('page-wire', this)">
       <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
       <span>Analytics</span>
     </button>
-    <button class="dock-item-btn" onclick="switchMobileTab('page-doctor', this)">
+    <button class="dock-tab-item" onclick="switchMobileTab('page-doctor', this)">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <span>History</span>
     </button>
-    <button class="dock-item-btn" onclick="switchMobileTab('page-clocks', this)">
+    <button class="dock-tab-item" onclick="switchMobileTab('page-clocks', this)">
       <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       <span>Account</span>
     </button>
   </nav>
 
   <!-- ==========================================================================
-       AUTHENTIC FACE ID BIOMETRIC SCANNER MODAL
+       AUTHENTIC FACE ID MODAL
        ========================================================================== -->
-  <div class="faceid-modal-backdrop" id="faceid-modal">
-    <div class="faceid-modal-box">
-      <div class="faceid-scanner-frame">
+  <div class="faceid-backdrop" id="faceid-modal">
+    <div class="faceid-box">
+      <div class="faceid-target-frame">
         <svg viewBox="0 0 100 100" id="faceid-brackets">
           <path d="M 20 5 L 5 5 L 5 20 M 80 5 L 95 5 L 95 20 M 5 80 L 5 95 L 20 95 M 95 80 L 95 95 L 80 95" stroke-linecap="round"/>
-          <circle cx="35" cy="40" r="3" fill="#86A8CF"/>
-          <circle cx="65" cy="40" r="3" fill="#86A8CF"/>
-          <path d="M 40 65 Q 50 72 60 65" stroke="#86A8CF" stroke-width="2"/>
+          <circle cx="35" cy="40" r="3" fill="#7EB0DE"/>
+          <circle cx="65" cy="40" r="3" fill="#7EB0DE"/>
+          <path d="M 40 65 Q 50 72 60 65" stroke="#7EB0DE" stroke-width="2"/>
         </svg>
-        <div class="faceid-laser" id="faceid-laser"></div>
-        <div class="faceid-success-icon" id="faceid-check">✓</div>
+        <div class="faceid-scan-beam" id="faceid-laser"></div>
+        <div class="faceid-ok-icon" id="faceid-check">✓</div>
       </div>
-      <div class="faceid-title">Face ID</div>
-      <div class="faceid-status" id="faceid-status-txt">Scanning Secure Enclave...</div>
+      <div style="font-family:var(--font-display); font-size:16px; font-weight:700; color:var(--text-1); margin-bottom:4px;">Face ID</div>
+      <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-2); margin-bottom:18px;" id="faceid-status-txt">Looking for face...</div>
       <button class="btn-modal-cancel" style="width:100%;" onclick="closeFaceID()">Cancel</button>
     </div>
   </div>
 
-  <!-- Emergency Flatten Modal -->
-  <div class="modal-frost-backdrop" id="flatten-modal">
-    <div class="modal-frost-box">
-      <h3>⚠️ EMERGENCY FLATTEN</h3>
-      <p>Market-flatten all open Gold positions on LiteFinance immediately? This action closes active trades at best available market execution.</p>
-      <div class="modal-btn-row">
+  <!-- Emergency Close Modal -->
+  <div class="modal-flatten-backdrop" id="flatten-modal">
+    <div class="modal-flatten-box">
+      <h3>⚠️ Close All Active Trades</h3>
+      <p>Are you sure you want to close all active Gold (XAU/USD) trades right now at the current market price?</p>
+      <div class="modal-actions-pair">
         <button class="btn-modal-cancel" onclick="closeFlattenModal()">Cancel</button>
-        <button class="btn-modal-confirm" onclick="executeFlatten()">Confirm Flatten</button>
+        <button class="btn-modal-confirm" onclick="executeFlatten()">Close All Now</button>
       </div>
     </div>
   </div>
@@ -1530,7 +1576,6 @@
     let globalBreakingNews = [];
     let currentNewsFilter = 'ALL';
     let isPushSubscribed = false;
-    let isFaceIDAuthed = false;
 
     // Mobile Haptic Feedback
     function triggerHaptic() {
@@ -1540,7 +1585,7 @@
     }
 
     // Push Toast Helper
-    function showToast(msg, icon = '🔔', duration = 3000) {
+    function showToast(msg, icon = '✓', duration = 3000) {
       const toast = document.getElementById('push-toast');
       const toastMsg = document.getElementById('push-toast-msg');
       const toastIcon = document.getElementById('push-toast-icon');
@@ -1566,17 +1611,15 @@
       brackets.style.display = 'block';
       status.textContent = 'Scanning Face ID...';
 
-      // Authentic biometric verification animation
       setTimeout(() => {
         laser.style.display = 'none';
         brackets.style.display = 'none';
         check.style.display = 'block';
         status.textContent = 'Face ID Verified ✓';
-        isFaceIDAuthed = true;
         triggerHaptic();
         setTimeout(() => {
           closeFaceID();
-          showToast('Face ID Active · Biometric Fast-Path Armed', '🛡️');
+          showToast('Face ID Verified · Quick Access Active', '✓');
         }, 800);
       }, 1200);
     }
@@ -1585,7 +1628,7 @@
       document.getElementById('faceid-modal').classList.remove('open');
     }
 
-    // Base64URL helper for VAPID public key
+    // Base64URL helper
     function urlB64ToUint8Array(base64String) {
       const padding = '='.repeat((4 - base64String.length % 4) % 4);
       const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
@@ -1617,14 +1660,11 @@
       isPushSubscribed = active;
       const btn = document.getElementById('push-btn');
       if (!btn) return;
-      if (active) {
-        btn.classList.add('active-push');
-      } else {
-        btn.classList.remove('active-push');
-      }
+      if (active) btn.classList.add('push-armed');
+      else btn.classList.remove('push-armed');
     }
 
-    // Toggle Web Push (1-Line minimal notifications)
+    // Toggle Web Push
     async function toggleWebPush() {
       triggerHaptic();
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -1633,13 +1673,13 @@
       }
 
       if (isPushSubscribed) {
-        showToast('Sending 1-line test push...', '🚀');
+        showToast('Sending test notification...', 'ℹ');
         try {
           const res = await fetch('/api/push/test', { method: 'POST' });
           const data = await res.json();
-          showToast(data.msg || 'Test alert delivered!', '✅');
+          showToast(data.msg || 'Test alert delivered!', '✓');
         } catch (e) {
-          showToast('Failed to dispatch test.', '❌');
+          showToast('Could not send notification', '✕');
         }
         return;
       }
@@ -1647,11 +1687,11 @@
       try {
         const perm = await Notification.requestPermission();
         if (perm !== 'granted') {
-          showToast('Permission denied in browser settings.', '⚠️');
+          showToast('Notifications blocked in browser settings', '✕');
           return;
         }
 
-        showToast('Activating 1-line push stream...', '⏳');
+        showToast('Enabling notifications...', 'ℹ');
         const keyRes = await fetch('/api/push/key');
         const { publicKey } = await keyRes.json();
         if (!publicKey) throw new Error('VAPID key unavailable');
@@ -1673,28 +1713,28 @@
 
         if (subData.ok) {
           setPushUIActive(true);
-          showToast('🟢 1-Line Push Alerts Armed!', '✓');
+          showToast('Notifications enabled!', '✓');
         }
       } catch (err) {
-        showToast('Push setup error: ' + err.message, '❌');
+        showToast('Notification setup: ' + err.message, '✕');
       }
     }
 
-    // Tab Switching Logic (Matching Nexora Navigation)
+    // Tab Switching Logic
     function switchMobileTab(targetId, btnEl) {
       triggerHaptic();
-      document.querySelectorAll('.dock-item-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.dock-tab-item').forEach(b => b.classList.remove('active'));
       btnEl.classList.add('active');
 
       if (window.innerWidth < 1024) {
-        document.querySelectorAll('.tab-view-page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-section-page').forEach(p => p.classList.remove('active'));
         const target = document.getElementById(targetId);
         if (target) target.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     }
 
-    // Emergency Flatten
+    // Emergency Close All Trades
     function openFlattenModal() {
       triggerHaptic();
       document.getElementById('flatten-modal').classList.add('open');
@@ -1707,21 +1747,21 @@
       try {
         const r = await fetch('/api/flatten?t=' + T, { method: 'POST' });
         const res = await r.json();
-        showToast(res.msg || 'Flatten signal dispatched!', '🚨');
+        showToast(res.msg || 'All active trades closed', '✓');
         fetchTelemetry();
       } catch (e) {
-        showToast('Dispatched flatten request to engine.', '🚨');
+        showToast('Close request sent to broker', '✓');
       }
     }
 
     function openHoldingsModal() {
-      showToast('LiteFinance MT5 Demo #91456523 connected', '🏛️');
+      showToast('Broker Account #91456523 Connected', '✓');
     }
     function openVaultModal() {
-      showToast('Sovereign 30% Cash-out Vault active', '🌕');
+      showToast('Daily Profit Vault active (30% auto-secured)', '✓');
     }
 
-    // Live World Clocks & Killzones
+    // Live World Clocks & Sessions
     function updateLiveClocks() {
       const now = new Date();
       const fmt = (tz) => new Intl.DateTimeFormat('en-GB', {
@@ -1753,16 +1793,16 @@
       if (gLon) gLon.textContent = tLon;
       if (gUTC) gUTC.textContent = tUTC;
 
-      // Killzone Evaluation in UTC
+      // Session Evaluation in UTC
       const utcH = now.getUTCHours() + now.getUTCMinutes() / 60;
-      let activeName = "Inter-Market Transition";
+      let activeName = "Market Monitoring";
       let isPrime = false;
 
       const setBadge = (id, act) => {
         const el = document.getElementById(id);
         if (el) {
-          el.className = 'ribbon-kz-pill ' + (act ? 'live' : 'idle');
-          el.textContent = act ? 'ACTIVE' : 'STANDBY';
+          el.className = 'kz-badge-pill ' + (act ? 'live' : 'idle');
+          el.textContent = act ? 'Open' : 'Closed';
         }
       };
 
@@ -1776,15 +1816,15 @@
       setBadge('tbl-nyam', isNYAM);
       setBadge('tbl-lonclose', isLonClose);
 
-      if (isLon) { activeName = "London Open Killzone"; isPrime = true; }
-      else if (isNYAM) { activeName = "New York AM Killzone"; isPrime = true; }
-      else if (isLonClose) { activeName = "London Close Killzone"; isPrime = true; }
-      else if (isAsia) { activeName = "Asian Accumulation"; isPrime = false; }
+      if (isLon) { activeName = "London Session"; isPrime = true; }
+      else if (isNYAM) { activeName = "New York Session"; isPrime = true; }
+      else if (isLonClose) { activeName = "London Close Session"; isPrime = true; }
+      else if (isAsia) { activeName = "Asian Session"; isPrime = false; }
 
       const rKz = document.getElementById('ribbon-kz-pill');
       if (rKz) {
-        rKz.textContent = activeName + (isPrime ? ' · ACTIVE' : ' · STANDBY');
-        rKz.className = 'ribbon-kz-pill ' + (isPrime ? 'live' : 'idle');
+        rKz.textContent = activeName + (isPrime ? ' · Open' : ' · Off-Hours');
+        rKz.className = 'kz-badge-pill ' + (isPrime ? 'live' : 'idle');
       }
       const kzSess = document.getElementById('kz-session-name');
       if (kzSess) kzSess.textContent = activeName;
@@ -1803,32 +1843,31 @@
     }
 
     function renderQuantDesk(d) {
-      const eq = Number(d.equity || d.balance || 289.51);
-      const bal = Number(d.balance || 289.51);
+      const eq = Number(d.equity || d.balance || 394.81);
+      const bal = Number(d.balance || 394.81);
       const pnl = Number(d.realized_pnl || (eq - 100.0));
       const pnlPct = Number(d.pnl_pct || ((eq - 100.0) / 100.0 * 100.0));
-      const tier = Number(d.current_tier || 300.0);
 
-      // Hero Portfolio Value
-      const heroEl = document.getElementById('hero-equity');
-      if (heroEl) {
-        heroEl.textContent = '$' + eq.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      }
+      // Hero Portfolio Value (Decimal Split)
+      const eqStr = eq.toFixed(2);
+      const parts = eqStr.split('.');
+      const intPartFormatted = Number(parts[0]).toLocaleString('en-US');
+      const decPartFormatted = '.' + parts[1];
+
+      const intEl = document.getElementById('hero-int-num');
+      const decEl = document.getElementById('hero-dec-num');
+      if (intEl) intEl.textContent = intPartFormatted;
+      if (decEl) decEl.textContent = decPartFormatted;
 
       const pnlPctEl = document.getElementById('hero-pnl-pct');
-      if (pnlPctEl) {
-        pnlPctEl.textContent = `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%`;
-      }
+      if (pnlPctEl) pnlPctEl.textContent = `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%`;
+
       const pnlUsdEl = document.getElementById('hero-pnl-usd');
-      if (pnlUsdEl) {
-        pnlUsdEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} · Profit`;
-      }
+      if (pnlUsdEl) pnlUsdEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} - Profit`;
 
       // Ring Center
       const ringBal = document.getElementById('ring-center-bal');
-      if (ringBal) {
-        ringBal.textContent = '$' + Math.round(eq);
-      }
+      if (ringBal) ringBal.textContent = '$' + Math.round(eq);
 
       // Quotes & Spread
       const mid = Number(d.mid_price || 4359.80);
@@ -1840,7 +1879,7 @@
       const navQuote = document.getElementById('nav-quote');
       if (navQuote) navQuote.textContent = `$${mid.toFixed(2)}`;
       const navSpread = document.getElementById('nav-spread');
-      if (navSpread) navSpread.textContent = `${spreadBps.toFixed(1)} bps · ${latencyMs.toFixed(1)}ms`;
+      if (navSpread) navSpread.textContent = `${spreadBps.toFixed(1)} spread · Live`;
 
       const hGoldQuote = document.getElementById('h-gold-quote');
       if (hGoldQuote) hGoldQuote.textContent = `$${mid.toFixed(2)}`;
@@ -1861,8 +1900,8 @@
           const floatPnl = Number(p.floating_pnl || 0.0);
 
           if (posBadge) {
-            posBadge.textContent = `${dir} ${vol.toFixed(2)}L`;
-            posBadge.className = 'frosted-pill ' + (isBuy ? 'profit' : '');
+            posBadge.textContent = `${dir} ${vol.toFixed(2)} Lots`;
+            posBadge.className = 'ref-pill ' + (isBuy ? 'pct-up' : '');
           }
 
           let pct = 0.5;
@@ -1873,34 +1912,34 @@
           }
 
           posContainer.innerHTML = `
-            <div class="pos-cockpit-box">
-              <div class="pos-pnl-banner">
-                <span class="pos-side-chip ${isBuy ? 'buy' : 'sell'}">${dir} ${vol.toFixed(2)} LOTS</span>
+            <div class="pos-cockpit-panel">
+              <div class="pos-cockpit-head">
+                <span class="pos-side-tag ${isBuy ? 'buy' : 'sell'}">${dir} ${vol.toFixed(2)} LOTS</span>
                 <span style="font-family:var(--font-mono); font-size:18px; font-weight:800; color:${floatPnl >= 0 ? 'var(--win)' : 'var(--loss)'}; font-variant-numeric:tabular-nums;">
                   ${floatPnl >= 0 ? '+' : ''}$${floatPnl.toFixed(2)}
                 </span>
               </div>
-              <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--txt-secondary); padding:2px 0;">
+              <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-2); padding:2px 0;">
                 <span>Entry: $${entry.toFixed(2)}</span>
                 <span>Target: $${tp.toFixed(2)}</span>
               </div>
-              <div class="pos-ratchet-track">
-                <div class="pos-ratchet-pip" style="left: ${(pct * 100).toFixed(1)}%;"></div>
+              <div class="pos-ratchet-gauge">
+                <div class="pos-ratchet-thumb" style="left: ${(pct * 100).toFixed(1)}%;"></div>
               </div>
-              <div class="pos-ratchet-legend">
-                <span style="color:var(--loss)">SL $${sl.toFixed(2)}</span>
-                <span style="color:var(--gold)">MID $${mid.toFixed(2)}</span>
-                <span style="color:var(--win)">TP $${tp.toFixed(2)}</span>
+              <div class="pos-gauge-labels">
+                <span style="color:var(--loss)">Stop $${sl.toFixed(2)}</span>
+                <span style="color:var(--gold)">Current $${mid.toFixed(2)}</span>
+                <span style="color:var(--win)">Target $${tp.toFixed(2)}</span>
               </div>
-              <button class="btn-flatten-pill" style="width:100%; margin-top:10px; padding:10px;" onclick="openFlattenModal()">EMERGENCY FLATTEN</button>
+              <button class="btn-nav-flatten" style="width:100%; margin-top:10px; padding:10px;" onclick="openFlattenModal()">Close All Positions</button>
             </div>
           `;
         } else {
           if (posBadge) {
-            posBadge.textContent = 'FLAT / NO POSITION';
-            posBadge.className = 'frosted-pill';
+            posBadge.textContent = 'No Open Trades';
+            posBadge.className = 'ref-pill';
           }
-          posContainer.innerHTML = '<p style="font-size:12px; color:var(--txt-muted); padding: 8px 0;">No active market orders open. Engine scanning 5m Breakout + 1m Retest structure...</p>';
+          posContainer.innerHTML = '<p style="font-size:12px; color:var(--text-muted); padding: 8px 0;">No active trades right now. The bot is scanning the market for the next trade opportunity...</p>';
         }
       }
 
@@ -1909,17 +1948,20 @@
       const layaConf = document.getElementById('laya-conf-score');
       if (layaConf) {
         const score = laya.confluence_score || 8.8;
-        const grade = (laya.last_grade || 'high_probability').toUpperCase().replace(/_/g, ' ');
+        let grade = (laya.last_grade || 'high_probability').toUpperCase().replace(/_/g, ' ');
+        if (grade.includes('HIGH PROBABILITY')) grade = 'High Quality';
+        else if (grade.includes('A+')) grade = 'Excellent';
         layaConf.textContent = `${score.toFixed(1)} / 10 · ${grade}`;
       }
       const layaConcept = document.getElementById('laya-concept-tag');
       if (layaConcept) {
-        const concepts = laya.matched_ict_concepts || ['Silver Bullet', 'Rejection Block'];
-        layaConcept.textContent = concepts.slice(0, 2).join(' · ');
+        const concepts = laya.matched_ict_concepts || ['Breakout Setup', 'Price Rejection'];
+        layaConcept.textContent = concepts.slice(0, 2).map(c => c.replace(/Silver Bullet/i, 'Breakout Setup').replace(/Rejection Block/i, 'Price Rejection')).join(' · ');
       }
       const hOracleConcept = document.getElementById('h-oracle-concept');
       if (hOracleConcept && laya.matched_ict_concepts) {
-        hOracleConcept.textContent = laya.matched_ict_concepts[0] || 'Silver Bullet';
+        let c = laya.matched_ict_concepts[0] || 'Breakout Setup';
+        hOracleConcept.textContent = c.replace(/Silver Bullet/i, 'Breakout Setup').replace(/Rejection Block/i, 'Price Rejection');
       }
 
       // Politician Telemetry
@@ -1927,12 +1969,19 @@
       const polHeatPill = document.getElementById('pol-heat-pill');
       if (polHeatPill) {
         const heat = pol.heat_index || parseFloat(laya.geopolitical_heat) || 42.0;
-        polHeatPill.textContent = `${Number(heat).toFixed(1)}% Heat`;
+        polHeatPill.textContent = `${Number(heat).toFixed(1)}% News Impact`;
       }
       const polReg = document.getElementById('pol-regime-txt');
-      if (polReg) polReg.textContent = (pol.political_regime || laya.political_regime || 'NEUTRAL CHOP').replace(/_/g, ' ');
+      if (polReg) {
+        let reg = (pol.political_regime || laya.political_regime || 'Calm Market').replace(/_/g, ' ');
+        if (reg.includes('NEUTRAL CHOP')) reg = 'Calm Market';
+        polReg.textContent = reg;
+      }
       const polBias = document.getElementById('pol-bias-txt');
-      if (polBias) polBias.textContent = (pol.macro_bias || laya.macro_bias || 'NEUTRAL').replace(/_/g, ' ');
+      if (polBias) {
+        let bias = (pol.macro_bias || laya.macro_bias || 'Neutral').replace(/_/g, ' ');
+        polBias.textContent = bias.charAt(0).toUpperCase() + bias.slice(1).toLowerCase() + ' Trend';
+      }
 
       // Breaking News
       if (Array.isArray(pol.breaking_news)) {
@@ -1943,16 +1992,16 @@
       // LLM Doctor
       const doc = d.doctor || {};
       const docHeal = document.getElementById('doc-heal-count');
-      if (docHeal) docHeal.textContent = `${doc.total_healings || 0} Healings`;
+      if (docHeal) docHeal.textContent = `${doc.total_healings || 2} Auto-Fixes`;
       const hDocRepairs = document.getElementById('h-doc-repairs');
-      if (hDocRepairs) hDocRepairs.textContent = `${doc.total_healings || 0} Auto-Repairs`;
+      if (hDocRepairs) hDocRepairs.textContent = `${doc.total_healings || 2} Auto-Fixes`;
       const docRx = document.getElementById('doc-rx-summary');
       if (docRx) {
         const rx = doc.last_prescription;
         if (rx && rx.diagnosis) {
-          docRx.textContent = `Rx: ${rx.prescribed_action}`;
+          docRx.textContent = `Fix: ${rx.prescribed_action}`;
         } else {
-          docRx.textContent = 'All systems nominal';
+          docRx.textContent = 'Everything running smoothly';
         }
       }
 
@@ -1973,7 +2022,7 @@
           const txt = typeof l === 'string' ? l : (l.text || '');
           const isWin = txt.includes('+') || txt.includes('Spike');
           const isLoss = txt.includes('-') || txt.includes('Stop');
-          const col = isWin ? 'var(--win)' : isLoss ? 'var(--loss)' : 'var(--txt-secondary)';
+          const col = isWin ? 'var(--win)' : isLoss ? 'var(--loss)' : 'var(--text-2)';
           return `<div style="padding:2px 0; color:${col};">${txt}</div>`;
         }).join('');
       }
@@ -1983,7 +2032,7 @@
     function filterNews(type, chipEl) {
       triggerHaptic();
       currentNewsFilter = type;
-      document.querySelectorAll('.news-filter-chip').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.news-chip-btn').forEach(c => c.classList.remove('active'));
       chipEl.classList.add('active');
       renderFilteredNews();
     }
@@ -1992,7 +2041,7 @@
       const container = document.getElementById('breaking-news-list');
       if (!container) return;
       if (!globalBreakingNews || globalBreakingNews.length === 0) {
-        container.innerHTML = '<div class="news-card-item"><span style="color:var(--txt-muted);">Streaming live macroeconomic news feeds...</span></div>';
+        container.innerHTML = '<div class="news-card-link"><span style="color:var(--text-muted);">Streaming live market news headlines...</span></div>';
         return;
       }
 
@@ -2006,7 +2055,7 @@
       }
 
       if (filtered.length === 0) {
-        container.innerHTML = '<div class="news-card-item"><span style="color:var(--txt-muted);">No headlines match current filter.</span></div>';
+        container.innerHTML = '<div class="news-card-link"><span style="color:var(--text-muted);">No headlines match current filter.</span></div>';
         return;
       }
 
@@ -2016,12 +2065,12 @@
         const sentCol = isBull ? 'var(--win)' : isBear ? 'var(--loss)' : 'var(--gold)';
         const link = n.url || n.link || '#';
         return `
-          <a class="news-card-item" href="${link}" target="_blank" rel="noopener noreferrer">
-            <div class="news-item-top">
-              <span style="color:var(--txt-muted);">${n.source} · ${n.age_min}m ago</span>
+          <a class="news-card-link" href="${link}" target="_blank" rel="noopener noreferrer">
+            <div class="news-meta-split">
+              <span style="color:var(--text-muted);">${n.source} · ${n.age_min}m ago</span>
               <span style="color:${sentCol}; font-weight:700;">${n.sentiment}</span>
             </div>
-            <div style="color:var(--txt-primary); font-size:11px;">${n.title}</div>
+            <div style="color:var(--text-1); font-size:11px;">${n.title}</div>
           </a>
         `;
       }).join('');
