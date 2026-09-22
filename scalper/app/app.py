@@ -205,23 +205,68 @@ class HFTHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
-        # 1. Kill old service worker from previous apps immediately
+        # 1. Native Web Push Service Worker
         if path == "/sw.js":
             body = (
                 b"self.addEventListener('install', e => self.skipWaiting());\n"
-                b"self.addEventListener('activate', e => {\n"
-                b"  e.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))));\n"
-                b"  self.registration.unregister();\n"
+                b"self.addEventListener('activate', e => clients.claim());\n"
+                b"self.addEventListener('push', e => {\n"
+                b"  let data = {};\n"
+                b"  if (e.data) {\n"
+                b"    try { data = e.data.json(); } catch(err) { data = { body: e.data.text() }; }\n"
+                b"  }\n"
+                b"  const title = data.title || 'Stratton Oakmont Desk';\n"
+                b"  const options = {\n"
+                b"    body: data.body || 'Live Market Update',\n"
+                b"    icon: data.icon || '/icon-180.png',\n"
+                b"    badge: '/icon-180.png',\n"
+                b"    tag: data.tag || 'stratton-trade',\n"
+                b"    renotify: true,\n"
+                b"    data: { url: data.url || '/' },\n"
+                b"    vibrate: [200, 100, 200]\n"
+                b"  };\n"
+                b"  e.waitUntil(self.registration.showNotification(title, options));\n"
+                b"});\n"
+                b"self.addEventListener('notificationclick', e => {\n"
+                b"  e.notification.close();\n"
+                b"  const targetUrl = (e.notification.data && e.notification.data.url) ? e.notification.data.url : '/';\n"
+                b"  e.waitUntil(\n"
+                b"    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {\n"
+                b"      for (let client of clientList) {\n"
+                b"        if (client.url && 'focus' in client) return client.focus();\n"
+                b"      }\n"
+                b"      if (clients.openWindow) return clients.openWindow(targetUrl);\n"
+                b"    })\n"
+                b"  );\n"
                 b"});\n"
             )
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript")
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store, must-revalidate")
+            self.send_header("Cache-Control", "no-cache, must-revalidate")
             self.end_headers()
             if not head_only:
                 self.wfile.write(body)
             return
+
+        # 1b. VAPID Public Key for client push subscription
+        if path == "/api/push/key":
+            try:
+                from scalper.web_push import get_vapid_public_key
+                key = get_vapid_public_key()
+                payload = json.dumps({"publicKey": key}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                if not head_only:
+                    self.wfile.write(payload)
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                return
 
         # 2. Public API endpoint for HFT metrics (polled by UI)
         if path == "/api/hft":
@@ -349,6 +394,45 @@ class HFTHandler(BaseHTTPRequestHandler):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(b'{"success": true, "msg": "Flatten command dispatched to broker engine"}')
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(f'{{"error": "{e}"}}'.encode("utf-8"))
+            return
+
+        if path == "/api/push/subscribe":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length).decode("utf-8")
+                sub = json.loads(raw)
+                from scalper.web_push import add_subscription
+                ok = add_subscription(sub)
+                res = json.dumps({"ok": ok, "msg": "Push subscription activated"}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(res)
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(f'{{"error": "{e}"}}'.encode("utf-8"))
+            return
+
+        if path == "/api/push/test":
+            try:
+                from scalper.web_push import send_web_push
+                sent = send_web_push(
+                    title="🟢 Stratton Oakmont Test Push",
+                    message="Native Web Push notification connected successfully to your device!",
+                    tag="test-push",
+                )
+                res = json.dumps({"ok": True, "sent": sent, "msg": f"Dispatched to {sent} active device(s)"}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(res)
             except Exception as e:
                 self.send_response(500)
                 self.end_headers()

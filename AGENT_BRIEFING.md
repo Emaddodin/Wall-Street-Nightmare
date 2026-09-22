@@ -54,15 +54,17 @@ The VPS (`82.115.21.155`) runs 3 interdependent systemd services:
 ```
 /Users/mac/Desktop/TBT-Engine/
 ├── run_xau_broker_live.py         # Production execution loop (Apex Trinity + Trailing Ratchet)
-├── bark_integration.py            # Native iOS push notification integration
+├── bark_integration.py            # Push notification gateway (Web Push primary, Bark/ntfy bypassed)
 ├── README.md                      # Public documentation & architecture overview
 ├── NOTES.md                       # Operational manual, session schedule & risk parameters
 ├── AGENT_BRIEFING.md              # THIS FILE: Single orientation dossier for AI agents
 ├── engine/
 │   └── litefinance_gateway.py    # Playwright headless browser gateway (DOM mutation observer, <5ms order click)
 ├── scalper/
+│   ├── web_push.py               # Native self-hosted W3C Web Push & VAPID engine (pywebpush)
 │   ├── app/
-│   │   ├── app.py                 # Live web dashboard backend & API (/api/hft)
+│   │   ├── app.py                 # Live web dashboard backend & API (/api/hft, /api/push/*, /sw.js)
+│   │   ├── templates/             # Jinja/HTML templates (terminal.html - iOS 27 Liquid Glass UI)
 │   │   └── static/                # PWA icons and web assets
 │   ├── brain/
 │   │   ├── laya_oracle.py         # Laya System 1 non-autoregressive ModernBERT decision model

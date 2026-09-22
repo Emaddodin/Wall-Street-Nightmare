@@ -2,563 +2,1242 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Stratton Oakmont · Wall Street Quant Terminal</title>
+  <title>Stratton Oakmont · Liquid Glass Quant Terminal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Stratton Desk">
   <meta name="application-name" content="Stratton Desk">
-  <meta name="theme-color" content="#050508">
+  <meta name="theme-color" content="#04060a">
 
   <!-- Apple Touch & PWA Icons -->
-  <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png?v=6">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=6">
-  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=6">
-  <link rel="icon" type="image/png" href="/icon-180.png?v=6">
-  <link rel="manifest" href="/manifest.json?v=6">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png?v=7">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=7">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=7">
+  <link rel="icon" type="image/png" href="/icon-180.png?v=7">
+  <link rel="manifest" href="/manifest.json?v=7">
 
   <style>
+    /* ==========================================================================
+       LAYER 0 & SYSTEM TOKENS: Minimal Swiss Monochrome & Optical Liquid Glass
+       ========================================================================== */
     :root {
-      --bg: #050508;
-      --surface: #0c0d12;
-      --card: #12131a;
-      --card-hover: #171822;
-      --border: rgba(255, 255, 255, 0.08);
-      --border-accent: rgba(212, 175, 55, 0.3);
+      --canvas-bg: #04060a;
+      --wire-grid: rgba(255, 255, 255, 0.03);
+      --wire-border: rgba(255, 255, 255, 0.08);
+      --wire-border-highlight: rgba(255, 255, 255, 0.18);
+      --glass-base: rgba(11, 14, 22, 0.72);
+      --glass-card: rgba(16, 20, 31, 0.65);
+      --glass-sub: rgba(8, 11, 18, 0.75);
+      --glass-active: rgba(255, 255, 255, 0.07);
+
+      /* Restrained Functional Accents */
       --gold: #e5c158;
-      --gold-dark: #b89230;
-      --gold-soft: rgba(229, 193, 88, 0.15);
-      --win: #00ff9d;
-      --win-soft: rgba(0, 255, 157, 0.12);
-      --loss: #ff3b5c;
-      --loss-soft: rgba(255, 59, 92, 0.12);
-      --cyan: #00e5ff;
-      --cyan-soft: rgba(0, 229, 255, 0.12);
-      --amber: #ffaa00;
-      --amber-soft: rgba(255, 170, 0, 0.12);
-      --txt: #f5f5f7;
-      --txt2: #8e8e99;
-      --off: #4e4e58;
-      --ui: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
-      --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --gold-dim: #9c8232;
+      --gold-glow: rgba(229, 193, 88, 0.12);
+      --gold-border: rgba(229, 193, 88, 0.28);
+      
+      --win: #10b981;
+      --win-soft: rgba(16, 185, 129, 0.12);
+      --win-border: rgba(16, 185, 129, 0.28);
+
+      --loss: #f43f5e;
+      --loss-soft: rgba(244, 63, 94, 0.12);
+      --loss-border: rgba(244, 63, 94, 0.32);
+
+      --cyan: #06b6d4;
+      --cyan-soft: rgba(6, 182, 212, 0.12);
+
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --text-dim: #475569;
+
+      --ui-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", sans-serif;
+      --mono-font: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
       --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
     }
 
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
-    html, body { background: var(--bg); color: var(--txt); font-family: var(--ui); -webkit-font-smoothing: antialiased; }
-    body { min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
-
-    /* Top Navigation Bar */
-    header.top-nav {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(5, 5, 8, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border); padding: 10px 16px;
-      display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    }
-    .brand-group { display: flex; align-items: center; gap: 12px; }
-    .brand-svg { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #242533, #12131a); display: flex; align-items: center; justify-content: center; border: 1px solid rgba(229, 193, 88, 0.4); flex-shrink: 0; box-shadow: 0 0 12px rgba(212, 175, 55, 0.2); }
-    .brand-svg span { font-family: "Georgia", serif; font-size: 18px; font-weight: 700; color: var(--gold); }
-    .brand-titles h1 { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; color: var(--txt); line-height: 1.1; }
-    .brand-titles p { font-family: var(--mono); font-size: 9px; font-weight: 600; color: var(--gold); letter-spacing: 0.12em; text-transform: uppercase; }
-
-    .header-ticker { display: none; align-items: center; gap: 12px; font-family: var(--mono); font-size: 12px; background: var(--surface); padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); }
-    .header-ticker .pair { font-weight: 700; color: var(--txt); }
-    .header-ticker .quote { color: var(--gold); font-weight: 700; }
-    .header-ticker .spread { color: var(--txt2); font-size: 10px; }
-
-    .header-actions { display: flex; align-items: center; gap: 8px; }
-    .status-pill {
-      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px;
-      font-family: var(--mono); font-size: 10px; font-weight: 700; background: var(--surface); border: 1px solid var(--border);
-    }
-    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--win); box-shadow: 0 0 8px var(--win); animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.85); } }
-    
-    .flatten-btn-nav {
-      background: rgba(255, 59, 92, 0.15); color: var(--loss); border: 1px solid rgba(255, 59, 92, 0.3);
-      padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; font-family: var(--mono);
-      cursor: pointer; transition: all 0.15s ease;
-    }
-    .flatten-btn-nav:hover { background: var(--loss); color: #fff; box-shadow: 0 0 12px rgba(255, 59, 92, 0.4); }
-
-    /* Killzone Ribbon */
-    .kz-ribbon {
-      background: #08090d; border-bottom: 1px solid var(--border); padding: 6px 16px;
-      display: flex; align-items: center; justify-content: space-between; overflow-x: auto; white-space: nowrap; gap: 16px;
-    }
-    .kz-ribbon::-webkit-scrollbar { display: none; }
-    .ribbon-item { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--txt2); }
-    .ribbon-item strong { color: var(--txt); font-family: var(--mono); font-weight: 600; }
-    .ribbon-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-family: var(--mono); text-transform: uppercase; }
-    .ribbon-badge.live { background: var(--win-soft); color: var(--win); border: 1px solid rgba(0, 255, 157, 0.3); }
-    .ribbon-badge.idle { background: rgba(255, 255, 255, 0.05); color: var(--off); }
-
-    /* Main Content Container */
-    main.app-stage {
-      flex: 1; padding: 16px; width: 100%; max-width: 1680px; margin: 0 auto;
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      margin: 0;
+      padding: 0;
     }
 
-    /* Cards */
-    .card {
-      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
-      padding: 16px; position: relative; overflow: hidden; transition: border-color 0.2s, transform 0.15s;
+    html, body {
+      background-color: var(--canvas-bg);
+      color: var(--text-primary);
+      font-family: var(--ui-font);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+      overflow-x: hidden;
     }
-    .card:hover { border-color: rgba(255, 255, 255, 0.14); }
-    .card.glow-gold { border-color: var(--border-accent); box-shadow: 0 0 24px rgba(212, 175, 55, 0.06); }
-    .card.glow-cyan { border-color: rgba(0, 229, 255, 0.25); box-shadow: 0 0 24px rgba(0, 229, 255, 0.06); }
-    .card.glow-amber { border-color: rgba(255, 170, 0, 0.25); box-shadow: 0 0 24px rgba(255, 170, 0, 0.06); }
 
-    .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
-    .card-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--txt2); display: flex; align-items: center; gap: 6px; }
-    .card-badge { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
-    .badge-win { background: var(--win-soft); color: var(--win); border: 1px solid rgba(0, 255, 157, 0.3); }
-    .badge-gold { background: var(--gold-soft); color: var(--gold); border: 1px solid rgba(229, 193, 88, 0.3); }
-    .badge-cyan { background: var(--cyan-soft); color: var(--cyan); border: 1px solid rgba(0, 229, 255, 0.3); }
-    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(255, 170, 0, 0.3); }
-    .badge-off { background: rgba(255, 255, 255, 0.05); color: var(--off); }
+    body {
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
 
-    /* Hero Balance Card */
-    .hero-amount { font-family: var(--ui); font-size: 44px; font-weight: 800; letter-spacing: -0.03em; color: var(--gold); line-height: 1.05; margin: 4px 0; font-variant-numeric: tabular-nums; }
-    .hero-amount.green { color: var(--win); text-shadow: 0 0 20px rgba(0, 255, 157, 0.3); }
-    .hero-amount.red { color: var(--loss); text-shadow: 0 0 20px rgba(255, 59, 92, 0.3); }
-    .hero-sub { font-size: 13px; color: var(--txt2); font-weight: 500; margin-bottom: 14px; }
+    /* Subtle architectural wireframe coordinate grid */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image: 
+        linear-gradient(to right, var(--wire-grid) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--wire-grid) 1px, transparent 1px);
+      background-size: 36px 36px;
+      opacity: 0.8;
+    }
 
-    .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; gap: 8px; }
-    .stat-row:last-child { border-bottom: 0; }
-    .stat-k { color: var(--txt2); font-weight: 500; }
-    .stat-v { font-family: var(--mono); font-weight: 700; text-align: right; color: var(--txt); font-variant-numeric: tabular-nums; }
-    .stat-v.up { color: var(--win); }
-    .stat-v.dn { color: var(--loss); }
-    .stat-v.gold { color: var(--gold); }
-    .stat-v.cyan { color: var(--cyan); }
+    /* Minimal cool optical diffusion blob (monochrome calm) */
+    .ambient-lens {
+      position: fixed;
+      pointer-events: none;
+      z-index: 0;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(229, 193, 88, 0.035) 0%, rgba(16, 185, 129, 0.02) 40%, transparent 70%);
+      top: -150px;
+      right: 5%;
+      filter: blur(90px);
+    }
 
-    /* Progress / Compounding Bar */
-    .tier-meter { margin: 12px 0 6px; }
-    .tier-track { height: 6px; background: rgba(255, 255, 255, 0.06); border-radius: 4px; overflow: hidden; position: relative; }
-    .tier-fill { height: 100%; background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--win)); border-radius: 4px; width: 31%; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 0 8px rgba(229, 193, 88, 0.4); }
-    .tier-labels { display: flex; justify-content: space-between; font-size: 10px; font-family: var(--mono); color: var(--txt2); margin-top: 4px; }
+    /* ==========================================================================
+       LAYER 4: iOS 27 NATIVE GLASSY TOP ISLAND
+       ========================================================================== */
+    header.ios-island-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: calc(8px + var(--safe-top)) 16px 8px;
+      background: rgba(4, 6, 10, 0.76);
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      border-bottom: 1px solid var(--wire-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      transition: background 0.3s ease;
+    }
+
+    .island-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-monogram {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+      border: 1px solid var(--gold-border);
+      box-shadow: inset 0 1px 0 0 var(--wire-border-highlight), 0 4px 12px rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .brand-monogram span {
+      font-family: var(--mono-font);
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--gold);
+    }
+
+    .brand-text h1 {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text-primary);
+      line-height: 1.1;
+    }
+    .brand-text p {
+      font-family: var(--mono-font);
+      font-size: 9px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* Live Quote Ticker Pill */
+    .quote-island-pill {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: var(--glass-card);
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--wire-border);
+      box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.06);
+      font-family: var(--mono-font);
+      font-size: 11px;
+    }
+    .quote-island-pill .symbol {
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+    .quote-island-pill .price {
+      font-weight: 800;
+      color: var(--gold);
+      font-variant-numeric: tabular-nums;
+    }
+    .quote-island-pill .spread {
+      color: var(--text-muted);
+      font-size: 10px;
+    }
+
+    /* Header Actions: Web Push + Status + Emergency Flatten */
+    .island-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .push-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--glass-card);
+      border: 1px solid var(--wire-border);
+      border-radius: 18px;
+      padding: 5px 10px;
+      font-family: var(--mono-font);
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.05);
+    }
+    .push-toggle-btn:hover {
+      background: var(--glass-active);
+      color: var(--text-primary);
+      border-color: var(--wire-border-highlight);
+    }
+    .push-toggle-btn.subscribed {
+      background: var(--win-soft);
+      color: var(--win);
+      border-color: var(--win-border);
+    }
+    .push-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+    .push-toggle-btn.subscribed .push-dot {
+      background: var(--win);
+      box-shadow: 0 0 6px var(--win);
+    }
+
+    .status-badge-island {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 9px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--wire-border);
+      font-family: var(--mono-font);
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--win);
+      box-shadow: 0 0 8px var(--win);
+      animation: pulse-ring 2s infinite cubic-bezier(0.45, 0, 0.55, 1);
+    }
+    @keyframes pulse-ring {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.85); opacity: 0.55; }
+    }
+
+    .btn-flatten-pill {
+      background: var(--loss-soft);
+      color: var(--loss);
+      border: 1px solid var(--loss-border);
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-family: var(--mono-font);
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      letter-spacing: 0.05em;
+    }
+    .btn-flatten-pill:hover {
+      background: var(--loss);
+      color: #ffffff;
+      box-shadow: 0 0 14px rgba(244, 63, 94, 0.4);
+    }
+
+    /* Killzone Sub-Ribbon */
+    .kz-ribbon-sub {
+      background: rgba(8, 10, 16, 0.85);
+      border-bottom: 1px solid var(--wire-border);
+      padding: 6px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      overflow-x: auto;
+      white-space: nowrap;
+      gap: 16px;
+      font-size: 11px;
+      font-family: var(--mono-font);
+      position: relative;
+      z-index: 90;
+    }
+    .kz-ribbon-sub::-webkit-scrollbar { display: none; }
+    .ribbon-cell { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); }
+    .ribbon-cell strong { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .kz-chip {
+      font-size: 9px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .kz-chip.active { background: var(--win-soft); color: var(--win); border: 1px solid var(--win-border); }
+    .kz-chip.standby { background: rgba(255,255,255,0.04); color: var(--text-dim); }
+
+    /* ==========================================================================
+       LAYER 1 & 2: MULTI-DEPTH WIREFRAME CONTAINER & GLASS CARDS
+       ========================================================================== */
+    main.stage-container {
+      flex: 1;
+      padding: 16px;
+      width: 100%;
+      max-width: 1640px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 10;
+    }
+
+    /* Optical Specular Liquid Glass Card */
+    .liquid-glass-card {
+      background: var(--glass-card);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid var(--wire-border);
+      border-top: 1px solid var(--wire-border-highlight);
+      border-radius: 20px;
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 
+        0 20px 40px -15px rgba(0, 0, 0, 0.7),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.10);
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+    .liquid-glass-card:hover {
+      border-color: rgba(255, 255, 255, 0.14);
+      border-top-color: rgba(255, 255, 255, 0.24);
+    }
+    .liquid-glass-card.glow-gold {
+      border-color: var(--gold-border);
+      border-top-color: rgba(229, 193, 88, 0.45);
+      box-shadow: 0 0 30px -10px var(--gold-glow), inset 0 1px 0 0 rgba(255,255,255,0.12);
+    }
+
+    .card-header-flex {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 8px;
+    }
+    .card-title-eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .card-pill-tag {
+      font-family: var(--mono-font);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+      letter-spacing: 0.04em;
+    }
+    .tag-win { background: var(--win-soft); color: var(--win); border: 1px solid var(--win-border); }
+    .tag-gold { background: var(--gold-glow); color: var(--gold); border: 1px solid var(--gold-border); }
+    .tag-cyan { background: var(--cyan-soft); color: var(--cyan); border: 1px solid rgba(6, 182, 212, 0.3); }
+    .tag-loss { background: var(--loss-soft); color: var(--loss); border: 1px solid var(--loss-border); }
+    .tag-dim { background: rgba(255,255,255,0.04); color: var(--text-dim); }
+
+    /* Hero Typography */
+    .hero-equity-display {
+      font-family: var(--ui-font);
+      font-size: 46px;
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      color: var(--gold);
+      line-height: 1.05;
+      margin: 4px 0 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .hero-equity-display.green {
+      color: var(--win);
+      text-shadow: 0 0 28px rgba(16, 185, 129, 0.25);
+    }
+    .hero-equity-sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      margin-bottom: 14px;
+    }
+
+    /* Structured Wireframe Data Rows */
+    .wire-metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 12px;
+      gap: 8px;
+    }
+    .wire-metric-row:last-child {
+      border-bottom: 0;
+    }
+    .metric-key {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .metric-val {
+      font-family: var(--mono-font);
+      font-weight: 700;
+      text-align: right;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .metric-val.up { color: var(--win); }
+    .metric-val.dn { color: var(--loss); }
+    .metric-val.gold { color: var(--gold); }
+    .metric-val.cyan { color: var(--cyan); }
+
+    /* Compounding Tier Progress Bar */
+    .tier-meter-box {
+      margin: 10px 0 8px;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .tier-meter-track {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .tier-meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--gold-dim), var(--gold), var(--win));
+      border-radius: 4px;
+      width: 31%;
+      transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 0 10px rgba(229, 193, 88, 0.4);
+    }
+    .tier-meter-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      font-family: var(--mono-font);
+      color: var(--text-muted);
+      margin-top: 5px;
+    }
 
     /* Active Position Cockpit */
-    .pos-cockpit { background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 12px; }
-    .pos-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .pos-side-badge { font-family: var(--mono); font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 4px; }
-    .pos-side-badge.buy { background: var(--win); color: #000; }
-    .pos-side-badge.sell { background: var(--loss); color: #fff; }
-    .pos-pnl-live { font-family: var(--mono); font-size: 20px; font-weight: 800; }
-    
-    .pos-ratchet-track { height: 6px; background: linear-gradient(90deg, var(--loss-soft), var(--surface) 40%, var(--win-soft)); border-radius: 3px; position: relative; margin: 12px 0 6px; }
-    .pos-ratchet-thumb { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 12px; height: 12px; border-radius: 50%; background: var(--gold); border: 2px solid #000; box-shadow: 0 0 8px var(--gold); }
-    .pos-ends { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--txt2); }
+    .pos-wire-cockpit {
+      background: rgba(4, 6, 12, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 14px;
+      margin-top: 10px;
+    }
+    .pos-header-split {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .pos-dir-badge {
+      font-family: var(--mono-font);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.04em;
+    }
+    .pos-dir-badge.buy { background: var(--win); color: #000; }
+    .pos-dir-badge.sell { background: var(--loss); color: #fff; }
+    .pos-pnl-live {
+      font-family: var(--mono-font);
+      font-size: 20px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
 
-    /* Action Buttons */
-    .btn-flatten { width: 100%; padding: 12px; border-radius: 8px; font-family: var(--ui); font-size: 13px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #c41e3a, #ff3b5c); border: 0; cursor: pointer; transition: all 0.15s ease; box-shadow: 0 4px 14px rgba(255, 59, 92, 0.3); margin-top: 10px; }
-    .btn-flatten:hover { opacity: 0.92; transform: translateY(-1px); }
-    .btn-flatten:active { transform: translateY(1px); }
+    .pos-ratchet-bar {
+      height: 6px;
+      background: linear-gradient(90deg, var(--loss-soft), rgba(255,255,255,0.05) 40%, var(--win-soft));
+      border-radius: 3px;
+      position: relative;
+      margin: 12px 0 6px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .pos-ratchet-pip {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--gold);
+      border: 2px solid #000;
+      box-shadow: 0 0 10px var(--gold);
+      transition: left 0.3s ease;
+    }
+    .pos-ratchet-bounds {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono-font);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
 
-    /* News Feed Items */
-    .news-filter-bar { display: flex; gap: 6px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 4px; }
-    .news-chip { background: var(--surface); border: 1px solid var(--border); color: var(--txt2); font-size: 10px; font-weight: 700; font-family: var(--mono); padding: 4px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
-    .news-chip.active { background: var(--gold-soft); color: var(--gold); border-color: rgba(229, 193, 88, 0.4); }
-    .news-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
-    .news-item { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 8px; padding: 8px 10px; font-size: 11px; line-height: 1.35; }
-    .news-item-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; font-size: 10px; font-family: var(--mono); }
-    .news-src { color: var(--txt2); }
-    .news-sent { font-weight: 700; }
+    .btn-card-flatten {
+      width: 100%;
+      padding: 11px;
+      border-radius: 10px;
+      font-family: var(--ui-font);
+      font-size: 12px;
+      font-weight: 700;
+      color: #ffffff;
+      background: linear-gradient(135deg, #b91c1c, #e11d48);
+      border: 0;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: 0 4px 14px rgba(225, 29, 72, 0.3);
+      margin-top: 10px;
+      letter-spacing: 0.03em;
+    }
+    .btn-card-flatten:active { transform: scale(0.98); }
+
+    /* Interactive News Wire */
+    .news-filter-strip {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .news-filter-chip {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--wire-border);
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 700;
+      font-family: var(--mono-font);
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .news-filter-chip.active {
+      background: var(--gold-glow);
+      color: var(--gold);
+      border-color: var(--gold-border);
+    }
+    .news-feed-scroll {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 270px;
+      overflow-y: auto;
+    }
+    .news-feed-item {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .news-item-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 3px;
+      font-size: 10px;
+      font-family: var(--mono-font);
+    }
 
     /* Execution Log Stream */
-    .log-stream { background: #08090d; border: 1px solid var(--border); border-radius: 8px; padding: 10px; max-height: 240px; overflow-y: auto; font-family: var(--mono); font-size: 11px; line-height: 1.5; display: flex; flex-direction: column; gap: 4px; }
-    .log-row { padding: 2px 4px; border-radius: 4px; }
-    .log-row.win { color: var(--win); background: var(--win-soft); }
-    .log-row.loss { color: var(--loss); background: var(--loss-soft); }
-    .log-row.info { color: var(--txt2); }
-
-    /* World Clocks Grid */
-    .clocks-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-    @media (min-width: 600px) { .clocks-grid { grid-template-columns: repeat(4, 1fr); } }
-    .clock-card { background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: left; }
-    .clock-city { font-size: 10px; color: var(--txt2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-    .clock-val { font-family: var(--mono); font-size: 16px; font-weight: 800; color: var(--gold); margin: 2px 0; font-variant-numeric: tabular-nums; }
-    .clock-sub { font-size: 9px; color: var(--off); font-family: var(--mono); }
-
-    /* Killzone Matrix Table */
-    .kz-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--mono); }
-    .kz-table th { text-align: left; color: var(--off); padding: 6px 8px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 10px; text-transform: uppercase; }
-    .kz-table td { padding: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
-
-    /* Bottom Navigation Bar (Phone Only) */
-    nav.bottom-nav {
-      position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
-      background: rgba(10, 11, 15, 0.92); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-      border-top: 1px solid var(--border); padding: 8px 12px calc(8px + var(--safe-bottom));
-      display: flex; justify-content: space-around; align-items: center;
+    .terminal-log-stream {
+      background: #020408;
+      border: 1px solid var(--wire-border);
+      border-radius: 10px;
+      padding: 10px;
+      max-height: 240px;
+      overflow-y: auto;
+      font-family: var(--mono-font);
+      font-size: 11px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
-    .tab-btn {
-      background: none; border: 0; color: var(--txt2); font-family: var(--ui); font-size: 10px; font-weight: 600;
-      display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; padding: 4px 8px;
-      transition: color 0.15s, transform 0.1s; border-radius: 8px; flex: 1; max-width: 72px;
+    .log-item-row {
+      padding: 2px 4px;
+      border-radius: 4px;
     }
-    .tab-btn svg { width: 20px; height: 20px; stroke-width: 2; stroke: currentColor; fill: none; transition: stroke 0.15s; }
-    .tab-btn.active { color: var(--gold); }
-    .tab-btn.active svg { stroke: var(--gold); filter: drop-shadow(0 0 6px rgba(229, 193, 88, 0.5)); }
-    .tab-btn:active { transform: scale(0.92); }
+    .log-item-row.win { color: var(--win); background: var(--win-soft); }
+    .log-item-row.loss { color: var(--loss); background: var(--loss-soft); }
+    .log-item-row.info { color: var(--text-secondary); }
 
-    /* Responsive Views */
-    /* Phone Default: Tab View */
-    .tab-page { display: none; flex-direction: column; gap: 12px; }
-    .tab-page.active { display: flex; }
+    /* Clocks Grid */
+    .clocks-matrix-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    @media (min-width: 600px) {
+      .clocks-matrix-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    .clock-widget-box {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--wire-border);
+      border-radius: 10px;
+      padding: 10px;
+      text-align: left;
+    }
+    .clock-label-city {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .clock-time-val {
+      font-family: var(--mono-font);
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--gold);
+      margin: 2px 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .clock-zone-sub {
+      font-size: 9px;
+      color: var(--text-dim);
+      font-family: var(--mono-font);
+    }
 
-    /* Laptop / Desktop Mode: High Density Quant Multi-Column Grid */
+    /* Timetable Matrix */
+    .sessions-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      font-family: var(--mono-font);
+    }
+    .sessions-table th {
+      text-align: left;
+      color: var(--text-dim);
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--wire-border);
+      font-weight: 600;
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+    .sessions-table td {
+      padding: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    /* ==========================================================================
+       LAYER 4: iOS 27 NATIVE FLOATING GLASS DOCK (Mobile & Tablet)
+       ========================================================================== */
+    nav.ios-floating-dock {
+      position: fixed;
+      bottom: calc(12px + var(--safe-bottom));
+      left: 16px;
+      right: 16px;
+      max-width: 480px;
+      margin: 0 auto;
+      height: 60px;
+      z-index: 200;
+      background: rgba(14, 18, 27, 0.72);
+      backdrop-filter: blur(36px) saturate(190%);
+      -webkit-backdrop-filter: blur(36px) saturate(190%);
+      border: 1px solid var(--wire-border);
+      border-top: 1px solid var(--wire-border-highlight);
+      border-radius: 30px;
+      padding: 4px 10px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      box-shadow: 
+        0 20px 40px -10px rgba(0, 0, 0, 0.8),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .dock-tab-btn {
+      background: none;
+      border: 0;
+      color: var(--text-muted);
+      font-family: var(--ui-font);
+      font-size: 10px;
+      font-weight: 600;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 20px;
+      flex: 1;
+      max-width: 72px;
+      transition: color 0.15s ease, transform 0.1s ease;
+      position: relative;
+    }
+    .dock-tab-btn svg {
+      width: 20px;
+      height: 20px;
+      stroke-width: 2;
+      stroke: currentColor;
+      fill: none;
+      transition: stroke 0.15s ease, filter 0.15s ease;
+    }
+    .dock-tab-btn.active {
+      color: var(--gold);
+    }
+    .dock-tab-btn.active svg {
+      stroke: var(--gold);
+      filter: drop-shadow(0 0 6px rgba(229, 193, 88, 0.5));
+    }
+    .dock-tab-btn.active::after {
+      content: "";
+      position: absolute;
+      bottom: 2px;
+      width: 14px;
+      height: 2px;
+      border-radius: 2px;
+      background: var(--gold);
+      box-shadow: 0 0 6px var(--gold);
+    }
+    .dock-tab-btn:active {
+      transform: scale(0.92);
+    }
+
+    /* Tab Page Visibility Engine */
+    .tab-view-page {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .tab-view-page.active {
+      display: flex;
+    }
+
+    /* Desktop Mode: 3-Column Cockpit Layout */
     @media (min-width: 1024px) {
-      body { padding-bottom: 24px; }
-      header.top-nav { padding: 12px 28px; }
-      .header-ticker { display: flex; }
-      .kz-ribbon { padding: 8px 28px; }
-      main.app-stage { padding: 24px 28px; }
-      
-      /* Hide phone tab bar on desktop */
-      nav.bottom-nav { display: none; }
-      
-      /* Show all sections concurrently in a 3-column quant cockpit grid */
-      .desktop-quant-grid {
-        display: grid; grid-template-columns: 340px 1fr 380px; gap: 20px; align-items: start;
+      body {
+        padding-bottom: 24px;
       }
-      .quant-col-left { display: flex; flex-direction: column; gap: 16px; }
-      .quant-col-center { display: flex; flex-direction: column; gap: 16px; }
-      .quant-col-right { display: flex; flex-direction: column; gap: 16px; }
-      
-      /* Force display on desktop grid */
-      .tab-page { display: flex !important; }
-      .phone-only { display: none !important; }
-      .desktop-only { display: block !important; }
+      header.ios-island-nav {
+        padding: 12px 28px;
+      }
+      .quote-island-pill {
+        display: flex;
+      }
+      .kz-ribbon-sub {
+        padding: 8px 28px;
+      }
+      main.stage-container {
+        padding: 24px 28px;
+      }
+
+      /* Hide mobile dock on desktop */
+      nav.ios-floating-dock {
+        display: none;
+      }
+
+      /* Desktop Grid: Show all sections concurrently */
+      .desktop-quant-cockpit {
+        display: grid;
+        grid-template-columns: 340px 1fr 380px;
+        gap: 20px;
+        align-items: start;
+      }
+      .cockpit-col-left,
+      .cockpit-col-center,
+      .cockpit-col-right {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .tab-view-page {
+        display: flex !important;
+      }
     }
 
     @media (max-width: 1023px) {
-      body { padding-bottom: calc(72px + var(--safe-bottom)); }
-      .desktop-quant-grid { display: block; }
-      .desktop-only { display: none !important; }
+      body {
+        padding-bottom: calc(88px + var(--safe-bottom));
+      }
+      .desktop-quant-cockpit {
+        display: block;
+      }
     }
 
-    /* Modal for Safe Flatten */
-    .modal-backdrop {
-      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px);
-      display: none; align-items: center; justify-content: center; z-index: 500; padding: 20px;
+    /* ==========================================================================
+       LAYER 4: MODALS & OVERLAYS (Emergency Flatten & Push Toast)
+       ========================================================================== */
+    .modal-frost-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 500;
+      padding: 20px;
     }
-    .modal-backdrop.open { display: flex; }
-    .modal-box {
-      background: var(--card); border: 1px solid var(--loss); border-radius: 16px;
-      padding: 24px; max-width: 360px; width: 100%; text-align: center; box-shadow: 0 0 32px rgba(255, 59, 92, 0.25);
+    .modal-frost-backdrop.open {
+      display: flex;
     }
-    .modal-box h3 { font-size: 18px; color: var(--loss); margin-bottom: 8px; }
-    .modal-box p { font-size: 13px; color: var(--txt2); margin-bottom: 20px; line-height: 1.4; }
-    .modal-actions { display: flex; gap: 10px; }
-    .btn-confirm-loss { flex: 1; padding: 12px; background: var(--loss); color: #fff; font-weight: 700; border: 0; border-radius: 8px; cursor: pointer; }
-    .btn-cancel { flex: 1; padding: 12px; background: var(--surface); color: var(--txt); font-weight: 600; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+    .modal-frost-box {
+      background: var(--glass-card);
+      border: 1px solid var(--loss-border);
+      border-top: 1px solid rgba(244, 63, 94, 0.4);
+      border-radius: 22px;
+      padding: 24px;
+      max-width: 380px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 0 40px rgba(244, 63, 94, 0.25), inset 0 1px 0 0 rgba(255,255,255,0.15);
+    }
+    .modal-frost-box h3 {
+      font-size: 18px;
+      color: var(--loss);
+      margin-bottom: 8px;
+    }
+    .modal-frost-box p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      line-height: 1.4;
+    }
+    .modal-action-row {
+      display: flex;
+      gap: 10px;
+    }
+    .btn-modal-confirm {
+      flex: 1;
+      padding: 12px;
+      background: var(--loss);
+      color: #fff;
+      font-weight: 700;
+      border: 0;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .btn-modal-cancel {
+      flex: 1;
+      padding: 12px;
+      background: rgba(255,255,255,0.06);
+      color: var(--text-primary);
+      font-weight: 600;
+      border: 1px solid var(--wire-border);
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    /* Notification Toast Banner */
+    .push-banner-toast {
+      position: fixed;
+      top: calc(70px + var(--safe-top));
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 400;
+      background: rgba(14, 20, 31, 0.92);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--gold-border);
+      border-radius: 16px;
+      padding: 10px 18px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .push-banner-toast.visible {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
   </style>
 </head>
 <body>
 
-  <!-- Top Sticky Header -->
-  <header class="top-nav">
-    <div class="brand-group">
-      <div class="brand-svg">
+  <!-- Ambient Light Lens -->
+  <div class="ambient-lens"></div>
+
+  <!-- Push Notification Toast -->
+  <div class="push-banner-toast" id="push-toast">
+    <span id="push-toast-icon">🔔</span>
+    <span id="push-toast-msg">Web Push Status</span>
+  </div>
+
+  <!-- ==========================================================================
+       TOP NAVIGATION: iOS 27 GLASSY DYNAMIC ISLAND
+       ========================================================================== -->
+  <header class="ios-island-nav">
+    <div class="island-brand">
+      <div class="brand-monogram">
         <span>$</span>
       </div>
-      <div class="brand-titles">
+      <div class="brand-text">
         <h1>Stratton Oakmont</h1>
         <p>Wall Street Quant Desk · Gold HFT</p>
       </div>
     </div>
 
-    <div class="header-ticker">
-      <span class="pair">XAU/USD</span>
-      <span class="quote" id="nav-quote">$4,359.80</span>
-      <span class="spread" id="nav-spread">0.5 bps · 0.2ms</span>
+    <!-- Live Pair Ticker Pill -->
+    <div class="quote-island-pill">
+      <span class="symbol">XAU/USD</span>
+      <span class="price" id="island-quote">$4,359.80</span>
+      <span class="spread" id="island-spread">0.5 bps · 0.2ms</span>
     </div>
 
-    <div class="header-actions">
-      <div class="status-pill">
-        <div class="status-dot"></div>
-        <span id="nav-engine-status">DEMO #91456523</span>
+    <!-- Right Actions -->
+    <div class="island-actions">
+      <!-- Native Web Push Toggle Button -->
+      <button class="push-toggle-btn" id="push-btn" onclick="toggleWebPush()">
+        <span class="push-dot"></span>
+        <span id="push-btn-label">Alerts: OFF</span>
+      </button>
+
+      <div class="status-badge-island">
+        <div class="pulse-dot"></div>
+        <span id="island-engine-status">DEMO #91456523</span>
       </div>
-      <button class="flatten-btn-nav" onclick="openFlattenModal()">FLATTEN</button>
+
+      <button class="btn-flatten-pill" onclick="openFlattenModal()">FLATTEN</button>
     </div>
   </header>
 
-  <!-- Killzone Ribbon -->
-  <div class="kz-ribbon">
-    <div class="ribbon-item">
+  <!-- ==========================================================================
+       LAYER 1: KILLZONE HORIZONTAL RIBBON
+       ========================================================================== -->
+  <div class="kz-ribbon-sub">
+    <div class="ribbon-cell">
       <span>Tehran:</span>
-      <strong id="ribbon-clk-tehran">--:--:--</strong>
+      <strong id="ribbon-tehran">--:--:--</strong>
     </div>
-    <div class="ribbon-item">
+    <div class="ribbon-cell">
       <span>New York:</span>
-      <strong id="ribbon-clk-ny">--:--:--</strong>
+      <strong id="ribbon-ny">--:--:--</strong>
     </div>
-    <div class="ribbon-item">
+    <div class="ribbon-cell">
       <span>London:</span>
-      <strong id="ribbon-clk-lon">--:--:--</strong>
+      <strong id="ribbon-lon">--:--:--</strong>
     </div>
-    <div class="ribbon-item">
+    <div class="ribbon-cell">
       <span>UTC:</span>
-      <strong id="ribbon-clk-utc">--:--:--</strong>
+      <strong id="ribbon-utc">--:--:--</strong>
     </div>
-    <div class="ribbon-item">
-      <span class="ribbon-badge live" id="ribbon-kz-badge">ACTIVE KILLZONE</span>
+    <div class="ribbon-cell">
+      <span class="kz-chip active" id="ribbon-kz-chip">ACTIVE KILLZONE</span>
     </div>
   </div>
 
-  <!-- Stage Content -->
-  <main class="app-stage">
-    <div class="desktop-quant-grid">
+  <!-- ==========================================================================
+       LAYER 2: MAIN STAGE CONTAINER
+       ========================================================================== -->
+  <main class="stage-container">
+    <div class="desktop-quant-cockpit">
 
-      <!-- ==================== COLUMN 1 / TAB 1: DESK (TRADING OVERVIEW) ==================== -->
-      <div class="tab-page active quant-col-left" id="page-desk">
-        
-        <!-- Hero Balance & Compounding Card -->
-        <div class="card glow-gold" id="card-hero">
-          <div class="card-head">
-            <span class="card-title">Trading Equity & Capital</span>
-            <span class="card-badge badge-win" id="badge-engine-state">ACTIVE SCANNING</span>
+      <!-- ==================== COLUMN 1 / TAB 1: DESK ==================== -->
+      <div class="tab-view-page active cockpit-col-left" id="tab-desk">
+
+        <!-- Hero Equity & Progress Card -->
+        <div class="liquid-glass-card glow-gold">
+          <div class="card-header-flex">
+            <span class="card-title-eyebrow">Trading Equity & Capital</span>
+            <span class="card-pill-tag tag-win" id="badge-engine-state">ACTIVE SCANNING</span>
           </div>
-          <div class="hero-amount green" id="hero-equity">$309.76</div>
-          <div class="hero-sub" id="hero-tier-sub">Target $1,000 · Tier $300 (0.10 Lots) · 1:1000 ECN</div>
 
-          <!-- Compounding Tier Progress Bar -->
-          <div class="tier-meter">
-            <div class="tier-track">
-              <div class="tier-fill" id="tier-fill-bar" style="width: 31%;"></div>
+          <div class="hero-equity-display green" id="hero-equity">$309.76</div>
+          <div class="hero-equity-sub" id="hero-tier-sub">Target $1,000 · Tier $300 (0.10 Lots) · 1:1000 ECN</div>
+
+          <!-- Compounding Tier Progress Meter -->
+          <div class="tier-meter-box">
+            <div class="tier-meter-track">
+              <div class="tier-meter-fill" id="tier-fill-bar" style="width: 31%;"></div>
             </div>
-            <div class="tier-labels">
+            <div class="tier-meter-labels">
               <span>Tier $300</span>
               <span id="tier-progress-pct">31% to $1,000</span>
               <span>Target $1,000</span>
             </div>
           </div>
 
-          <div class="stat-row">
-            <span class="stat-k">Realized Profit / PnL</span>
-            <span class="stat-v up" id="stat-pnl">+$209.76 (+209.8%)</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Realized Profit / PnL</span>
+            <span class="metric-val up" id="stat-pnl">+$209.76 (+209.8%)</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">XAUUSD Live Quote</span>
-            <span class="stat-v" id="stat-quote">BID $4,359.67 · ASK $4,360.19</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">XAUUSD Live Quote</span>
+            <span class="metric-val" id="stat-quote">BID $4,359.67 · ASK $4,360.19</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Spread / Execution Latency</span>
-            <span class="stat-v" id="stat-latency">0.5 bps · 0.2ms</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Spread / Internal Latency</span>
+            <span class="metric-val" id="stat-latency">0.5 bps · 0.2ms</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Risk Stop Ceiling</span>
-            <span class="stat-v dn" id="stat-risk-stop">Hard Stop -$15.00 Cap</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Risk Stop Ceiling</span>
+            <span class="metric-val dn" id="stat-risk-stop">Hard Stop -$15.00 Cap</span>
           </div>
         </div>
 
         <!-- Active Position Cockpit -->
-        <div class="card" id="card-position">
-          <div class="card-head">
-            <span class="card-title">Live Market Position</span>
-            <span class="card-badge badge-off" id="pos-status-badge">FLAT / NO POSITION</span>
+        <div class="liquid-glass-card" id="card-position">
+          <div class="card-header-flex">
+            <span class="card-title-eyebrow">Live Market Position</span>
+            <span class="card-pill-tag tag-dim" id="pos-status-badge">FLAT / NO POSITION</span>
           </div>
           <div id="pos-cockpit-content">
-            <p style="font-size:12px; color:var(--txt2); padding: 8px 0;">No active market orders open. Engine scanning 5m Breakout + 1m Retest structure...</p>
+            <p style="font-size:12px; color:var(--text-secondary); padding: 8px 0;">No active market orders open. Engine scanning 5m Breakout + 1m Retest structure...</p>
           </div>
         </div>
 
         <!-- Sovereign Cashout Card -->
-        <div class="card glow-gold">
-          <div class="card-head">
-            <span class="card-title">🌕 Sovereign Cash-Out Vault</span>
-            <span class="card-badge badge-gold" id="cashout-badge">ACCUMULATING</span>
+        <div class="liquid-glass-card glow-gold">
+          <div class="card-header-flex">
+            <span class="card-title-eyebrow">🌕 Sovereign Cash-Out Vault</span>
+            <span class="card-pill-tag tag-gold" id="cashout-badge">ACCUMULATING</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Today's Net Profit</span>
-            <span class="stat-v up" id="cashout-profit">+$0.00</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Today's Net Profit</span>
+            <span class="metric-val up" id="cashout-profit">+$0.00</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Recommended Cash-Out (30%)</span>
-            <span class="stat-v gold" id="cashout-recommended">$0.00</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Recommended Cash-Out (30%)</span>
+            <span class="metric-val gold" id="cashout-recommended">$0.00</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Retained Compounding Bankroll</span>
-            <span class="stat-v" id="cashout-retained">$309.76</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Retained Compounding Bankroll</span>
+            <span class="metric-val" id="cashout-retained">$309.76</span>
           </div>
         </div>
 
       </div>
 
-      <!-- ==================== COLUMN 2 / TAB 2: LAYA SYSTEM 1 ORACLE ==================== -->
-      <div class="tab-page quant-col-center" id="page-oracle">
+      <!-- ==================== COLUMN 2 / TAB 2: ORACLE ==================== -->
+      <div class="tab-view-page cockpit-col-center" id="tab-oracle">
 
         <!-- Laya System 1 Neural Card -->
-        <div class="card glow-cyan">
-          <div class="card-head">
-            <span class="card-title">🧠 Laya System 1 · Neural Decision Oracle</span>
-            <span class="card-badge badge-cyan" id="laya-badge">ACTIVE · 0.5MS</span>
+        <div class="liquid-glass-card">
+          <div class="card-header-flex">
+            <span class="card-title-eyebrow">🧠 Laya System 1 · Neural Decision Oracle</span>
+            <span class="card-pill-tag tag-cyan" id="laya-badge">ACTIVE · 0.5MS</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">ICT Confluence Rating</span>
-            <span class="stat-v up" id="laya-confluence">8.8 / 10 · A+ PRIME</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">ICT Confluence Rating</span>
+            <span class="metric-val up" id="laya-confluence">8.8 / 10 · A+ PRIME</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Institutional Concept</span>
-            <span class="stat-v cyan" id="laya-concept">Silver Bullet · Rejection Block</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Institutional Concept</span>
+            <span class="metric-val cyan" id="laya-concept">Silver Bullet · Rejection Block</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Macro Calendar Shield</span>
-            <span class="stat-v up" id="laya-macro-shield">SAFE · None in next 3 hours</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Macro Calendar Shield</span>
+            <span class="metric-val up" id="laya-macro-shield">SAFE · None in next 3 hours</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Compounding Multiplier</span>
-            <span class="stat-v gold" id="laya-compounding">1.00x (12% trap risk)</span>
-          </div>
-        </div>
-
-        <!-- Strategy Rules & Architecture -->
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title">Apex Trinity · Execution Invariants</span>
-            <span class="card-badge badge-win">HARD SOFTWARE ENFORCED</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-k">Max Risk Stop Loss</span>
-            <span class="stat-v dn">-$15.00 strict ceiling per trade</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-k">Ratchet 1 (BE Lock)</span>
-            <span class="stat-v up">+1.5 ATR &rarr; SL Entry +0.20 pts</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-k">Ratchet 2 (Profit Lock)</span>
-            <span class="stat-v up">+2.5 ATR &rarr; SL +1.5 ATR</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-k">Spike Harvest Target</span>
-            <span class="stat-v gold">+$50.00 to +$100.00 rapid extraction</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-k">Toxic Rollover Blackout</span>
-            <span class="stat-v dn">23:00 - 24:00 UTC spread freeze</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Compounding Multiplier</span>
+            <span class="metric-val gold" id="laya-compounding">1.00x (12% trap risk)</span>
           </div>
         </div>
 
-        <!-- Real-Time Order & Execution Feed -->
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title">Live Execution & Signal Feed</span>
-            <span class="card-badge badge-off" id="log-count">MONITORING</span>
+        <!-- Strategy Rules & Invariants -->
+        <div class="liquid-glass-card">
+          <div class="card-header-flex">
+            <span class="card-title-eyebrow">Apex Trinity · Execution Invariants</span>
+            <span class="card-pill-tag tag-win">SOFTWARE ENFORCED</span>
           </div>
-          <div class="log-stream" id="trades-feed">
-            <div class="log-row info">Connected to LiteFinance MT5 Demo feed. Monitoring 1m/5m structure...</div>
+          <div class="wire-metric-row">
+            <span class="metric-key">Max Risk Stop Loss</span>
+            <span class="metric-val dn">-$15.00 strict ceiling per trade</span>
+          </div>
+          <div class="wire-metric-row">
+            <span class="metric-key">Ratchet 1 (BE Lock)</span>
+            <span class="metric-val up">+1.5 ATR &rarr; SL Entry +0.20 pts</span>
+          </div>
+          <div class="wire-metric-row">
+            <span class="metric-key">Ratchet 2 (Profit Lock)</span>
+            <span class="metric-val up">+2.5 ATR &rarr; SL +1.5 ATR</span>
+          </div>
+          <div class="wire-metric-row">
+            <span class="metric-key">Spike Harvest Target</span>
+            <span class="metric-val gold">+$50.00 to +$100.00 rapid extraction</span>
+          </div>
+          <div class="wire-metric-row">
+            <span class="metric-key">Toxic Rollover Blackout</span>
+            <span class="metric-val dn">23:00 - 24:00 UTC spread freeze</span>
+          </div>
+        </div>
+
+        <!-- Live Execution Stream -->
+        <div class="liquid-glass-card">
+          <div class="card-header-flex">
+            <span class="card-title-eyebrow">Live Execution & Signal Feed</span>
+            <span class="card-pill-tag tag-dim" id="log-count">MONITORING</span>
+          </div>
+          <div class="terminal-log-stream" id="trades-feed">
+            <div class="log-item-row info">Connected to LiteFinance MT5 Demo feed. Monitoring 1m/5m structure...</div>
           </div>
         </div>
 
       </div>
 
-      <!-- ==================== COLUMN 3 / TAB 3 & 4: MACRO WIRE & DOCTOR ==================== -->
-      <div class="tab-page quant-col-right" id="page-wire">
+      <!-- ==================== COLUMN 3 / TAB 3 & 4: WIRE & DOCTOR ==================== -->
+      <div class="tab-view-page cockpit-col-right" id="tab-wire">
 
-        <!-- Politician Brain & Macro Radar Card -->
-        <div class="card glow-amber">
-          <div class="card-head">
-            <span class="card-title">🏛️ Politician Brain · Macro Radar</span>
-            <span class="card-badge badge-amber" id="pol-heat-badge">42.0% HEAT · MODERATE</span>
+        <!-- Politician Brain Card -->
+        <div class="liquid-glass-card">
+          <div class="card-header-flex">
+            <span class="card-title-eyebrow">🏛️ Politician Brain · Macro Radar</span>
+            <span class="card-pill-tag tag-gold" id="pol-heat-badge">42.0% HEAT · MODERATE</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Political & Tariff Regime</span>
-            <span class="stat-v gold" id="pol-regime">NEUTRAL CHOP</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Political & Tariff Regime</span>
+            <span class="metric-val gold" id="pol-regime">NEUTRAL CHOP</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Fundamental Gold Bias</span>
-            <span class="stat-v up" id="pol-bias">NEUTRAL</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Fundamental Gold Bias</span>
+            <span class="metric-val up" id="pol-bias">NEUTRAL</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Titan Sword Booster</span>
-            <span class="stat-v up" id="pol-sword">1.65x Titan Boost · +5.0 to +8.0 ATR</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Titan Sword Booster</span>
+            <span class="metric-val up" id="pol-sword">1.65x Titan Boost · +5.0 to +8.0 ATR</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Sovereign Shield</span>
-            <span class="stat-v up" id="pol-shield">🛡️ Zero spread-widening risk</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Sovereign Shield</span>
+            <span class="metric-val up" id="pol-shield">🛡️ Zero spread-widening risk</span>
           </div>
 
-          <!-- Interactive News Filter & List -->
-          <div style="margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px;">
-            <div class="news-filter-bar">
-              <span class="news-chip active" onclick="filterNews('ALL', this)">ALL</span>
-              <span class="news-chip" onclick="filterNews('BULL', this)">🟢 BULL</span>
-              <span class="news-chip" onclick="filterNews('BEAR', this)">🔴 BEAR</span>
-              <span class="news-chip" onclick="filterNews('TARIFF', this)">⚡ TARIFFS</span>
+          <!-- Breaking News Strip -->
+          <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
+            <div class="news-filter-strip">
+              <span class="news-filter-chip active" onclick="filterNews('ALL', this)">ALL</span>
+              <span class="news-filter-chip" onclick="filterNews('BULL', this)">🟢 BULL</span>
+              <span class="news-filter-chip" onclick="filterNews('BEAR', this)">🔴 BEAR</span>
+              <span class="news-filter-chip" onclick="filterNews('TARIFF', this)">⚡ TARIFFS</span>
             </div>
-            <div class="news-list" id="breaking-news-list">
-              <div class="news-item">
-                <span style="color:var(--txt2);">Streaming live macroeconomic news feeds...</span>
+            <div class="news-feed-scroll" id="breaking-news-list">
+              <div class="news-feed-item">
+                <span style="color:var(--text-secondary);">Streaming live macroeconomic news feeds...</span>
               </div>
             </div>
           </div>
         </div>
 
         <!-- Autonomous LLM Doctor Sentinel Card -->
-        <div class="card glow-cyan" id="page-doctor">
-          <div class="card-head">
-            <span class="card-title">🏥 Autonomous LLM Doctor Sentinel</span>
-            <span class="card-badge badge-cyan" id="doc-badge">SURVEILLANCE ACTIVE 🟢</span>
+        <div class="liquid-glass-card" id="tab-doctor">
+          <div class="card-header-flex">
+            <span class="card-title-eyebrow">🏥 Autonomous LLM Doctor Sentinel</span>
+            <span class="card-pill-tag tag-cyan" id="doc-badge">SURVEILLANCE ACTIVE 🟢</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Clinical Diagnostic Brain</span>
-            <span class="stat-v cyan" id="doc-brain">Qwen2.5-1.5B (llama-server :8080)</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Clinical Diagnostic Brain</span>
+            <span class="metric-val cyan" id="doc-brain">Qwen2.5-1.5B (llama-server :8080)</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Monitored Service</span>
-            <span class="stat-v" id="doc-service">stratton-xau-live.service</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Monitored Service</span>
+            <span class="metric-val" id="doc-service">stratton-xau-live.service</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Autonomous Auto-Repairs</span>
-            <span class="stat-v up" id="doc-repairs-count">0 Healing Interventions</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Autonomous Auto-Repairs</span>
+            <span class="metric-val up" id="doc-repairs-count">0 Healing Interventions</span>
           </div>
-          <div class="stat-row">
-            <span class="stat-k">Last Clinical Prescription</span>
-            <span class="stat-v" id="doc-rx" style="font-size:10px; color:var(--txt2); max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">All systems nominal · Zero intervention needed</span>
+          <div class="wire-metric-row">
+            <span class="metric-key">Last Clinical Prescription</span>
+            <span class="metric-val" id="doc-rx" style="font-size:10px; color:var(--text-secondary); max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">All systems nominal · Zero intervention needed</span>
           </div>
         </div>
 
       </div>
 
-      <!-- ==================== TAB 5: KILLZONES & SCHEDULE ==================== -->
-      <div class="tab-page" id="page-killzones">
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title">World Institutional Clocks</span>
-            <span class="card-badge badge-gold" id="kz-active-session">MONITORING</span>
+      <!-- ==================== TAB 5: KILLZONES & WORLD CLOCKS ==================== -->
+      <div class="tab-view-page" id="tab-clocks">
+        <div class="liquid-glass-card">
+          <div class="card-header-flex">
+            <span class="card-title-eyebrow">World Institutional Clocks</span>
+            <span class="card-pill-tag tag-gold" id="kz-active-session">MONITORING</span>
           </div>
-          <div class="clocks-grid">
-            <div class="clock-card">
-              <div class="clock-city">📱 Tehran (Local)</div>
-              <div class="clock-val" id="clk-grid-tehran">--:--:--</div>
-              <div class="clock-sub">IRST (UTC+3:30)</div>
+          <div class="clocks-matrix-grid">
+            <div class="clock-widget-box">
+              <div class="clock-label-city">📱 Tehran (Local)</div>
+              <div class="clock-time-val" id="clk-grid-tehran">--:--:--</div>
+              <div class="clock-zone-sub">IRST (UTC+3:30)</div>
             </div>
-            <div class="clock-card">
-              <div class="clock-city">🏛️ New York (COMEX)</div>
-              <div class="clock-val" id="clk-grid-ny">--:--:--</div>
-              <div class="clock-sub">EDT (UTC-4:00)</div>
+            <div class="clock-widget-box">
+              <div class="clock-label-city">🏛️ New York (COMEX)</div>
+              <div class="clock-time-val" id="clk-grid-ny">--:--:--</div>
+              <div class="clock-zone-sub">EDT (UTC-4:00)</div>
             </div>
-            <div class="clock-card">
-              <div class="clock-city">🇬🇧 London (LBMA)</div>
-              <div class="clock-val" id="clk-grid-lon">--:--:--</div>
-              <div class="clock-sub">BST (UTC+1:00)</div>
+            <div class="clock-widget-box">
+              <div class="clock-label-city">🇬🇧 London (LBMA)</div>
+              <div class="clock-time-val" id="clk-grid-lon">--:--:--</div>
+              <div class="clock-zone-sub">BST (UTC+1:00)</div>
             </div>
-            <div class="clock-card">
-              <div class="clock-city">🌐 UTC Epoch</div>
-              <div class="clock-val" id="clk-grid-utc" style="color:var(--txt);">--:--:--</div>
-              <div class="clock-sub">Broker Sync</div>
+            <div class="clock-widget-box">
+              <div class="clock-label-city">🌐 UTC Epoch</div>
+              <div class="clock-time-val" id="clk-grid-utc" style="color:var(--text-primary);">--:--:--</div>
+              <div class="clock-zone-sub">Broker Sync</div>
             </div>
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title">Institutional Session Timetable Matrix</span>
+        <div class="liquid-glass-card">
+          <div class="card-header-flex">
+            <span class="card-title-eyebrow">Institutional Session Timetable Matrix</span>
           </div>
-          <table class="kz-table">
+          <table class="sessions-table">
             <thead>
               <tr>
                 <th>Session</th>
@@ -570,32 +1249,32 @@
             </thead>
             <tbody>
               <tr>
-                <td><strong>🌏 Asian Range</strong><br><span style="color:var(--off); font-size:9px;">Accumulation</span></td>
+                <td><strong>🌏 Asian Range</strong><br><span style="color:var(--text-dim); font-size:9px;">Accumulation</span></td>
                 <td>03:30 - 09:30</td>
                 <td>20:00 - 02:00</td>
                 <td>01:00 - 07:00</td>
-                <td><span class="ribbon-badge idle" id="tbl-badge-asia">STANDBY</span></td>
+                <td><span class="kz-chip standby" id="tbl-badge-asia">STANDBY</span></td>
               </tr>
               <tr>
-                <td><strong>🇬🇧 London Open</strong><br><span style="color:var(--off); font-size:9px;">Judas Swing</span></td>
+                <td><strong>🇬🇧 London Open</strong><br><span style="color:var(--text-dim); font-size:9px;">Judas Swing</span></td>
                 <td>10:30 - 13:30</td>
                 <td>03:00 - 06:00</td>
                 <td>08:00 - 11:00</td>
-                <td><span class="ribbon-badge idle" id="tbl-badge-lon">STANDBY</span></td>
+                <td><span class="kz-chip standby" id="tbl-badge-lon">STANDBY</span></td>
               </tr>
               <tr>
-                <td><strong>🏛️ New York AM</strong><br><span style="color:var(--off); font-size:9px;">COMEX Expansion</span></td>
+                <td><strong>🏛️ New York AM</strong><br><span style="color:var(--text-dim); font-size:9px;">COMEX Expansion</span></td>
                 <td>15:30 - 18:30</td>
                 <td>08:00 - 11:00</td>
                 <td>13:00 - 16:00</td>
-                <td><span class="ribbon-badge idle" id="tbl-badge-nyam">STANDBY</span></td>
+                <td><span class="kz-chip standby" id="tbl-badge-nyam">STANDBY</span></td>
               </tr>
               <tr>
-                <td><strong>🌆 London Close</strong><br><span style="color:var(--off); font-size:9px;">Retracement</span></td>
+                <td><strong>🌆 London Close</strong><br><span style="color:var(--text-dim); font-size:9px;">Retracement</span></td>
                 <td>18:30 - 20:30</td>
                 <td>11:00 - 13:00</td>
                 <td>16:00 - 18:00</td>
-                <td><span class="ribbon-badge idle" id="tbl-badge-lonclose">STANDBY</span></td>
+                <td><span class="kz-chip standby" id="tbl-badge-lonclose">STANDBY</span></td>
               </tr>
             </tbody>
           </table>
@@ -605,70 +1284,200 @@
     </div>
   </main>
 
-  <!-- Phone Native Bottom Navigation Bar -->
-  <nav class="bottom-nav">
-    <button class="tab-btn active" onclick="switchMobileTab('page-desk', this)">
+  <!-- ==========================================================================
+       LAYER 4: iOS 27 NATIVE FLOATING GLASS DOCK (Phone Nav)
+       ========================================================================== -->
+  <nav class="ios-floating-dock">
+    <button class="dock-tab-btn active" onclick="switchMobileTab('tab-desk', this)">
       <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
       <span>Desk</span>
     </button>
-    <button class="tab-btn" onclick="switchMobileTab('page-oracle', this)">
+    <button class="dock-tab-btn" onclick="switchMobileTab('tab-oracle', this)">
       <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
       <span>Oracle</span>
     </button>
-    <button class="tab-btn" onclick="switchMobileTab('page-wire', this)">
+    <button class="dock-tab-btn" onclick="switchMobileTab('tab-wire', this)">
       <svg viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
       <span>Wire</span>
     </button>
-    <button class="tab-btn" onclick="switchMobileTab('page-doctor', this)">
+    <button class="dock-tab-btn" onclick="switchMobileTab('tab-doctor', this)">
       <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
       <span>Doctor</span>
     </button>
-    <button class="tab-btn" onclick="switchMobileTab('page-killzones', this)">
+    <button class="dock-tab-btn" onclick="switchMobileTab('tab-clocks', this)">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <span>Clocks</span>
     </button>
   </nav>
 
-  <!-- Confirmation Modal for Safe Flatten -->
-  <div class="modal-backdrop" id="flatten-modal">
-    <div class="modal-box">
+  <!-- ==========================================================================
+       MODAL: EMERGENCY FLATTEN CONFIRMATION
+       ========================================================================== -->
+  <div class="modal-frost-backdrop" id="flatten-modal">
+    <div class="modal-frost-box">
       <h3>⚠️ EMERGENCY FLATTEN</h3>
-      <p>Are you sure you want to market-flatten all open Gold positions on LiteFinance immediately?</p>
-      <div class="modal-actions">
-        <button class="btn-cancel" onclick="closeFlattenModal()">Cancel</button>
-        <button class="btn-confirm-loss" onclick="executeFlatten()">Confirm Flatten</button>
+      <p>Market-flatten all open Gold positions on LiteFinance immediately? This action is irreversible.</p>
+      <div class="modal-action-row">
+        <button class="btn-modal-cancel" onclick="closeFlattenModal()">Cancel</button>
+        <button class="btn-modal-confirm" onclick="executeFlatten()">Confirm Flatten</button>
       </div>
     </div>
   </div>
 
-  <!-- JavaScript Engine -->
+  <!-- ==========================================================================
+       JAVASCRIPT TELEMETRY & NATIVE WEB PUSH ENGINE
+       ========================================================================== -->
   <script>
     const T = new URLSearchParams(location.search).get('t') || '';
     let globalBreakingNews = [];
     let currentNewsFilter = 'ALL';
+    let isPushSubscribed = false;
 
     // Mobile Haptic Feedback Helper
     function triggerHaptic() {
       if ('vibrate' in navigator) {
-        try { navigator.vibrate(12); } catch (e) {}
+        try { navigator.vibrate(10); } catch (e) {}
       }
     }
 
-    // Tab Switching Logic for Phone
+    // Toast Notification Banner
+    function showToast(msg, icon = '🔔', duration = 3000) {
+      const toast = document.getElementById('push-toast');
+      const toastMsg = document.getElementById('push-toast-msg');
+      const toastIcon = document.getElementById('push-toast-icon');
+      if (!toast || !toastMsg) return;
+      toastIcon.textContent = icon;
+      toastMsg.textContent = msg;
+      toast.classList.add('visible');
+      setTimeout(() => { toast.classList.remove('visible'); }, duration);
+    }
+
+    // Base64URL helper for VAPID public key
+    function urlB64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+
+    // Native Web Push Controller
+    async function checkWebPushStatus() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        const btn = document.getElementById('push-btn');
+        if (btn) btn.style.display = 'none';
+        return;
+      }
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) {
+            setPushUIActive(true);
+            return;
+          }
+        }
+      } catch (e) {}
+      setPushUIActive(false);
+    }
+
+    function setPushUIActive(active) {
+      isPushSubscribed = active;
+      const btn = document.getElementById('push-btn');
+      const label = document.getElementById('push-btn-label');
+      if (!btn || !label) return;
+      if (active) {
+        btn.classList.add('subscribed');
+        label.textContent = 'Alerts: ON (Test)';
+      } else {
+        btn.classList.remove('subscribed');
+        label.textContent = 'Alerts: OFF';
+      }
+    }
+
+    async function toggleWebPush() {
+      triggerHaptic();
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        alert('Web Push is not supported in this browser. On iOS, add this page to Home Screen first.');
+        return;
+      }
+
+      // If already subscribed, clicking acts as a direct Test Push trigger!
+      if (isPushSubscribed) {
+        showToast('Sending test push to your device...', '🚀');
+        try {
+          const res = await fetch('/api/push/test', { method: 'POST' });
+          const data = await res.json();
+          showToast(data.msg || 'Test push sent!', '✅');
+        } catch (e) {
+          showToast('Failed to dispatch test push.', '❌');
+        }
+        return;
+      }
+
+      // Subscribe user
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') {
+          showToast('Push permission was denied in browser settings.', '⚠️');
+          return;
+        }
+
+        showToast('Activating encrypted push channel...', '⏳');
+
+        // 1. Fetch public key
+        const keyRes = await fetch('/api/push/key');
+        const { publicKey } = await keyRes.json();
+        if (!publicKey) throw new Error('No VAPID key returned');
+
+        // 2. Register service worker
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+
+        // 3. Subscribe
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64ToUint8Array(publicKey)
+        });
+
+        // 4. Send subscription to server
+        const subRes = await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sub)
+        });
+        const subData = await subRes.json();
+
+        if (subData.ok) {
+          setPushUIActive(true);
+          showToast('Push alerts armed! Tap anytime to test.', '🟢');
+        } else {
+          showToast('Subscription registration failed.', '❌');
+        }
+      } catch (err) {
+        console.error('Push registration error:', err);
+        showToast('Failed to register push: ' + err.message, '❌');
+      }
+    }
+
+    // Tab Switching Logic for Phone & Tablet
     function switchMobileTab(targetId, btnEl) {
       triggerHaptic();
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.dock-tab-btn').forEach(b => b.classList.remove('active'));
       btnEl.classList.add('active');
 
       if (window.innerWidth < 1024) {
-        document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-view-page').forEach(p => p.classList.remove('active'));
         const target = document.getElementById(targetId);
         if (target) target.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     }
 
-    // Safe Flatten Modal
+    // Emergency Flatten Modal
     function openFlattenModal() {
       triggerHaptic();
       document.getElementById('flatten-modal').classList.add('open');
@@ -681,14 +1490,14 @@
       try {
         const r = await fetch('/api/flatten?t=' + T, { method: 'POST' });
         const res = await r.json();
-        alert(res.msg || 'Flatten signal dispatched!');
+        showToast(res.msg || 'Flatten signal dispatched to broker!', '🚨');
         fetchTelemetry();
       } catch (e) {
-        alert('Dispatched flatten request to broker engine.');
+        showToast('Dispatched flatten request to broker engine.', '🚨');
       }
     }
 
-    // 1. Live Clocks & Killzone Calculation
+    // Live Institutional Clocks & Killzones
     function updateLiveClocks() {
       const now = new Date();
       const fmt = (tz) => new Intl.DateTimeFormat('en-GB', {
@@ -701,10 +1510,10 @@
       const tUTC = fmt('UTC');
 
       // Update Ribbon
-      const rTeh = document.getElementById('ribbon-clk-tehran');
-      const rNY = document.getElementById('ribbon-clk-ny');
-      const rLon = document.getElementById('ribbon-clk-lon');
-      const rUTC = document.getElementById('ribbon-clk-utc');
+      const rTeh = document.getElementById('ribbon-tehran');
+      const rNY = document.getElementById('ribbon-ny');
+      const rLon = document.getElementById('ribbon-lon');
+      const rUTC = document.getElementById('ribbon-utc');
       if (rTeh) rTeh.textContent = tTeh;
       if (rNY) rNY.textContent = tNY;
       if (rLon) rLon.textContent = tLon;
@@ -728,7 +1537,7 @@
       const setBadge = (id, act) => {
         const el = document.getElementById(id);
         if (el) {
-          el.className = 'ribbon-badge ' + (act ? 'live' : 'idle');
+          el.className = 'kz-chip ' + (act ? 'active' : 'standby');
           el.textContent = act ? 'ACTIVE' : 'STANDBY';
         }
       };
@@ -748,20 +1557,18 @@
       else if (isLonClose) { activeName = "London Close Killzone"; isPrime = true; }
       else if (isAsia) { activeName = "Asian Accumulation"; isPrime = false; }
 
-      const rKzBadge = document.getElementById('ribbon-kz-badge');
-      if (rKzBadge) {
-        rKzBadge.textContent = activeName + (isPrime ? ' · ACTIVE' : ' · STANDBY');
-        rKzBadge.className = 'ribbon-badge ' + (isPrime ? 'live' : 'idle');
+      const rKzChip = document.getElementById('ribbon-kz-chip');
+      if (rKzChip) {
+        rKzChip.textContent = activeName + (isPrime ? ' · ACTIVE' : ' · STANDBY');
+        rKzChip.className = 'kz-chip ' + (isPrime ? 'active' : 'standby');
       }
       const kzSess = document.getElementById('kz-active-session');
-      if (kzSess) {
-        kzSess.textContent = activeName;
-      }
+      if (kzSess) kzSess.textContent = activeName;
     }
     setInterval(updateLiveClocks, 1000);
     updateLiveClocks();
 
-    // 2. Real-Time Telemetry Poller
+    // Telemetry Poller
     async function fetchTelemetry() {
       try {
         const r = await fetch('/api/hft?t=' + T + '&n=' + Date.now(), { cache: 'no-store' });
@@ -778,17 +1585,17 @@
       const pnlPct = Number(d.pnl_pct || ((eq - 100.0) / 100.0 * 100.0));
       const tier = Number(d.current_tier || 300.0);
 
-      // Hero
+      // Hero Equity
       const heroEl = document.getElementById('hero-equity');
       if (heroEl) {
         heroEl.textContent = '$' + eq.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        heroEl.className = 'hero-amount ' + (pnl >= 0 ? 'green' : 'red');
+        heroEl.className = 'hero-equity-display ' + (pnl >= 0 ? 'green' : 'dn');
       }
 
       const pnlEl = document.getElementById('stat-pnl');
       if (pnlEl) {
         pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)`;
-        pnlEl.className = 'stat-v ' + (pnl >= 0 ? 'up' : 'dn');
+        pnlEl.className = 'metric-val ' + (pnl >= 0 ? 'up' : 'dn');
       }
 
       // Tier Meter
@@ -806,17 +1613,17 @@
       const spreadBps = Number(d.spread_bps || 0.5);
       const latencyMs = Number(d.latency_ms || 0.2);
 
-      const navQuote = document.getElementById('nav-quote');
+      const navQuote = document.getElementById('island-quote');
       if (navQuote) navQuote.textContent = `$${mid.toFixed(2)}`;
-      const navSpread = document.getElementById('nav-spread');
+      const navSpread = document.getElementById('island-spread');
       if (navSpread) navSpread.textContent = `${spreadBps.toFixed(1)} bps · ${latencyMs.toFixed(1)}ms`;
 
       const statQuote = document.getElementById('stat-quote');
       if (statQuote) statQuote.innerHTML = `BID $${bid.toFixed(2)} · ASK $${ask.toFixed(2)}`;
       const statLatency = document.getElementById('stat-latency');
-      if (statLatency) statLatency.textContent = `${spreadBps.toFixed(1)} bps spread · ${latencyMs.toFixed(1)}ms internal`;
+      if (statLatency) statLatency.textContent = `${spreadBps.toFixed(1)} bps · ${latencyMs.toFixed(1)}ms`;
 
-      // Active Position Cockpit
+      // Position Cockpit
       const posContainer = document.getElementById('pos-cockpit-content');
       const posBadge = document.getElementById('pos-status-badge');
       const p = d.position;
@@ -833,7 +1640,7 @@
 
           if (posBadge) {
             posBadge.textContent = `${dir} ${vol.toFixed(2)}L`;
-            posBadge.className = 'card-badge ' + (isBuy ? 'badge-win' : 'badge-amber');
+            posBadge.className = 'card-pill-tag ' + (isBuy ? 'tag-win' : 'tag-gold');
           }
 
           let pct = 0.5;
@@ -844,32 +1651,32 @@
           }
 
           posContainer.innerHTML = `
-            <div class="pos-cockpit">
-              <div class="pos-top">
-                <span class="pos-side-badge ${isBuy ? 'buy' : 'sell'}">${dir} ${vol.toFixed(2)} LOTS</span>
-                <span class="pos-pnl-live ${floatPnl >= 0 ? 'stat-v up' : 'stat-v dn'}">${floatPnl >= 0 ? '+' : ''}$${floatPnl.toFixed(2)}</span>
+            <div class="pos-wire-cockpit">
+              <div class="pos-header-split">
+                <span class="pos-dir-badge ${isBuy ? 'buy' : 'sell'}">${dir} ${vol.toFixed(2)} LOTS</span>
+                <span class="pos-pnl-live ${floatPnl >= 0 ? 'metric-val up' : 'metric-val dn'}">${floatPnl >= 0 ? '+' : ''}$${floatPnl.toFixed(2)}</span>
               </div>
-              <div class="stat-row" style="padding:4px 0; border:0;">
-                <span class="stat-k">Entry: $${entry.toFixed(2)}</span>
-                <span class="stat-v">Target: $${tp.toFixed(2)}</span>
+              <div class="wire-metric-row" style="padding:3px 0; border:0;">
+                <span class="metric-key">Entry: $${entry.toFixed(2)}</span>
+                <span class="metric-val">Target: $${tp.toFixed(2)}</span>
               </div>
-              <div class="pos-ratchet-track">
-                <div class="pos-ratchet-thumb" style="left: ${(pct * 100).toFixed(1)}%;"></div>
+              <div class="pos-ratchet-bar">
+                <div class="pos-ratchet-pip" style="left: ${(pct * 100).toFixed(1)}%;"></div>
               </div>
-              <div class="pos-ends">
+              <div class="pos-ratchet-bounds">
                 <span style="color:var(--loss)">SL $${sl.toFixed(2)}</span>
                 <span style="color:var(--gold)">MID $${mid.toFixed(2)}</span>
                 <span style="color:var(--win)">TP $${tp.toFixed(2)}</span>
               </div>
-              <button class="btn-flatten" onclick="openFlattenModal()">EMERGENCY FLATTEN POSITION</button>
+              <button class="btn-card-flatten" onclick="openFlattenModal()">EMERGENCY FLATTEN POSITION</button>
             </div>
           `;
         } else {
           if (posBadge) {
             posBadge.textContent = 'FLAT / NO POSITION';
-            posBadge.className = 'card-badge badge-off';
+            posBadge.className = 'card-pill-tag tag-dim';
           }
-          posContainer.innerHTML = '<p style="font-size:12px; color:var(--txt2); padding: 8px 0;">No active market orders open. Engine scanning 5m Breakout + 1m Retest structure...</p>';
+          posContainer.innerHTML = '<p style="font-size:12px; color:var(--text-secondary); padding: 8px 0;">No active market orders open. Engine scanning 5m Breakout + 1m Retest structure...</p>';
         }
       }
 
@@ -896,7 +1703,7 @@
         const st = laya.macro_status || 'SAFE';
         const ev = laya.macro_next_event || 'None in next 3 hours';
         layaShield.textContent = `${st} · ${ev}`;
-        layaShield.className = 'stat-v ' + (st === 'SAFE' ? 'up' : 'gold');
+        layaShield.className = 'metric-val ' + (st === 'SAFE' ? 'up' : 'gold');
       }
       const layaComp = document.getElementById('laya-compounding');
       if (layaComp) {
@@ -917,7 +1724,7 @@
       if (polBias) {
         const b = pol.macro_bias || laya.macro_bias || 'NEUTRAL';
         polBias.textContent = b.replace(/_/g, ' ');
-        polBias.className = 'stat-v ' + (b.includes('BULL') ? 'up' : b.includes('BEAR') ? 'dn' : 'gold');
+        polBias.className = 'metric-val ' + (b.includes('BULL') ? 'up' : b.includes('BEAR') ? 'dn' : 'gold');
       }
       const polSword = document.getElementById('pol-sword');
       if (polSword) {
@@ -937,13 +1744,13 @@
         renderFilteredNews();
       }
 
-      // Autonomous LLM Doctor Telemetry
+      // LLM Doctor Telemetry
       const doc = d.doctor || {};
       const docBadge = document.getElementById('doc-badge');
       if (docBadge) {
         const st = doc.doctor_status || 'SURVEILLANCE ACTIVE 🟢';
         docBadge.textContent = st;
-        docBadge.className = 'card-badge ' + (st.includes('HEALING') ? 'badge-amber' : 'badge-cyan');
+        docBadge.className = 'card-pill-tag ' + (st.includes('HEALING') ? 'tag-gold' : 'tag-cyan');
       }
       const docBrain = document.getElementById('doc-brain');
       if (docBrain) docBrain.textContent = `${doc.model || 'Qwen2.5-1.5B'} (${doc.runtime || 'llama-server :8080'})`;
@@ -962,7 +1769,7 @@
         }
       }
 
-      // Sovereign Cashout Telemetry
+      // Sovereign Cashout Vault
       const w = d.daily_withdrawal || {};
       const dProf = Number(w.daily_profit || 0.0);
       const dCash = Number(w.recommended_cashout_today || 0.0);
@@ -982,17 +1789,17 @@
           const txt = typeof l === 'string' ? l : (l.text || '');
           const isWin = txt.includes('+') || txt.includes('Spike');
           const isLoss = txt.includes('-') || txt.includes('Stop');
-          const cls = isWin ? 'log-row win' : isLoss ? 'log-row loss' : 'log-row info';
+          const cls = isWin ? 'log-item-row win' : isLoss ? 'log-item-row loss' : 'log-item-row info';
           return `<div class="${cls}">${txt}</div>`;
         }).join('');
       }
     }
 
-    // Interactive News Filter
+    // News Filter Engine
     function filterNews(type, chipEl) {
       triggerHaptic();
       currentNewsFilter = type;
-      document.querySelectorAll('.news-chip').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.news-filter-chip').forEach(c => c.classList.remove('active'));
       chipEl.classList.add('active');
       renderFilteredNews();
     }
@@ -1001,7 +1808,7 @@
       const container = document.getElementById('breaking-news-list');
       if (!container) return;
       if (!globalBreakingNews || globalBreakingNews.length === 0) {
-        container.innerHTML = '<div class="news-item"><span style="color:var(--txt2);">Streaming live macroeconomic news feeds...</span></div>';
+        container.innerHTML = '<div class="news-feed-item"><span style="color:var(--text-secondary);">Streaming live macroeconomic news feeds...</span></div>';
         return;
       }
 
@@ -1015,7 +1822,7 @@
       }
 
       if (filtered.length === 0) {
-        container.innerHTML = '<div class="news-item"><span style="color:var(--txt2);">No headlines match current filter.</span></div>';
+        container.innerHTML = '<div class="news-feed-item"><span style="color:var(--text-secondary);">No headlines match current filter.</span></div>';
         return;
       }
 
@@ -1024,22 +1831,18 @@
         const isBear = n.sentiment.includes('BEAR');
         const sentColor = isBull ? 'var(--win)' : isBear ? 'var(--loss)' : 'var(--gold)';
         return `
-          <div class="news-item">
-            <div class="news-item-top">
-              <span class="news-src">${n.source} · ${n.age_min}m ago</span>
-              <span class="news-sent" style="color:${sentColor};">${n.sentiment}</span>
+          <div class="news-feed-item">
+            <div class="news-item-meta">
+              <span style="color:var(--text-muted);">${n.source} · ${n.age_min}m ago</span>
+              <span style="font-weight:700; color:${sentColor};">${n.sentiment}</span>
             </div>
-            <div style="color:var(--txt);">${n.title}</div>
+            <div style="color:var(--text-primary); font-size:11px;">${n.title}</div>
           </div>
         `;
       }).join('');
     }
 
-    // Start Poller
-    fetchTelemetry();
-    setInterval(fetchTelemetry, 1500);
-
-    // Keyboard Shortcuts for Desktop Terminal Power Users
+    // Keyboard Shortcuts for Desktop Power Users
     window.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT') return;
       if (e.key === 'f' || e.key === 'F') {
@@ -1050,6 +1853,11 @@
         fetchTelemetry();
       }
     });
+
+    // Start Poller & Push Check
+    fetchTelemetry();
+    setInterval(fetchTelemetry, 1500);
+    checkWebPushStatus();
   </script>
 </body>
 </html>

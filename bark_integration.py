@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger("bark_integration")
 
 DEFAULT_BARK_SERVER = "https://api.day.app"
+DEFAULT_NTFY_URL = "https://ntfy.sh"
 DASHBOARD_URL = os.getenv("SCALPER_DASHBOARD_URL", "https://82-115-21-155.sslip.io/")
 ICON_URL = os.getenv("SCALPER_ICON_URL", "https://82-115-21-155.sslip.io/icon-180.png")
 
@@ -217,6 +218,9 @@ async def push_bark_async(
     )
 
 
+DISCONNECT_BARK_NTFY = os.getenv("DISCONNECT_BARK_NTFY", "true").lower() in ("true", "1", "yes")
+
+
 def send_alert(
     title: str,
     message: str,
@@ -227,36 +231,31 @@ def send_alert(
     icon: str = ICON_URL,
 ) -> bool:
     """
-    Primary notification gateway. Uses Bark as the primary notification provider.
-    Maps priority to Bark sound and level.
+    Primary notification gateway. Uses native self-hosted Web Push as the primary provider.
+    Bark and ntfy are disconnected per user directive.
     """
-    if priority in ("urgent", "max", "emergency"):
-        level = "timeSensitive"
-        chosen_sound = sound or "alarm"
-    elif priority in ("high", "alert"):
-        level = "timeSensitive"
-        chosen_sound = sound or "minuet"
-    elif priority in ("low", "min"):
-        level = "passive"
-        chosen_sound = sound or "glass"
-    else:
-        level = "active"
-        chosen_sound = sound or "chime"
+    # 1. Native Web Push Dispatch
+    sent = 0
+    try:
+        from scalper.web_push import send_web_push
+        sent = send_web_push(title=title, message=message, url=url, icon=icon)
+    except Exception as exc:
+        logger.debug("Native WebPush error in send_alert: %s", exc)
 
+    if DISCONNECT_BARK_NTFY:
+        logger.info("📱 Native Web Push delivered to %d device(s): '%s' (Bark & Ntfy disconnected).", sent, title)
+        return True
+
+    # Legacy external dispatch only if explicitly re-enabled
     keys = get_bark_keys()
     if keys:
         return push_bark(
             title=title,
             message=message,
             group=group,
-            sound=chosen_sound,
-            level=level,
             url=url,
             icon=icon,
         )
-
-    # If no Bark key configured yet, log warning and fallback to ntfy
-    logger.warning("BARK_KEY is not set in .env. Falling back to ntfy for alert: %s", title)
     return _push_ntfy_fallback(title=title, message=message, priority=priority)
 
 
