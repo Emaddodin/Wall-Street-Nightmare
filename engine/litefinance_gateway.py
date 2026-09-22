@@ -202,8 +202,26 @@ class LiteFinanceGateway:
                     setInterval(notifyQuote, 50);
                     notifyQuote();
 
-                    // 3. Pre-cached single-shot fast execution function
-                    window.__executeFastMarketOrder = (dir, vol) => {
+                    // Helper to inject broker-side Stop-Loss into LiteFinance trading DOM
+                    const applySL = (slPrice) => {
+                        if (!slPrice || parseFloat(slPrice) <= 0) return;
+                        try {
+                            const trigger = document.querySelector('.js_extra_field_trigger');
+                            const container = document.querySelector('.extra_fields_inner');
+                            if (container && window.getComputedStyle(container).display === 'none' && trigger) {
+                                trigger.click();
+                            }
+                            const slInput = document.querySelector('#stop_loss_price_1');
+                            if (slInput) {
+                                slInput.value = slPrice;
+                                slInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                slInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        } catch(e) {}
+                    };
+
+                    // 3. Pre-cached single-shot fast execution function with broker SL
+                    window.__executeFastMarketOrder = (dir, vol, sl = null) => {
                         const isBuy = (dir === 'BUY');
                         const radioId = isBuy ? '#trade_buy_1' : '#trade_sell_1';
                         const radio = document.querySelector(radioId);
@@ -220,6 +238,8 @@ class LiteFinanceGateway:
                             inp.dispatchEvent(new Event('input', { bubbles: true }));
                             inp.dispatchEvent(new Event('change', { bubbles: true }));
                         }
+
+                        if (sl) applySL(sl);
 
                         const btnSelector = isBuy ? 'button.btn_green.js_trade_action_open' : 'button.btn_red.js_trade_action_open';
                         let btn = document.querySelector(btnSelector);
@@ -234,8 +254,8 @@ class LiteFinanceGateway:
                         return { success: false, error: 'NO_VISIBLE_ORDER_BUTTON' };
                     };
 
-                    // 3.1 Fast multi-order burst stacking function
-                    window.__executeFastBurst = async (dir, count, vol) => {
+                    // 3.1 Fast multi-order burst stacking function with broker SL
+                    window.__executeFastBurst = async (dir, count, vol, sl = null) => {
                         const isBuy = (dir === 'BUY');
                         const radioId = isBuy ? '#trade_buy_1' : '#trade_sell_1';
                         const radio = document.querySelector(radioId);
@@ -252,6 +272,8 @@ class LiteFinanceGateway:
                             inp.dispatchEvent(new Event('input', { bubbles: true }));
                             inp.dispatchEvent(new Event('change', { bubbles: true }));
                         }
+
+                        if (sl) applySL(sl);
 
                         const btnSelector = isBuy ? 'button.btn_green.js_trade_action_open' : 'button.btn_red.js_trade_action_open';
                         let btn = document.querySelector(btnSelector);
@@ -268,7 +290,7 @@ class LiteFinanceGateway:
                             btn.click();
                             executed++;
                             if (i < count - 1) {
-                                await new Promise(r => setTimeout(r, 30));
+                                await new Promise(r => setTimeout(r, 40));
                             }
                         }
                         return { success: true, executed, button: btn.innerText.trim() || (isBuy ? 'BUY' : 'SELL') };
@@ -439,11 +461,12 @@ class LiteFinanceGateway:
             t0 = time.perf_counter()
             direction = direction.upper()
             vol_str = f"{volume:.2f}"
+            sl_str = f"{sl_price:.2f}" if (sl_price and sl_price > 0) else None
             try:
-                # Atomic single-shot order execution inside Chrome's V8 engine
-                res = await self._page.evaluate("""({ dir, vol }) => {
+                # Atomic single-shot order execution inside Chrome's V8 engine with broker SL
+                res = await self._page.evaluate("""({ dir, vol, sl }) => {
                     if (typeof window.__executeFastMarketOrder === 'function') {
-                        return window.__executeFastMarketOrder(dir, vol);
+                        return window.__executeFastMarketOrder(dir, vol, sl);
                     }
                     const isBuy = (dir === 'BUY');
                     const radioId = isBuy ? '#trade_buy_1' : '#trade_sell_1';
@@ -474,7 +497,7 @@ class LiteFinanceGateway:
                         return { success: true, text: btn.innerText.trim() || (isBuy ? 'BUY' : 'SELL') };
                     }
                     return { success: false, error: 'NO_VISIBLE_ORDER_BUTTON' };
-                }""", {"dir": direction, "vol": vol_str})
+                }""", {"dir": direction, "vol": vol_str, "sl": sl_str})
 
                 latency_ms = (time.perf_counter() - t0) * 1000.0
 
@@ -485,14 +508,15 @@ class LiteFinanceGateway:
 
                 clicked_btn = res.get("text", "ORDER_CLICKED")
                 logger.info(
-                    "⚡ ULTRA-FAST BROKER ORDER SENT: %s %.2f lots | Dispatch Latency: %.2fms | Button: %s",
-                    direction, volume, latency_ms, clicked_btn
+                    "⚡ ULTRA-FAST BROKER ORDER SENT: %s %.2f lots | SL: %s | Dispatch Latency: %.2fms | Button: %s",
+                    direction, volume, sl_str or "NONE", latency_ms, clicked_btn
                 )
 
                 return {
                     "success": True,
                     "direction": direction,
                     "volume": volume,
+                    "sl_price": sl_price,
                     "latency_ms": latency_ms,
                     "button": clicked_btn,
                 }
@@ -510,7 +534,7 @@ class LiteFinanceGateway:
     ) -> Dict[str, Any]:
         """
         Executes an Order Stacking Burst (as seen in scalp.mp4).
-        Dispatches stack_count rapid orders of lot_per_order into LiteFinance broker.
+        Dispatches stack_count rapid orders of lot_per_order into LiteFinance broker with broker-side SL.
         """
         async with self._lock:
             if not self._page:
@@ -526,18 +550,19 @@ class LiteFinanceGateway:
 
             stack_count = max(1, min(20, stack_count))
             vol_str = f"{lot_per_order:.2f}"
+            sl_str = f"{sl_price:.2f}" if (sl_price and sl_price > 0) else None
             t0 = time.perf_counter()
 
             try:
-                res = await self._page.evaluate("""async ({ dir, count, vol }) => {
+                res = await self._page.evaluate("""async ({ dir, count, vol, sl }) => {
                     if (typeof window.__executeFastBurst === 'function') {
-                        return await window.__executeFastBurst(dir, count, vol);
+                        return await window.__executeFastBurst(dir, count, vol, sl);
                     }
                     if (typeof window.__executeFastMarketOrder === 'function') {
-                        return window.__executeFastMarketOrder(dir, vol);
+                        return window.__executeFastMarketOrder(dir, vol, sl);
                     }
                     return { success: false, error: 'NO_BURST_EXECUTION_FUNCTION' };
-                }""", {"dir": direction, "count": stack_count, "vol": vol_str})
+                }""", {"dir": direction, "count": stack_count, "vol": vol_str, "sl": sl_str})
 
                 latency_ms = (time.perf_counter() - t0) * 1000.0
 
@@ -549,8 +574,8 @@ class LiteFinanceGateway:
                 executed_count = res.get("executed", stack_count)
                 actual_total_vol = round(executed_count * lot_per_order, 2)
                 logger.info(
-                    "⚡ ORDER STACK BURST SENT: %s %d orders x %.2f lots (= %.2f lots total) | Dispatch Latency: %.2fms",
-                    direction, executed_count, lot_per_order, actual_total_vol, latency_ms
+                    "⚡ ORDER STACK BURST SENT: %s %d orders x %.2f lots (= %.2f lots total) | SL: %s | Dispatch Latency: %.2fms",
+                    direction, executed_count, lot_per_order, actual_total_vol, sl_str or "NONE", latency_ms
                 )
 
                 return {
@@ -559,6 +584,7 @@ class LiteFinanceGateway:
                     "orders_dispatched": executed_count,
                     "lot_per_order": lot_per_order,
                     "total_volume": actual_total_vol,
+                    "sl_price": sl_price,
                     "latency_ms": latency_ms,
                     "button": res.get("button", direction),
                 }
@@ -570,6 +596,7 @@ class LiteFinanceGateway:
         """
         Emergency / Profit spike flatten: atomic execution across all open tickets.
         Directly targets .js_trade_action_close and auto-opens portfolio drawer if needed.
+        Includes table scroll-fold support to ensure tickets 6-10 are not missed.
         """
         async with self._lock:
             if not self._page:
@@ -580,12 +607,12 @@ class LiteFinanceGateway:
                 # 1. Close any positions whose close button is already visible
                 closed_count = await self._page.evaluate("""() => {
                     const closeBtns = Array.from(document.querySelectorAll('.js_trade_action_close, a.btn_red.js_trade_action_close, .btn_close, [class*="close_trade"]')).filter(b => b.getBoundingClientRect().width > 0);
-                    closedCount = 0;
+                    let count = 0;
                     closeBtns.forEach(b => {
                         b.click();
-                        closedCount++;
+                        count++;
                     });
-                    return closedCount;
+                    return count;
                 }""")
 
                 # 2. If no buttons were immediately visible, ensure portfolio drawer is open
@@ -619,16 +646,21 @@ class LiteFinanceGateway:
                     confirmBtns.forEach(cb => cb.click());
                 }""")
 
-                # 4. Multi-Attempt Verification: Check if margin assets are still tied up
+                # 4. Multi-Attempt Verification with Scroll-Fold Flattening
                 acc = await self.get_account_snapshot(force_fresh=True)
                 if acc.assets_used > 0.0:
-                    logger.warning("⚠️ Assets still tied up ($%.2f) after initial flatten. Triggering failsafe drawer close...", acc.assets_used)
-                    for retry in range(2):
+                    logger.warning("⚠️ Assets still tied up ($%.2f) after initial flatten. Triggering failsafe scroll flatten...", acc.assets_used)
+                    for retry in range(4):
                         await self._page.evaluate("""() => {
                             const portBtn = Array.from(document.querySelectorAll('a, button, div')).find(el => (el.innerText || '').includes('PORTFOLIO'));
                             if (portBtn) portBtn.click();
+                            // Scroll table container to reveal tickets hidden below fold
+                            const scrollable = document.querySelector('.portfolio_table, .ui-scrollable, .portfolio_trades, .data_table_wrap, [class*="portfolio"]') || document.querySelector('.js_scrollable');
+                            if (scrollable) {
+                                scrollable.scrollTop += 300;
+                            }
                         }""")
-                        await self._page.wait_for_timeout(300)
+                        await self._page.wait_for_timeout(250)
                         extra_closed = await self._page.evaluate("""() => {
                             const btns = Array.from(document.querySelectorAll('button, a')).filter(b => {
                                 const cls = (b.className || '').toLowerCase();
@@ -640,9 +672,17 @@ class LiteFinanceGateway:
                         }""")
                         closed_count += extra_closed
                         await self._page.wait_for_timeout(200)
+                        # Confirm modals
+                        await self._page.evaluate("""() => {
+                            const confirmBtns = Array.from(document.querySelectorAll('button, a.btn')).filter(x => {
+                                const t = (x.innerText || '').trim();
+                                return (t === 'Close' || t === 'Yes' || t === 'Confirm' || t === 'OK') && x.getBoundingClientRect().width > 0;
+                            });
+                            confirmBtns.forEach(cb => cb.click());
+                        }""")
                         acc = await self.get_account_snapshot(force_fresh=True)
                         if acc.assets_used <= 0.0:
-                            logger.info("✅ Failsafe flatten succeeded: 0 assets in use.")
+                            logger.info("✅ Failsafe scroll flatten succeeded: 0 assets in use.")
                             break
 
                 latency_ms = (time.perf_counter() - t0) * 1000.0

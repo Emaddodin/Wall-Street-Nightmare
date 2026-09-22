@@ -143,6 +143,15 @@ class MicroExitController:
         self.consecutive_stalls = 0
         self.last_price = self.entry_price
 
+        # Compute volume-adjusted dynamic risk ceiling with spread cushion
+        if self.sl_price > 0.0 and self.total_volume > 0.0:
+            structural_dist = abs(self.entry_price - self.sl_price)
+            multiplier = 100.0 if self.cfg.symbol == "XAUUSD" else 100000.0
+            computed_risk = structural_dist * multiplier * self.total_volume
+            self.dynamic_hard_stop = max(self.cfg.hard_risk_stop_usd, computed_risk * 1.15)
+        else:
+            self.dynamic_hard_stop = self.cfg.hard_risk_stop_usd
+
     def evaluate_tick(
         self,
         current_price: float,
@@ -200,7 +209,8 @@ class MicroExitController:
             elif self.direction == "SELL" and current_price >= self.sl_price:
                 sl_violated = True
 
-        if floating_pnl <= -self.cfg.hard_risk_stop_usd or sl_violated:
+        effective_stop_usd = getattr(self, "dynamic_hard_stop", self.cfg.hard_risk_stop_usd)
+        if floating_pnl <= -effective_stop_usd or sl_violated:
             return ExitDecision(
                 should_exit=True,
                 reason=f"🛑 Hard Risk Stop Hit (PnL: ${floating_pnl:.2f}, SL: {self.sl_price:.2f})",

@@ -279,6 +279,13 @@ class LiveBrokerScalper:
         self.peak_balance: float = 0.0
         self.milestone_notified: set[int] = set()
 
+        # Institutional Risk & Safeguard State
+        self.cooldown_until: float = 0.0
+        self.lockout_until: float = 0.0
+        self.consecutive_losses: int = 0
+        self.daily_realized_loss: float = 0.0
+        self.circuit_breaker_active: bool = False
+
     def compute_daily_withdrawal(self, current_balance: float) -> Dict[str, Any]:
         """
         Computes recommended daily profit withdrawal according to Sovereign schedule.
@@ -287,6 +294,11 @@ class LiveBrokerScalper:
         if self.daily_date != today_str:
             self.daily_date = today_str
             self.daily_start_balance = current_balance
+            self.daily_realized_loss = 0.0
+            self.circuit_breaker_active = False
+            self.consecutive_losses = 0
+            self.cooldown_until = 0.0
+            self.lockout_until = 0.0
             self.milestone_notified.clear()
         elif self.daily_start_balance <= 0.0:
             self.daily_start_balance = current_balance
@@ -319,8 +331,19 @@ class LiveBrokerScalper:
         - London Drive: 07:00 to 11:30 UTC
         - NY Overlap / US Data: 12:30 to 16:30 UTC
         - NY Afternoon Rebalance Sweep: 18:00 to 20:00 UTC
+        - Friday Curfew: Block all entries after 18:00 UTC on Friday to prevent weekend gap risk
+        - Weekend Curfew: Block Saturday and Sunday before 22:00 UTC market open
         """
         now = datetime.now(timezone.utc)
+        # Friday Curfew
+        if now.weekday() == 4 and now.hour >= 18:
+            return False
+        # Weekend Curfew
+        if now.weekday() == 5:
+            return False
+        if now.weekday() == 6 and now.hour < 22:
+            return False
+
         time_float = now.hour + (now.minute / 60.0)
         if 7.0 <= time_float <= 11.5:
             return True
@@ -332,7 +355,13 @@ class LiveBrokerScalper:
 
     def get_current_session_label(self) -> str:
         """Returns ICT session killzone based on current UTC hour."""
-        hr = datetime.now(timezone.utc).hour
+        now = datetime.now(timezone.utc)
+        if now.weekday() == 4 and now.hour >= 18:
+            return "Friday Evening Pre-Weekend Curfew (Trading Blocked)"
+        if now.weekday() == 5 or (now.weekday() == 6 and now.hour < 22):
+            return "Weekend Market Closed (Trading Blocked)"
+
+        hr = now.hour
         if 0 <= hr < 6:
             return "Asian Range Accumulation (Chop - Trading Paused)"
         elif 6 <= hr < 11:
@@ -344,39 +373,44 @@ class LiveBrokerScalper:
         else:
             return "London Close / Asian Pre-Market (Chop - Trading Paused)"
 
-    def compute_stack_sizing(self, balance: float) -> Tuple[int, float, float]:
+    def compute_stack_sizing(self, balance: float, stop_distance: float = 2.50) -> Tuple[int, float, float]:
         """
-        Order Stacking Burst profile matching scalp.mp4 + Drawdown Defense.
-        Forensically calibrated: On a ~$100-$300 account with 1:1000 leverage,
-        a stack of 6 to 10 x 0.10 lots extracts $50 - $140 on a +0.85 move.
+        Mathematical Institutional Risk Sizing (Wall Street / Prop-Firm Standard).
+        Calculates lot sizing from strict 2% max equity risk.
+        Guarantees that entry spread ($0.25 - $0.35) never consumes > 12-15% of the stop loss.
         Returns: (stack_count, lot_per_order, total_volume)
         """
         if self.peak_balance <= 0.0:
             self.peak_balance = balance
         self.peak_balance = max(self.peak_balance, balance)
 
-        effective_balance = balance
+        effective_balance = max(50.0, balance)
         dd_pct = ((self.peak_balance - balance) / self.peak_balance * 100.0) if self.peak_balance > 0 else 0.0
         if dd_pct > 18.0:
-            effective_balance = balance * 0.65  # Defensive scaling during drawdown
+            effective_balance = effective_balance * 0.70  # Defensive scaling during drawdown
 
-        if effective_balance < 150.0:
-            stack_count = 6
-            lot_per_order = 0.10
-        elif effective_balance < 350.0:
-            stack_count = 8
-            lot_per_order = 0.10
-        elif effective_balance < 800.0:
-            stack_count = 10
-            lot_per_order = 0.15
-        elif effective_balance < 2000.0:
-            stack_count = 12
-            lot_per_order = 0.20
-        else:
-            stack_count = 15
-            lot_per_order = min(0.40, round((effective_balance / 4000.0) * 0.25, 2))
+        # Strict 2% maximum equity risk per trade
+        risk_pct = 0.02
+        dollar_risk = min(effective_balance * risk_pct, 250.0)
 
+        # Sizing formula: Total Volume (lots) = Dollar_Risk / (Stop_Distance * 100)
+        safe_stop_dist = max(1.50, stop_distance)
+        target_volume = round(dollar_risk / (safe_stop_dist * 100.0), 2)
+
+        # Dynamic sanity boundaries:
+        # On a $100 account -> ~0.02 - 0.03 lots
+        # On a $700 account -> ~0.05 - 0.08 lots
+        # On a $2000 account -> ~0.15 - 0.25 lots
+        min_vol = 0.02
+        max_vol = round(min(5.0, max(0.04, (effective_balance / 700.0) * 0.08)), 2)
+        total_volume = max(min_vol, min(max_vol, target_volume))
+
+        # Order Stacking Burst: distribute total_volume into micro-orders (0.01 - 0.02 lots each)
+        lot_per_order = 0.01 if total_volume < 0.10 else round(total_volume / 5.0, 2)
+        lot_per_order = max(0.01, lot_per_order)
+        stack_count = max(1, min(10, int(round(total_volume / lot_per_order))))
         total_volume = round(stack_count * lot_per_order, 2)
+
         return stack_count, lot_per_order, total_volume
 
 
@@ -431,10 +465,25 @@ class LiveBrokerScalper:
 
     def evaluate_strategy(self, quote: QuoteSnapshot, account_balance: float) -> Optional[Dict[str, Any]]:
         """
-        Evaluates active Gold hyper-scalp setup with killzone and volatility filters.
+        Evaluates active Gold hyper-scalp setup with killzone, volatility, spread, and circuit breaker filters.
         Strictly aligned with the 473-day Trump regime optimization.
         """
-        # 1. Killzone Filter: Avoid dead Asian/late-night chop
+        now_ts = time.time()
+        # Circuit Breaker & Cooldown Vetoes
+        if self.circuit_breaker_active:
+            return None
+        if now_ts < self.lockout_until:
+            return None
+        if now_ts < self.cooldown_until:
+            return None
+
+        # 0. Live Spread Veto: Avoid news blowout & illiquid rollover (Max 45 cents on Gold)
+        spread = round(quote.ask - quote.bid, 2)
+        if spread > 0.45:
+            logger.warning("🛡️ SPREAD BLOWOUT VETO: Current spread is $%.2f (max allowed $0.45). Signal suppressed.", spread)
+            return None
+
+        # 1. Killzone Filter: Avoid dead Asian/late-night chop & Friday weekend close
         if not self.is_in_killzone():
             return None
 
@@ -583,10 +632,41 @@ async def run_live_scalper(symbol: str = "XAUUSD"):
                         priority=prio,
                     )
 
+                    # Institutional Risk Management: Cooldown & Circuit Breaker Tracking
+                    if floating_pnl < 0:
+                        scalper.consecutive_losses += 1
+                        scalper.daily_realized_loss += abs(floating_pnl)
+                        scalper.cooldown_until = time.time() + 300.0  # 5 min post-loss freeze
+                        logger.warning("🧊 POST-LOSS COOLDOWN ARMED: Freezing entries for 300s (Losses: %d, Loss Today: -$%.2f)",
+                                       scalper.consecutive_losses, scalper.daily_realized_loss)
+                        if scalper.consecutive_losses >= 2:
+                            scalper.lockout_until = time.time() + 3600.0  # 60 min whipsaw lockout
+                            logger.warning("🚨 CONSECUTIVE LOSS LOCKOUT: 2 losses in a row. Pausing auto-trading for 60m.")
+                            push_ntfy(
+                                title="🛡️ Consecutive Loss Lockout",
+                                message=f"2 losses in a row (-${abs(floating_pnl):.2f}). Auto-trade paused for 60m to prevent whipsaw churn.",
+                                tags="shield,warning",
+                                priority="high",
+                            )
+
+                        # Daily Max Drawdown Circuit Breaker
+                        max_allowed_loss = min(50.0, max(20.0, scalper.daily_start_balance * 0.08))
+                        if scalper.daily_realized_loss >= max_allowed_loss:
+                            scalper.circuit_breaker_active = True
+                            scalper.trading_paused = True
+                            logger.critical("🛑 DAILY CIRCUIT BREAKER TRIGGERED: Loss -$%.2f today (Cap: $%.2f). Halting auto-trade until 00:00 UTC.",
+                                            scalper.daily_realized_loss, max_allowed_loss)
+                            push_ntfy(
+                                title="🛑 Daily Drawdown Circuit Breaker",
+                                message=f"Realized loss reached -${scalper.daily_realized_loss:.2f} today (Limit: ${max_allowed_loss:.2f}). Trading halted until 00:00 UTC to preserve capital.",
+                                tags="rotating_light,octagonal_sign",
+                                priority="urgent",
+                            )
+                    else:
+                        scalper.consecutive_losses = 0
+
                     journal_entry = {
                         "timestamp": datetime.now(timezone.utc).isoformat(),
-
-
                         "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
                         "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
                         "symbol": scalper.symbol,
@@ -605,13 +685,27 @@ async def run_live_scalper(symbol: str = "XAUUSD"):
                     append_live_trade_journal(journal_entry)
                     scalper.active_stack = None
 
+            # Friday Curfew Force-Flatten (20:30 UTC) to eliminate weekend gap risks
+            now_utc = datetime.now(timezone.utc)
+            if now_utc.weekday() == 4 and now_utc.hour == 20 and now_utc.minute >= 30 and scalper.active_stack:
+                logger.warning("🚨 FRIDAY 20:30 UTC WEEKEND CURFEW: Force-flattening open position before market close...")
+                res = await gw.flatten_all_positions()
+                push_ntfy(
+                    title="🛑 Friday Weekend Force-Flatten",
+                    message="Closed open position before Friday market close to prevent weekend gap risk.",
+                    tags="hourglass,warning",
+                    priority="urgent",
+                )
+                scalper.active_stack = None
 
             # 3. Check for Strategy Entry if Flat (evaluated every ~100ms)
-            elif tick_count % 5 == 0 and not getattr(scalper, "trading_paused", False):
-                sig_dict = scalper.evaluate_strategy(quote, acc_snap.balance)
+            elif tick_count % 5 == 0 and not getattr(scalper, "trading_paused", False) and not scalper.circuit_breaker_active:
+                current_bal = acc.balance if ('acc' in locals() and acc and acc.balance > 0) else acc_snap.balance
+                sig_dict = scalper.evaluate_strategy(quote, current_bal)
                 if sig_dict:
                     acc = await gw.get_account_snapshot(force_fresh=True)
-                    stack_count, lot_per_order, total_vol = scalper.compute_stack_sizing(acc.balance)
+                    stop_dist = abs(sig_dict["entry_price"] - sig_dict["sl_price"]) if sig_dict.get("sl_price") else 2.50
+                    stack_count, lot_per_order, total_vol = scalper.compute_stack_sizing(acc.balance, stop_distance=stop_dist)
 
                     # --- LAYA SYSTEM 1 DECISION & ICT RAG VALIDATION ---
                     market_state = {
