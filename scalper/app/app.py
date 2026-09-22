@@ -318,16 +318,16 @@ class HFTHandler(BaseHTTPRequestHandler):
 
         if path == "/manifest.json":
             manifest = {
-                "name": "Wall Street · Stratton Oakmont Quant Desk",
-                "short_name": "Wall Street",
+                "name": "Stratton · Institutional Quant Desk",
+                "short_name": "Stratton",
                 "start_url": "/",
                 "display": "standalone",
-                "background_color": "#000000",
-                "theme_color": "#000000",
+                "background_color": "#0A1120",
+                "theme_color": "#0A1120",
                 "icons": [
-                    {"src": "/icon-192.png?v=5", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-                    {"src": "/icon-512.png?v=5", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
-                    {"src": "/icon-180.png?v=5", "sizes": "180x180", "type": "image/png", "purpose": "any"}
+                    {"src": "/icon-192.png?v=8", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+                    {"src": "/icon-512.png?v=8", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+                    {"src": "/icon-180.png?v=8", "sizes": "180x180", "type": "image/png", "purpose": "any"}
                 ]
             }
             body = json.dumps(manifest).encode("utf-8")
@@ -423,8 +423,8 @@ class HFTHandler(BaseHTTPRequestHandler):
             try:
                 from scalper.web_push import send_web_push
                 sent = send_web_push(
-                    title="🟢 Stratton Oakmont Test Push",
-                    message="Native Web Push notification connected successfully to your device!",
+                    title="🟢 Stratton Push Active",
+                    message="Direct 1-line stream connected · Zero lag verified",
                     tag="test-push",
                 )
                 res = json.dumps({"ok": True, "sent": sent, "msg": f"Dispatched to {sent} active device(s)"}).encode("utf-8")

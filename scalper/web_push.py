@@ -129,6 +129,46 @@ def remove_subscription(endpoint: str) -> None:
         save_subscriptions(filtered)
 
 
+def _clean_minimal_text(title: str, message: str) -> tuple[str, str]:
+    """
+    Formats notification into ultra-clean, glanceable 1-line texts for iPhone lockscreen.
+    Ensures the user can read and understand the update in a single 1-second glance.
+    """
+    clean_title = title.strip()
+    
+    # Simplification patterns for known Stratton alerts
+    if "TO THE MOON HARVEST" in clean_title:
+        clean_title = clean_title.replace("TO THE MOON HARVEST", "Harvested")
+    elif "Trailing Profit Lock" in clean_title:
+        clean_title = clean_title.replace("Trailing Profit Lock", "Profit Locked")
+    elif "Trailing BE Hit" in clean_title:
+        clean_title = clean_title.replace("Trailing BE Hit", "BE Secured")
+
+    lines = [l.strip() for l in message.strip().splitlines() if l.strip()]
+    
+    # Extract concise summary if multiline trade alert
+    body_parts = []
+    for line in lines:
+        if line.startswith("Closed @") or line.startswith("New Balance:") or line.startswith("Harvested spike @"):
+            body_parts.append(line.replace("🌕", "").strip())
+        elif line.startswith("Entry:") or line.startswith("SL:") or line.startswith("Spike:"):
+            body_parts.append(line)
+        elif line.startswith("Today's Profit:") or line.startswith("Retained for Compounding:"):
+            body_parts.append(line)
+            
+    if body_parts:
+        clean_body = " · ".join(body_parts)
+    else:
+        clean_body = " · ".join(lines)
+
+    # Condense into clean 1-line string (max 120 chars)
+    clean_body = clean_body.replace("  ", " ").replace(" | ", " · ")
+    if len(clean_body) > 120:
+        clean_body = clean_body[:117] + "..."
+        
+    return clean_title, clean_body
+
+
 def send_web_push(
     title: str,
     message: str,
@@ -149,9 +189,11 @@ def send_web_push(
     priv_key = keys["private"]
     claims = dict(keys.get("claims", {"sub": VAPID_SUBJECT}))
 
+    clean_title, clean_body = _clean_minimal_text(title, message)
+
     payload = json.dumps({
-        "title": title,
-        "body": message,
+        "title": clean_title,
+        "body": clean_body,
         "tag": tag,
         "url": url,
         "icon": icon,
