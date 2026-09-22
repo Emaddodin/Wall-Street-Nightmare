@@ -213,9 +213,12 @@ class LiteFinanceGateway:
                             }
                             const slInput = document.querySelector('#stop_loss_price_1');
                             if (slInput) {
+                                slInput.focus();
                                 slInput.value = slPrice;
                                 slInput.dispatchEvent(new Event('input', { bubbles: true }));
                                 slInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                slInput.dispatchEvent(new Event('keyup', { bubbles: true }));
+                                slInput.blur();
                             }
                         } catch(e) {}
                     };
@@ -395,7 +398,9 @@ class LiteFinanceGateway:
     async def get_account_snapshot(self, force_fresh: bool = False) -> AccountSnapshot:
         """Reads real-time balance, assets used, available margin, and floating change with RAM cache."""
         now = time.time()
-        if not force_fresh and self._last_account and (now - self._last_account_ts) < 2.0:
+        # Rate-limit CDP round-trips to at most once per 250ms even if force_fresh=True
+        min_interval = 0.25 if force_fresh else 2.0
+        if self._last_account and (now - self._last_account_ts) < min_interval:
             return self._last_account
 
         if not self._page:

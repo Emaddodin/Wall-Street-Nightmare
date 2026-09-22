@@ -26,6 +26,7 @@ from scalper.brain.ict_rag import get_ict_rag
 from scalper.brain.macro_watchdog import get_macro_watchdog
 from scalper.brain.regime_prior_engine import get_regime_prior_engine, RegimePriorEngine, RegimePriorEvaluation
 from scalper.brain.politician_brain import get_politician_brain, PoliticianBrain, PoliticalAssessment
+from scalper.brain.trade_journal_rag import get_trade_journal_rag, TradeJournalRAG, TradeRagEvaluation
 
 logger = logging.getLogger("laya_oracle")
 
@@ -50,6 +51,10 @@ class LayaDecision:
     macro_bias: str = ""
     geopolitical_heat: float = 50.0
     tp_expansion_multiplier: float = 1.0
+    max_safe_holding_min: int = 25
+    rag_twin_win_rate: float = 80.0
+    rag_trap_risk: float = 0.15
+    rag_dominant_exit: str = "MACRO_SPIKE_HARVEST"
 
 
 class LayaOracle:
@@ -70,6 +75,7 @@ class LayaOracle:
         self.watchdog = get_macro_watchdog()
         self.regime = get_regime_prior_engine()
         self.politician = get_politician_brain()
+        self.trade_rag = get_trade_journal_rag()
 
         # Asynchronously warmup model in background
         self._executor.submit(self._warmup_model)
@@ -186,6 +192,40 @@ class LayaOracle:
                 tp_expansion_multiplier=1.0,
             )
 
+        # 3.5 Consult 473-Day Granular Trade Journal RAG (Historical Twins Empirical Memory)
+        rag_eval = self.trade_rag.query_historical_twins({
+            "direction": direction,
+            "setup_type": strategy_name,
+            "hour_utc": hour_utc,
+            "wick_ratio": wick_ratio,
+            "atr_entry": float(market_state.get("atr_entry", market_state.get("atr_1m", 1.80))),
+            "politician_regime": pol_eval.regime.value,
+        }, top_k=15)
+
+        if not rag_eval.is_allowed:
+            latency = (time.perf_counter() - t0) * 1000.0
+            return LayaDecision(
+                is_valid=False,
+                setup_grade="toxic_trap",
+                trap_probability=rag_eval.trap_risk_pct,
+                confluence_score=1.5,
+                confidence=0.96,
+                compounding_multiplier=0.0,
+                decision_latency_ms=latency,
+                matched_ict_concepts=["Empirical RAG Trade Twin Veto"],
+                reasoning=f"Vetoed by Trade Journal RAG: {rag_eval.regime_notes}",
+                empirical_win_rate_pct=rag_eval.win_rate_pct,
+                regime_notes=rag_eval.regime_notes,
+                political_regime=pol_eval.regime.value,
+                macro_bias=pol_eval.macro_bias.value,
+                geopolitical_heat=pol_eval.geopolitical_heat_index,
+                tp_expansion_multiplier=1.0,
+                max_safe_holding_min=rag_eval.max_safe_holding_min,
+                rag_twin_win_rate=rag_eval.win_rate_pct,
+                rag_trap_risk=rag_eval.trap_risk_pct,
+                rag_dominant_exit=rag_eval.dominant_exit_reason,
+            )
+
         # 4. Retrieve Matching ICT Knowledge Concepts
         rag_context = self.rag.retrieve_context(market_state, top_k=3)
         matched_titles = rag_context.get("top_concept_titles", ["S&R Breakout", "Candle Rejection"])
@@ -255,6 +295,13 @@ class LayaOracle:
                     conf_score = max(conf_score, regime_eval.confluence_boost)
                     compounding_mult = max(compounding_mult, regime_eval.compounding_multiplier)
 
+                # Blend with Trade Journal RAG Twins (Historical Empirical Memory)
+                if rag_eval.recommendation == "SOVEREIGN_CONFLUENCE":
+                    conf_score = min(10.0, max(conf_score, 9.5))
+                    compounding_mult = max(compounding_mult, 1.40)
+                elif rag_eval.recommendation == "REDUCE_SIZE":
+                    compounding_mult = min(compounding_mult, 0.85)
+
                 # Blend with Politician & Fundamental Brain (The Sword)
                 if pol_eval.alpha_boost_multiplier > 1.0:
                     compounding_mult = max(compounding_mult, pol_eval.alpha_boost_multiplier)
@@ -272,13 +319,17 @@ class LayaOracle:
                     compounding_multiplier=compounding_mult,
                     decision_latency_ms=latency,
                     matched_ict_concepts=matched_titles,
-                    reasoning=f"Laya System 1: Grade {grade} (Conf: {confidence*100:.1f}%, Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, Pol: {pol_eval.regime.value})",
+                    reasoning=f"Laya System 1: Grade {grade} (Conf: {confidence*100:.1f}%, Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, Twins WR: {rag_eval.win_rate_pct:.1f}%, Pol: {pol_eval.regime.value})",
                     empirical_win_rate_pct=regime_eval.empirical_win_rate_pct,
-                    regime_notes=f"{regime_eval.regime_notes} | {pol_eval.active_catalyst}",
+                    regime_notes=f"{regime_eval.regime_notes} | {rag_eval.regime_notes} | {pol_eval.active_catalyst}",
                     political_regime=pol_eval.regime.value,
                     macro_bias=pol_eval.macro_bias.value,
                     geopolitical_heat=pol_eval.geopolitical_heat_index,
                     tp_expansion_multiplier=pol_eval.tp_expansion_multiplier,
+                    max_safe_holding_min=rag_eval.max_safe_holding_min,
+                    rag_twin_win_rate=rag_eval.win_rate_pct,
+                    rag_trap_risk=rag_eval.trap_risk_pct,
+                    rag_dominant_exit=rag_eval.dominant_exit_reason,
                 )
                 self._last_decision = decision
                 return decision
@@ -310,6 +361,13 @@ class LayaOracle:
             1.50 if grade == "A_plus_prime" else 1.25 if grade == "high_probability" else 1.00 if is_valid else 0.00,
         )
 
+        # Blend with Trade Journal RAG Twins
+        if rag_eval.recommendation == "SOVEREIGN_CONFLUENCE":
+            conf_score = min(10.0, max(conf_score, 9.5))
+            compounding_mult = max(compounding_mult, 1.40)
+        elif rag_eval.recommendation == "REDUCE_SIZE":
+            compounding_mult = min(compounding_mult, 0.85)
+
         # Blend with Politician & Fundamental Brain (The Sword)
         if pol_eval.alpha_boost_multiplier > 1.0:
             compounding_mult = max(compounding_mult, pol_eval.alpha_boost_multiplier)
@@ -328,13 +386,17 @@ class LayaOracle:
             compounding_multiplier=compounding_mult,
             decision_latency_ms=latency,
             matched_ict_concepts=matched_titles,
-            reasoning=f"Laya Calibrated Engine: Grade {grade} (Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, Pol: {pol_eval.regime.value}, ICT: {', '.join(matched_titles[:2])})",
+            reasoning=f"Laya Calibrated Engine: Grade {grade} (Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, Twins WR: {rag_eval.win_rate_pct:.1f}%, Pol: {pol_eval.regime.value}, ICT: {', '.join(matched_titles[:2])})",
             empirical_win_rate_pct=regime_eval.empirical_win_rate_pct,
-            regime_notes=f"{regime_eval.regime_notes} | {pol_eval.active_catalyst}",
+            regime_notes=f"{regime_eval.regime_notes} | {rag_eval.regime_notes} | {pol_eval.active_catalyst}",
             political_regime=pol_eval.regime.value,
             macro_bias=pol_eval.macro_bias.value,
             geopolitical_heat=pol_eval.geopolitical_heat_index,
             tp_expansion_multiplier=pol_eval.tp_expansion_multiplier,
+            max_safe_holding_min=rag_eval.max_safe_holding_min,
+            rag_twin_win_rate=rag_eval.win_rate_pct,
+            rag_trap_risk=rag_eval.trap_risk_pct,
+            rag_dominant_exit=rag_eval.dominant_exit_reason,
         )
         self._last_decision = decision
         return decision
@@ -382,6 +444,12 @@ class LayaOracle:
             "political_regime": self.politician._current_regime.value,
             "macro_bias": self.politician._current_bias.value,
             "tp_expansion": f"{last_dec.tp_expansion_multiplier:.2f}x" if last_dec else "1.00x",
+            "rag_twins": {
+                "twin_win_rate": f"{last_dec.rag_twin_win_rate:.1f}%" if last_dec else "80.0%",
+                "trap_risk": f"{last_dec.rag_trap_risk*100:.1f}%" if last_dec else "15.0%",
+                "max_safe_holding_min": last_dec.max_safe_holding_min if last_dec else 25,
+                "dominant_exit": last_dec.rag_dominant_exit if last_dec else "MACRO_SPIKE_HARVEST",
+            },
         }
 
 

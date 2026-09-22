@@ -235,6 +235,7 @@ class LiveBrokerScalper:
         self.daily_realized_loss: float = 0.0
         self.circuit_breaker_active: bool = False
         self.trading_paused: bool = False
+        self.ghost_position_ticks: int = 0
 
     def compute_daily_withdrawal(self, current_balance: float) -> Dict[str, Any]:
         """
@@ -471,6 +472,18 @@ async def run_live_scalper():
             # 2. Check position state if in trade
             if scalper.active_stack:
                 acc = await gw.get_account_snapshot(force_fresh=True)
+                
+                # 2.1 Ghost Position Watchdog (if broker closed order or hit SL externally)
+                if acc.assets_used <= 0.0:
+                    scalper.ghost_position_ticks += 1
+                    if scalper.ghost_position_ticks >= 4:
+                        logger.warning("👻 GHOST POSITION DETECTED: Broker reports 0 assets used for 4 ticks. Clearing active stack.")
+                        scalper.active_stack = None
+                        scalper.ghost_position_ticks = 0
+                        continue
+                else:
+                    scalper.ghost_position_ticks = 0
+
                 floating_pnl = acc.floating_pnl
                 current_mid = quote.mid
                 scalper.active_stack["floating_pnl"] = floating_pnl
@@ -485,12 +498,25 @@ async def run_live_scalper():
                 # Distance moved in favorable direction in points ($/oz)
                 gain_pts = (current_mid - entry_px) if direction == "BUY" else (entry_px - current_mid)
 
+                # 2.2 Stagnation & Maximum Safe Holding Duration (from TradeJournalRAG)
+                time_held_sec = time.time() - scalper.active_stack["open_time"]
+                max_duration_sec = scalper.active_stack.get("max_safe_duration_sec", 1500.0) # ~25 mins default
+                stagnation_exit = False
+                stagnation_reason = ""
+                if time_held_sec >= max_duration_sec:
+                    if floating_pnl >= 3.0:
+                        stagnation_exit = True
+                        stagnation_reason = f"Stagnation Harvest: Locked +${floating_pnl:.2f} after {int(time_held_sec//60)}m (Historical Twin Edge Expired)"
+                    elif time_held_sec >= (max_duration_sec * 1.4):
+                        stagnation_exit = True
+                        stagnation_reason = f"Stagnation Scratch: Exited at ${floating_pnl:.2f} after {int(time_held_sec//60)}m (Avoid Lingering Reversal)"
+
                 # --- "To The Moon" Sovereign Trailing Ratchets & Bag Protection ---
 
                 # EDGE FIX 1: Dynamic Peak Watermark Bag Protection
-                # If floating profit reached >= $35 (or >= 6% of balance) and drops by >= 18% of peak -> LOCK CASH & EXIT!
+                # If floating profit reached >= $25 (or >= 5% of balance) and drops by >= 18% of peak -> LOCK CASH & EXIT!
                 peak_pnl = scalper.active_stack.get("peak_pnl", 0.0)
-                min_peak_threshold = max(30.0, 0.06 * acc.balance)
+                min_peak_threshold = max(25.0, 0.05 * acc.balance)
                 watermark_exit = False
                 if peak_pnl >= min_peak_threshold:
                     pullback_usd = peak_pnl - floating_pnl
@@ -516,9 +542,9 @@ async def run_live_scalper():
                 sl_hit = (direction == "BUY" and current_mid <= scalper.active_stack["sl_price"]) or \
                          (direction == "SELL" and current_mid >= scalper.active_stack["sl_price"])
 
-                # Hard single-trade loss ceiling (Never exceed 20% of account balance or $15 minimum)
+                # Hard single-trade loss ceiling (Strict 5% equity floor, maximum $35 on accounts under $1,000)
                 tier_mult = max(1.0, acc.balance / 100.0)
-                dynamic_risk_stop = max(MAX_RISK_STOP_USD, min(tier_mult * 15.0, 0.20 * acc.balance))
+                dynamic_risk_stop = max(MAX_RISK_STOP_USD, min(0.05 * acc.balance, 35.0 if acc.balance < 1000.0 else tier_mult * 25.0))
                 dynamic_spike_target = max(RAPID_SPIKE_TARGET_USD, tier_mult * 50.0)
 
                 # Check Friday 20:30 UTC force-flatten
@@ -555,6 +581,41 @@ async def run_live_scalper():
                         message=f"Locked +${floating_pnl:.2f} (Peak was +${peak_pnl:.2f}). Never let a winner become a loss!\nNew Balance: ${res.get('balance', acc.balance):.2f}",
                         tags="moneybag,shield",
                         priority="high",
+                    )
+                    scalper.active_stack = None
+
+                elif stagnation_exit:
+                    logger.info("⏳ %s: Mid: $%.2f | Floating PnL: $%.2f", stagnation_reason, current_mid, floating_pnl)
+                    res = await gw.flatten_all_positions()
+                    if floating_pnl < 0:
+                        scalper.consecutive_losses += 1
+                        scalper.daily_realized_loss += abs(floating_pnl)
+                        scalper.cooldown_until = time.time() + 180.0
+                    else:
+                        scalper.consecutive_losses = 0
+
+                    log_live_trade({
+                        "timestamp": time.time(),
+                        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                        "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+                        "symbol": "XAUUSD",
+                        "direction": direction,
+                        "strategy": scalper.active_stack.get("strategy_type", "TO_THE_MOON"),
+                        "entry_price": entry_px,
+                        "exit_price": current_mid,
+                        "volume": scalper.active_stack["volume"],
+                        "peak_floating_pnl": peak_pnl,
+                        "realized_pnl": floating_pnl,
+                        "exit_reason": "STAGNATION_TIME_DECAY_EXIT",
+                        "duration_min": max(1, int((time.time() - scalper.active_stack["open_time"]) // 60)),
+                        "balance_after": res.get("balance", acc.balance),
+                        "equity_after": res.get("balance", acc.balance),
+                    })
+                    push_ntfy(
+                        title=f"⏳ Stagnation Exit (${floating_pnl:+.2f})",
+                        message=f"{stagnation_reason}\nClosed @ ${current_mid:.2f}. Balance: ${res.get('balance', acc.balance):.2f}",
+                        tags="hourglass,shield" if floating_pnl >= 0 else "hourglass,warning",
+                        priority="high" if floating_pnl >= 0 else "default",
                     )
                     scalper.active_stack = None
 
@@ -704,6 +765,7 @@ async def run_live_scalper():
                                     "atr_1m": sig.atr_1m,
                                     "strategy_type": sig.strategy_type,
                                     "open_time": time.time(),
+                                    "max_safe_duration_sec": max(15, min(35, getattr(laya_decision, "max_safe_holding_min", 25))) * 60,
                                     "floating_pnl": 0.0,
                                     "peak_pnl": 0.0,
                                     "be_ratchet_hit": False,
