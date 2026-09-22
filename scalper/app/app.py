@@ -289,6 +289,30 @@ class HFTHandler(BaseHTTPRequestHandler):
 
         # 3. Static Icons / Assets & PWA Manifest (Wall Street Street Sign)
         static_dir = Path(__file__).resolve().parent / "static"
+        # Serve generic static files (css, js, images, fonts)
+        if path.startswith("/static/"):
+            asset_path = static_dir / path.lstrip("/")
+            if asset_path.exists():
+                data = asset_path.read_bytes()
+                mime = "application/octet-stream"
+                if asset_path.suffix == ".css":
+                    mime = "text/css"
+                elif asset_path.suffix == ".js":
+                    mime = "application/javascript"
+                elif asset_path.suffix == ".png":
+                    mime = "image/png"
+                elif asset_path.suffix == ".ico":
+                    mime = "image/x-icon"
+                elif asset_path.suffix == ".woff2":
+                    mime = "font/woff2"
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                if not head_only:
+                    self.wfile.write(data)
+                return
+        # Existing icon handling
         if path.startswith("/apple-touch-icon") or path in (
             "/icon-180.png", "/icon-192.png", "/icon-512.png",
             "/icon-1024.png", "/icon-512-maskable.png", "/logo.png", "/favicon.png"
@@ -355,7 +379,16 @@ class HFTHandler(BaseHTTPRequestHandler):
             if not head_only:
                 self.wfile.write(body)
             return
-
+        if path == "/glass":
+            body_path = Path(__file__).resolve().parent / "templates" / "glass.html"
+            body = body_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(body)
+            return
         # 5. Serve Terminal Dashboard
         body = _render_hft_terminal().encode("utf-8")
         self.send_response(200)

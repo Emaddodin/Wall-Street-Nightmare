@@ -1,0 +1,57 @@
+/* Glassy card style */
+@font-face {
+  font-family: "JPMC Tiempos";
+  src: url("/static/fonts/tiempos-text-web-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+}
+
+body {
+  background: url('/static/background.jpg') no-repeat center center fixed;
+  background-size: cover;
+  margin: 0;
+  font-family: "JPMC Tiempos", sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.glass-card {
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  padding: 2rem 3rem;
+  text-align: center;
+  color: #fff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.glass-card h1 {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.glass-card p {
+  margin: 0 0 1.5rem;
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+.glass-card button {
+  background: rgba(255, 255, 255, 0.25);
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.glass-card button:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
