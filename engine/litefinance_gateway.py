@@ -55,10 +55,12 @@ class LiteFinanceGateway:
         session_file: str = SESSION_PATH,
         proxy: str = PROXY_SERVER,
         chrome_path: str = CHROME_PATH,
+        symbol: str = "XAUUSD",
     ):
         self.session_file = session_file
         self.proxy = proxy
         self.chrome_path = chrome_path
+        self.symbol = symbol.upper().replace("/", "")
 
         self._playwright = None
         self._browser: Optional[Browser] = None
@@ -81,7 +83,7 @@ class LiteFinanceGateway:
         """Callback invoked directly from Chrome V8 MutationObserver on every price tick."""
         now = time.time()
         self._last_quote = QuoteSnapshot(
-            symbol="XAUUSD",
+            symbol=self.symbol,
             bid=float(bid),
             ask=float(ask),
             mid=float(mid),
@@ -149,8 +151,9 @@ class LiteFinanceGateway:
                 # Expose Python callback into Chrome V8 window for zero-polling quote stream
                 await self._page.expose_function("__onJsQuoteUpdate", self._on_js_quote_tick)
 
-                logger.info("Navigating to %s...", CHART_URL)
-                await self._page.goto(CHART_URL, wait_until="domcontentloaded", timeout=45000)
+                chart_url = f"https://my.litefinance.org/trading/chart?symbol={self.symbol}"
+                logger.info("Navigating to %s...", chart_url)
+                await self._page.goto(chart_url, wait_until="domcontentloaded", timeout=45000)
                 await self._page.wait_for_timeout(3000)
 
                 # Clear annoying overlays / 2FA popups
@@ -229,6 +232,46 @@ class LiteFinanceGateway:
                             return { success: true, text: btn.innerText.trim() || (isBuy ? 'BUY' : 'SELL') };
                         }
                         return { success: false, error: 'NO_VISIBLE_ORDER_BUTTON' };
+                    };
+
+                    // 3.1 Fast multi-order burst stacking function
+                    window.__executeFastBurst = async (dir, count, vol) => {
+                        const isBuy = (dir === 'BUY');
+                        const radioId = isBuy ? '#trade_buy_1' : '#trade_sell_1';
+                        const radio = document.querySelector(radioId);
+                        if (radio && !radio.checked) {
+                            radio.checked = true;
+                            radio.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        const label = document.querySelector('label[for="' + (isBuy ? 'trade_buy_1' : 'trade_sell_1') + '"]');
+                        if (label) label.click();
+
+                        const inp = document.querySelector('#volume_value_1');
+                        if (inp && inp.value !== vol) {
+                            inp.value = vol;
+                            inp.dispatchEvent(new Event('input', { bubbles: true }));
+                            inp.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+
+                        const btnSelector = isBuy ? 'button.btn_green.js_trade_action_open' : 'button.btn_red.js_trade_action_open';
+                        let btn = document.querySelector(btnSelector);
+                        if (!btn || btn.getBoundingClientRect().width === 0) {
+                            const allBtns = Array.from(document.querySelectorAll('button.js_trade_action_open, button[type="submit"]'));
+                            btn = allBtns.find(b => b.getBoundingClientRect().width > 0 && ((isBuy && (b.innerText || '').toUpperCase().includes('BUY')) || (!isBuy && (b.innerText || '').toUpperCase().includes('SELL')))) || allBtns.find(b => b.getBoundingClientRect().width > 0);
+                        }
+                        if (!btn || btn.getBoundingClientRect().width === 0) {
+                            return { success: false, error: 'NO_VISIBLE_ORDER_BUTTON', executed: 0 };
+                        }
+
+                        let executed = 0;
+                        for (let i = 0; i < count; i++) {
+                            btn.click();
+                            executed++;
+                            if (i < count - 1) {
+                                await new Promise(r => setTimeout(r, 30));
+                            }
+                        }
+                        return { success: true, executed, button: btn.innerText.trim() || (isBuy ? 'BUY' : 'SELL') };
                     };
 
                     // 4. Background account snapshot cache
@@ -457,6 +500,72 @@ class LiteFinanceGateway:
                 logger.error("Error opening broker order: %s", e)
                 return {"success": False, "error": str(e)}
 
+    async def execute_order_burst(
+        self,
+        direction: str,
+        total_volume: float,
+        stack_count: int = 5,
+        lot_per_order: float = 0.10,
+        sl_price: float = 0.0,
+    ) -> Dict[str, Any]:
+        """
+        Executes an Order Stacking Burst (as seen in scalp.mp4).
+        Dispatches stack_count rapid orders of lot_per_order into LiteFinance broker.
+        """
+        async with self._lock:
+            if not self._page:
+                return {"success": False, "error": "Gateway not initialized"}
+
+            direction = direction.upper()
+            if direction not in ("BUY", "SELL"):
+                return {"success": False, "error": f"Invalid direction: {direction}"}
+
+            # If lot_per_order not set or <= 0, divide total_volume by stack_count
+            if lot_per_order <= 0.0:
+                lot_per_order = max(0.01, round(total_volume / max(1, stack_count), 2))
+
+            stack_count = max(1, min(20, stack_count))
+            vol_str = f"{lot_per_order:.2f}"
+            t0 = time.perf_counter()
+
+            try:
+                res = await self._page.evaluate("""async ({ dir, count, vol }) => {
+                    if (typeof window.__executeFastBurst === 'function') {
+                        return await window.__executeFastBurst(dir, count, vol);
+                    }
+                    if (typeof window.__executeFastMarketOrder === 'function') {
+                        return window.__executeFastMarketOrder(dir, vol);
+                    }
+                    return { success: false, error: 'NO_BURST_EXECUTION_FUNCTION' };
+                }""", {"dir": direction, "count": stack_count, "vol": vol_str})
+
+                latency_ms = (time.perf_counter() - t0) * 1000.0
+
+                if not isinstance(res, dict) or not res.get("success"):
+                    err_msg = res.get("error", "Burst dispatch failed") if isinstance(res, dict) else str(res)
+                    logger.error("❌ BROKER BURST DISPATCH FAILED: %s", err_msg)
+                    return {"success": False, "error": err_msg}
+
+                executed_count = res.get("executed", stack_count)
+                actual_total_vol = round(executed_count * lot_per_order, 2)
+                logger.info(
+                    "⚡ ORDER STACK BURST SENT: %s %d orders x %.2f lots (= %.2f lots total) | Dispatch Latency: %.2fms",
+                    direction, executed_count, lot_per_order, actual_total_vol, latency_ms
+                )
+
+                return {
+                    "success": True,
+                    "direction": direction,
+                    "orders_dispatched": executed_count,
+                    "lot_per_order": lot_per_order,
+                    "total_volume": actual_total_vol,
+                    "latency_ms": latency_ms,
+                    "button": res.get("button", direction),
+                }
+            except Exception as e:
+                logger.error("Error in execute_order_burst: %s", e)
+                return {"success": False, "error": str(e)}
+
     async def flatten_all_positions(self) -> Dict[str, Any]:
         """
         Emergency / Profit spike flatten: atomic execution across all open tickets.
@@ -510,9 +619,36 @@ class LiteFinanceGateway:
                     confirmBtns.forEach(cb => cb.click());
                 }""")
 
-                latency_ms = (time.perf_counter() - t0) * 1000.0
+                # 4. Multi-Attempt Verification: Check if margin assets are still tied up
                 acc = await self.get_account_snapshot(force_fresh=True)
-                logger.info("⚡ ULTRA-FAST BROKER FLATTEN: Closed %s tickets | Latency: %.2fms | Balance: $%.2f", closed_count, latency_ms, acc.balance)
+                if acc.assets_used > 0.0:
+                    logger.warning("⚠️ Assets still tied up ($%.2f) after initial flatten. Triggering failsafe drawer close...", acc.assets_used)
+                    for retry in range(2):
+                        await self._page.evaluate("""() => {
+                            const portBtn = Array.from(document.querySelectorAll('a, button, div')).find(el => (el.innerText || '').includes('PORTFOLIO'));
+                            if (portBtn) portBtn.click();
+                        }""")
+                        await self._page.wait_for_timeout(300)
+                        extra_closed = await self._page.evaluate("""() => {
+                            const btns = Array.from(document.querySelectorAll('button, a')).filter(b => {
+                                const cls = (b.className || '').toLowerCase();
+                                const txt = (b.innerText || '').trim().toLowerCase();
+                                return (cls.includes('close') || txt === 'close' || txt.includes('close all')) && b.getBoundingClientRect().width > 0;
+                            });
+                            btns.forEach(b => b.click());
+                            return btns.length;
+                        }""")
+                        closed_count += extra_closed
+                        await self._page.wait_for_timeout(200)
+                        acc = await self.get_account_snapshot(force_fresh=True)
+                        if acc.assets_used <= 0.0:
+                            logger.info("✅ Failsafe flatten succeeded: 0 assets in use.")
+                            break
+
+                latency_ms = (time.perf_counter() - t0) * 1000.0
+                logger.info("⚡ ULTRA-FAST BROKER FLATTEN: Closed %s tickets | Latency: %.2fms | Balance: $%.2f | Assets Used: $%.2f",
+                            closed_count, latency_ms, acc.balance, acc.assets_used)
+
 
                 return {
                     "success": True,
