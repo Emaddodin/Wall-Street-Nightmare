@@ -167,6 +167,7 @@ def sync_dashboard_state(
     last_latency_ms: float = 0.0,
     laya_telemetry: Optional[Dict[str, Any]] = None,
     daily_withdrawal: Optional[Dict[str, Any]] = None,
+    bot_running: bool = True,
 ) -> None:
     """Syncs live broker telemetry to HFT dashboard JSON file."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -174,8 +175,9 @@ def sync_dashboard_state(
 
     payload = {
         "engine": "XAUUSD Stratton Oakmont Broker LIVE Engine",
-        "status": "ACTIVE",
-        "fsm_state": "IN_POSITION" if active_pos else "SCANNING",
+        "status": "ACTIVE" if bot_running else "PAUSED",
+        "bot_running": bot_running,
+        "fsm_state": "IN_POSITION" if active_pos else ("PAUSED" if not bot_running else "SCANNING"),
         "mode": "BROKER LIVE (LiteFinance MT5 Demo #91456523)",
         "symbol": "XAUUSD",
         "balance": round(balance, 2),
@@ -380,7 +382,8 @@ async def run_live_scalper():
                     with open(cmd_file, "r") as f:
                         cmd = json.load(f)
                     cmd_file.unlink(missing_ok=True)
-                    if cmd.get("action") == "FLATTEN":
+                    action = cmd.get("action")
+                    if action == "FLATTEN":
                         logger.warning("🚨 EMERGENCY FLATTEN SIGNAL RECEIVED FROM DASHBOARD!")
                         res = await gw.flatten_all_positions()
                         push_ntfy(
@@ -390,6 +393,15 @@ async def run_live_scalper():
                             priority="urgent",
                         )
                         scalper.active_stack = None
+                    elif action == "PAUSE":
+                        logger.warning("⏸️ BOT AUTO-TRADE PAUSED VIA DASHBOARD")
+                        scalper.trading_paused = True
+                    elif action == "RESUME":
+                        logger.info("▶️ BOT AUTO-TRADE RESUMED VIA DASHBOARD")
+                        scalper.trading_paused = False
+                    elif action == "TOGGLE_PAUSE":
+                        scalper.trading_paused = not getattr(scalper, "trading_paused", False)
+                        logger.info("🔄 BOT TRADING TOGGLED: paused=%s", scalper.trading_paused)
                 except Exception as ce:
                     logger.warning("Error processing dashboard command: %s", ce)
 
@@ -492,7 +504,7 @@ async def run_live_scalper():
                         scalper.active_stack = None
 
             # 3. Check for Strategy Entry if Flat (evaluated every ~250ms)
-            elif tick_count % 5 == 0:
+            elif tick_count % 5 == 0 and not getattr(scalper, "trading_paused", False):
                 sig: Optional[ApexSignal] = scalper.evaluate_strategy()
                 if sig:
                     acc = await gw.get_account_snapshot(force_fresh=True)
@@ -592,7 +604,8 @@ async def run_live_scalper():
                     last_latency_ms=scalper.last_latency_ms,
                     laya_telemetry=laya_oracle.get_telemetry(),
                     daily_withdrawal=withdrawal_info,
-                    message="Trading on LiteFinance MT5 Demo" if not scalper.active_stack else f"In {scalper.active_stack['direction']} position ({scalper.active_stack['volume']} lots)",
+                    bot_running=not getattr(scalper, "trading_paused", False),
+                    message=("Trading on LiteFinance MT5 Demo" if not scalper.active_stack else f"In {scalper.active_stack['direction']} position ({scalper.active_stack['volume']} lots)") if not getattr(scalper, "trading_paused", False) else "Auto-trade paused via dashboard",
                 )
 
             # Micro-yield (20ms) to keep CPU cool while maintaining sub-millisecond reactivity

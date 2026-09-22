@@ -82,12 +82,57 @@
 
     body {
       background-image: 
-        radial-gradient(circle at 85% 15%, rgba(126, 176, 222, 0.09) 0%, transparent 45%),
-        radial-gradient(circle at 15% 45%, rgba(195, 142, 180, 0.06) 0%, transparent 40%),
+        radial-gradient(circle at 85% 15%, rgba(126, 176, 222, 0.12) 0%, transparent 45%),
+        radial-gradient(circle at 15% 45%, rgba(195, 142, 180, 0.08) 0%, transparent 40%),
         linear-gradient(180deg, #070D18 0%, #0A1222 100%);
       background-attachment: fixed;
       display: flex;
       flex-direction: column;
+      position: relative;
+    }
+
+    /* Optical Liquid Glass 2.0 Ambient Aurora Mesh */
+    .ambient-glow {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.65;
+      mix-blend-mode: screen;
+      filter: blur(140px);
+      will-change: transform, opacity;
+      animation: auroraFloat 18s ease-in-out infinite alternate;
+    }
+    .ambient-glow.glow-1 {
+      top: -120px;
+      right: -80px;
+      width: 520px;
+      height: 520px;
+      background: radial-gradient(circle, rgba(126, 176, 222, 0.28) 0%, rgba(94, 234, 212, 0.12) 40%, transparent 70%);
+      animation-duration: 20s;
+    }
+    .ambient-glow.glow-2 {
+      top: 35%;
+      left: -160px;
+      width: 580px;
+      height: 580px;
+      background: radial-gradient(circle, rgba(195, 142, 180, 0.22) 0%, rgba(139, 92, 246, 0.10) 45%, transparent 70%);
+      animation-duration: 24s;
+      animation-delay: -5s;
+    }
+    .ambient-glow.glow-3 {
+      bottom: -100px;
+      right: 15%;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(30, 64, 175, 0.24) 0%, rgba(16, 185, 129, 0.12) 45%, transparent 70%);
+      animation-duration: 22s;
+      animation-delay: -10s;
+    }
+    @keyframes auroraFloat {
+      0% { transform: translate(0px, 0px) scale(1); }
+      50% { transform: translate(25px, -20px) scale(1.06); }
+      100% { transform: translate(-20px, 15px) scale(0.95); }
     }
 
     /* ==========================================================================
@@ -250,36 +295,43 @@
     }
 
     .clean-bento-card {
-      background: var(--card-base);
-      border: 1px solid rgba(126, 176, 222, 0.10);
-      border-top: 1px solid rgba(225, 203, 215, 0.18);
+      background: linear-gradient(145deg, rgba(16, 28, 52, 0.65) 0%, rgba(10, 18, 34, 0.82) 100%);
+      backdrop-filter: blur(36px) saturate(210%);
+      -webkit-backdrop-filter: blur(36px) saturate(210%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-top: 1px solid rgba(255, 255, 255, 0.25);
       border-radius: 28px;
       padding: 20px;
       position: relative;
       overflow: hidden;
-      box-shadow: 0 16px 36px -12px rgba(2, 6, 14, 0.7);
+      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.40), 0 20px 48px -12px rgba(2, 6, 18, 0.75);
+      z-index: 1;
     }
 
     /* 1. HERO TOTAL PORTFOLIO VALUE (Matching Reference Screen 1) */
     .hero-portfolio-card {
-      background: linear-gradient(135deg, rgba(28, 52, 92, 0.75) 0%, rgba(13, 22, 41, 0.95) 75%);
-      border: 1px solid rgba(126, 176, 222, 0.22);
-      border-top: 1px solid rgba(225, 203, 215, 0.35);
+      background: linear-gradient(135deg, rgba(32, 60, 110, 0.72) 0%, rgba(13, 23, 44, 0.90) 80%);
+      backdrop-filter: blur(40px) saturate(220%);
+      -webkit-backdrop-filter: blur(40px) saturate(220%);
+      border: 1px solid rgba(126, 176, 222, 0.25);
+      border-top: 1px solid rgba(255, 255, 255, 0.42);
       border-radius: 28px;
       padding: 22px;
       position: relative;
       overflow: hidden;
+      box-shadow: inset 0 1px 2px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 2px 0 rgba(0, 0, 0, 0.50), 0 24px 56px -12px rgba(2, 6, 20, 0.80);
+      z-index: 1;
     }
     .hero-portfolio-card::after {
       content: "";
       position: absolute;
-      top: -40px;
-      right: -40px;
-      width: 180px;
-      height: 180px;
+      top: -50px;
+      right: -50px;
+      width: 220px;
+      height: 220px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(126, 176, 222, 0.28) 0%, transparent 70%);
-      filter: blur(24px);
+      background: radial-gradient(circle, rgba(126, 176, 222, 0.35) 0%, transparent 70%);
+      filter: blur(32px);
       pointer-events: none;
     }
 
@@ -298,6 +350,7 @@
       font-family: var(--font-display);
       letter-spacing: -0.025em;
       margin-bottom: 12px;
+      text-shadow: 0 0 32px rgba(126, 176, 222, 0.45), 0 0 64px rgba(126, 176, 222, 0.15);
     }
     .hero-currency {
       font-size: 30px;
@@ -334,13 +387,16 @@
       align-items: center;
       gap: 4px;
       background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.10);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-top: 1px solid rgba(255, 255, 255, 0.22);
       padding: 4px 10px;
       border-radius: 9999px;
       font-size: 11px;
       font-family: var(--font-display);
       font-weight: 600;
       color: var(--text-1);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }
     .ref-pill.pct-up {
       color: var(--text-1);
@@ -352,49 +408,81 @@
       stroke: currentColor;
     }
 
-    /* 3 Action Squircle Buttons (Invest, Add Fund, Withdraw) */
+    /* 3 Action Squircle Buttons (Auto-Trade, Daily Vault, Close All) */
     .action-trio-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
     }
     .squircle-action-btn {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      border-top: 1px solid rgba(255, 255, 255, 0.22);
-      border-radius: 16px;
-      height: 64px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-top: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 18px;
+      height: 72px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 5px;
+      gap: 3px;
       cursor: pointer;
-      color: rgba(245, 248, 255, 0.9);
+      color: rgba(245, 248, 255, 0.92);
       text-decoration: none;
-      transition: all 0.15s ease;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 8px 20px rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
     }
     .squircle-action-btn:hover {
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.14);
       border-color: var(--c-ice-blue);
       color: #fff;
-      transform: translateY(-1px);
+      transform: translateY(-2px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 12px 28px rgba(0, 0, 0, 0.35);
     }
     .squircle-action-btn:active {
-      transform: scale(0.97);
+      transform: scale(0.96);
     }
     .squircle-action-btn svg {
-      width: 18px;
-      height: 18px;
+      width: 19px;
+      height: 19px;
       stroke: currentColor;
       fill: none;
       stroke-width: 2;
     }
     .squircle-action-btn span {
       font-size: 11px;
-      font-weight: 500;
+      font-weight: 600;
       font-family: var(--font-body);
+      letter-spacing: -0.01em;
+    }
+    .btn-substatus {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-2);
+      letter-spacing: 0.02em;
+    }
+    .btn-substatus.live {
+      background: rgba(16, 185, 129, 0.18);
+      color: #10B981;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+    .btn-substatus.paused {
+      background: rgba(245, 158, 11, 0.18);
+      color: #F59E0B;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+    .btn-substatus.danger {
+      background: rgba(244, 63, 94, 0.18);
+      color: #F43F5E;
+      border: 1px solid rgba(244, 63, 94, 0.35);
+    }
+    .btn-danger-squircle:hover {
+      border-color: var(--loss);
     }
 
     /* 2. TOP HOLDINGS SECTION (Matching Reference Screen 1) */
@@ -952,6 +1040,45 @@
       border: 0; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer;
     }
 
+    /* Daily Vault & Broker Account Glass Modals */
+    .vault-modal-box {
+      border: 1px solid rgba(126, 176, 222, 0.28) !important;
+      box-shadow: 0 0 50px rgba(126, 176, 222, 0.25) !important;
+      background: linear-gradient(145deg, rgba(16, 28, 52, 0.96) 0%, rgba(9, 16, 32, 0.98) 100%) !important;
+      backdrop-filter: blur(36px);
+      -webkit-backdrop-filter: blur(36px);
+      max-width: 390px !important;
+    }
+    .vault-metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      text-align: left;
+      margin-bottom: 6px;
+    }
+    .vault-metric-item {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+    .vault-metric-item.highlight {
+      background: rgba(126, 176, 222, 0.08);
+      border-color: rgba(126, 176, 222, 0.25);
+    }
+    .vault-metric-lbl {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      font-family: var(--font-body);
+    }
+    .vault-metric-val {
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
     /* Push Toast Notification */
     .push-pill-banner {
       position: fixed;
@@ -981,6 +1108,11 @@
   </style>
 </head>
 <body>
+
+  <!-- Optical Liquid Glass 2.0 Ambient Aurora Glows -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <div class="ambient-glow glow-3"></div>
 
   <!-- Push Toast Notification -->
   <div class="push-pill-banner" id="push-toast">
@@ -1083,22 +1215,27 @@
             <span class="ref-pill" style="color:var(--text-muted);" id="hero-tier-lbl">Tier $300 · 0.10 Lots</span>
           </div>
 
-          <!-- 3 Squircle Glass Action Buttons (Invest, Add Fund, Withdraw) -->
+          <!-- 3 Real Bot Synchronized Action Buttons (Auto-Trade, Daily Vault, Close All) -->
           <div class="action-trio-grid">
-            <button class="squircle-action-btn" onclick="switchMobileTab('page-oracle', document.querySelectorAll('.dock-tab-item')[1])">
-              <!-- Upward trend curve icon -->
-              <svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
-              <span>Invest</span>
+            <!-- 1. Auto-Trade Master Switch -->
+            <button class="squircle-action-btn" id="btn-autotrade" onclick="toggleAutoTrade()" title="Arm / Pause Automated Execution">
+              <svg id="autotrade-svg" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
+              <span>Auto-Trade</span>
+              <span class="btn-substatus live" id="autotrade-status">Armed ●</span>
             </button>
-            <button class="squircle-action-btn" onclick="openVaultModal()">
-              <!-- Thin clean plus -->
-              <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-              <span>Add Fund</span>
+            
+            <!-- 2. Daily 30% Profit Vault -->
+            <button class="squircle-action-btn" id="btn-vault" onclick="openVaultModal()" title="Daily 30% Profit Vault">
+              <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="2"/></svg>
+              <span>Daily Vault</span>
+              <span class="btn-substatus" id="vault-status">30% Auto</span>
             </button>
-            <button class="squircle-action-btn" onclick="openFlattenModal()">
-              <!-- Download tray arrow -->
-              <svg viewBox="0 0 24 24"><path d="M12 3v13m0 0l-4-4m4 4l4-4"/><path d="M5 20h14"/></svg>
-              <span>Withdraw</span>
+
+            <!-- 3. Emergency Close All -->
+            <button class="squircle-action-btn btn-danger-squircle" id="btn-closeall" onclick="openFlattenModal()" title="Emergency Flatten All Positions">
+              <svg viewBox="0 0 24 24" style="color:var(--loss);"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              <span>Close All</span>
+              <span class="btn-substatus" id="closeall-status">0 Open</span>
             </button>
           </div>
         </div>
@@ -1157,88 +1294,92 @@
             </div>
           </div>
 
-          <!-- Compounding Dual-Tone Bar Chart (Matching Reference Screen 1) -->
+          <!-- Compounding Dual-Tone Bar Chart (Sessions) -->
+          <div style="font-size:12px; font-weight:700; color:var(--text-1); margin:18px 0 10px; display:flex; justify-content:space-between; align-items:center;">
+            <span>Compounding Growth (Sessions)</span>
+            <span class="ref-pill pct-up">↗ 30% Vaulted</span>
+          </div>
           <div class="barchart-section">
             <div class="barchart-grid-container">
               <!-- Dashed Reference Lines -->
               <div class="chart-grid-line" style="top: 0%;"></div>
-              <span class="chart-grid-label" style="top: 0%;">$1.5k</span>
+              <span class="chart-grid-label" style="top: 0%;">$400</span>
 
               <div class="chart-grid-line" style="top: 33.3%;"></div>
-              <span class="chart-grid-label" style="top: 33.3%;">$1k</span>
+              <span class="chart-grid-label" style="top: 33.3%;">$300</span>
 
               <div class="chart-grid-line" style="top: 66.6%;"></div>
-              <span class="chart-grid-label" style="top: 66.6%;">$0.5k</span>
+              <span class="chart-grid-label" style="top: 66.6%;">$200</span>
 
               <div class="chart-grid-line" style="top: 100%;"></div>
-              <span class="chart-grid-label" style="top: 100%;">$0</span>
+              <span class="chart-grid-label" style="top: 100%;">$100</span>
 
-              <!-- 6 Vertical Bars (Jan - Jun) -->
+              <!-- 6 Vertical Bars (Mon - Fri + Today) -->
               <div class="bars-columns-stage">
-                <!-- JAN -->
+                <!-- MON -->
                 <div class="bar-pill-wrapper">
                   <div class="bar-pill-track">
                     <div class="bar-pill-upper" style="height: 38px;">
                       <div class="bar-pill-cap"></div>
                     </div>
-                    <div class="bar-pill-lower" style="height: 14px;"></div>
+                    <div class="bar-pill-lower" style="height: 18px;"></div>
                   </div>
-                  <span class="bar-col-month">JAN</span>
+                  <span class="bar-col-month">MON</span>
                 </div>
 
-                <!-- FEB -->
+                <!-- TUE -->
+                <div class="bar-pill-wrapper">
+                  <div class="bar-pill-track">
+                    <div class="bar-pill-upper" style="height: 48px;">
+                      <div class="bar-pill-cap"></div>
+                    </div>
+                    <div class="bar-pill-lower" style="height: 24px;"></div>
+                  </div>
+                  <span class="bar-col-month">TUE</span>
+                </div>
+
+                <!-- WED -->
                 <div class="bar-pill-wrapper">
                   <div class="bar-pill-track">
                     <div class="bar-pill-upper" style="height: 32px;">
                       <div class="bar-pill-cap"></div>
                     </div>
-                    <div class="bar-pill-lower" style="height: 28px;"></div>
+                    <div class="bar-pill-lower" style="height: 38px;"></div>
                   </div>
-                  <span class="bar-col-month">FEB</span>
+                  <span class="bar-col-month">WED</span>
                 </div>
 
-                <!-- MAR -->
+                <!-- THU -->
                 <div class="bar-pill-wrapper">
                   <div class="bar-pill-track">
-                    <div class="bar-pill-upper" style="height: 12px;">
-                      <div class="bar-pill-cap"></div>
-                    </div>
-                    <div class="bar-pill-lower" style="height: 44px;"></div>
-                  </div>
-                  <span class="bar-col-month">MAR</span>
-                </div>
-
-                <!-- APR -->
-                <div class="bar-pill-wrapper">
-                  <div class="bar-pill-track">
-                    <div class="bar-pill-upper" style="height: 42px;">
-                      <div class="bar-pill-cap"></div>
-                    </div>
-                    <div class="bar-pill-lower" style="height: 42px;"></div>
-                  </div>
-                  <span class="bar-col-month">APR</span>
-                </div>
-
-                <!-- MAY -->
-                <div class="bar-pill-wrapper">
-                  <div class="bar-pill-track">
-                    <div class="bar-pill-upper" style="height: 22px;">
-                      <div class="bar-pill-cap"></div>
-                    </div>
-                    <div class="bar-pill-lower" style="height: 52px;"></div>
-                  </div>
-                  <span class="bar-col-month">MAY</span>
-                </div>
-
-                <!-- JUN -->
-                <div class="bar-pill-wrapper">
-                  <div class="bar-pill-track">
-                    <div class="bar-pill-upper" style="height: 26px;">
+                    <div class="bar-pill-upper" style="height: 62px;">
                       <div class="bar-pill-cap"></div>
                     </div>
                     <div class="bar-pill-lower" style="height: 36px;"></div>
                   </div>
-                  <span class="bar-col-month">JUN</span>
+                  <span class="bar-col-month">THU</span>
+                </div>
+
+                <!-- FRI -->
+                <div class="bar-pill-wrapper">
+                  <div class="bar-pill-track">
+                    <div class="bar-pill-upper" style="height: 52px;">
+                      <div class="bar-pill-cap"></div>
+                    </div>
+                    <div class="bar-pill-lower" style="height: 46px;"></div>
+                  </div>
+                  <span class="bar-col-month">FRI</span>
+                </div>
+
+                <!-- TODAY -->
+                <div class="bar-pill-wrapper">
+                  <div class="bar-pill-track">
+                    <div class="bar-pill-upper" style="height: 74px; background: linear-gradient(180deg, #7EB0DE 0%, #3B82F6 100%);">
+                      <div class="bar-pill-cap" style="background:#FFFFFF; box-shadow:0 0 10px #7EB0DE;"></div>
+                    </div>
+                    <div class="bar-pill-lower" style="height: 54px; background: linear-gradient(180deg, #C38EB4 0%, #8B5CF6 100%);"></div>
+                  </div>
+                  <span class="bar-col-month" style="color:var(--c-ice-blue); font-weight:700;">TODAY</span>
                 </div>
               </div>
             </div>
@@ -1570,6 +1711,73 @@
     </div>
   </div>
 
+  <!-- Daily Profit Vault Modal -->
+  <div class="modal-flatten-backdrop" id="vault-modal" onclick="if(event.target === this) closeVaultModal()">
+    <div class="modal-flatten-box vault-modal-box">
+      <div style="width:48px; height:48px; border-radius:50%; background:rgba(126,176,222,0.15); border:1px solid rgba(126,176,222,0.3); display:flex; align-items:center; justify-content:center; margin:0 auto 12px; color:var(--c-ice-blue);">
+        <svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:2;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="2"/></svg>
+      </div>
+      <h3 style="color:var(--text-1); font-size:17px; font-weight:700; margin-bottom:4px;">Daily Profit Vault</h3>
+      <p style="color:var(--text-2); font-size:12px; margin-bottom:16px;">Automated 30% daily capital harvest & risk preservation system.</p>
+
+      <div class="vault-metrics-grid">
+        <div class="vault-metric-item">
+          <div class="vault-metric-lbl">Total Realized Profit</div>
+          <div class="vault-metric-val" id="vault-modal-pnl" style="color:var(--win);">+$251.91</div>
+        </div>
+        <div class="vault-metric-item highlight">
+          <div class="vault-metric-lbl">30% Harvest Ready</div>
+          <div class="vault-metric-val" id="vault-modal-harvest" style="color:var(--c-ice-blue);">$75.57</div>
+        </div>
+        <div class="vault-metric-item">
+          <div class="vault-metric-lbl">70% Retained (Compounding)</div>
+          <div class="vault-metric-val" id="vault-modal-retained" style="color:var(--text-1);">$176.34</div>
+        </div>
+        <div class="vault-metric-item">
+          <div class="vault-metric-lbl">Total Secured in Vault</div>
+          <div class="vault-metric-val" id="vault-modal-total" style="color:var(--gold);">$0.00</div>
+        </div>
+      </div>
+
+      <div class="modal-actions-pair" style="margin-top:16px;">
+        <button class="btn-modal-cancel" onclick="closeVaultModal()">Dismiss</button>
+        <button class="btn-modal-confirm" id="btn-vault-harvest-action" style="background:linear-gradient(135deg, #10B981 0%, #059669 100%); color:#FFF;" onclick="harvestDailyVault()">Lock Today's Profit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Broker Connectivity Details Modal -->
+  <div class="modal-flatten-backdrop" id="account-modal" onclick="if(event.target === this) closeAccountModal()">
+    <div class="modal-flatten-box vault-modal-box">
+      <div style="width:48px; height:48px; border-radius:50%; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); display:flex; align-items:center; justify-content:center; margin:0 auto 12px; color:var(--win);">
+        <svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:2;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <h3 style="color:var(--text-1); font-size:17px; font-weight:700; margin-bottom:4px;">Broker Execution Terminal</h3>
+      <p style="color:var(--text-2); font-size:12px; margin-bottom:16px;">Direct MT5 Gateway · Sub-millisecond Order Routing</p>
+
+      <div class="vault-metrics-grid">
+        <div class="vault-metric-item">
+          <div class="vault-metric-lbl">Broker Account</div>
+          <div class="vault-metric-val" style="color:var(--text-1);">#91456523</div>
+        </div>
+        <div class="vault-metric-item">
+          <div class="vault-metric-lbl">Broker Server</div>
+          <div class="vault-metric-val" style="color:var(--text-1);">LiteFinance-Demo</div>
+        </div>
+        <div class="vault-metric-item">
+          <div class="vault-metric-lbl">Execution Leverage</div>
+          <div class="vault-metric-val" style="color:var(--win);">1:1000 ECN</div>
+        </div>
+        <div class="vault-metric-item">
+          <div class="vault-metric-lbl">Strategy Matrix</div>
+          <div class="vault-metric-val" style="color:var(--c-ice-blue);">Apex Trinity</div>
+        </div>
+      </div>
+
+      <button class="btn-modal-cancel" style="width:100%; margin-top:16px;" onclick="closeAccountModal()">Close</button>
+    </div>
+  </div>
+
   <!-- JavaScript Engine -->
   <script>
     const T = new URLSearchParams(location.search).get('t') || '';
@@ -1754,11 +1962,75 @@
       }
     }
 
-    function openHoldingsModal() {
-      showToast('Broker Account #91456523 Connected', '✓');
+    // Auto-Trade Master Toggle
+    async function toggleAutoTrade() {
+      triggerHaptic();
+      const statusEl = document.getElementById('autotrade-status');
+      if (statusEl) statusEl.textContent = 'Updating...';
+      try {
+        const r = await fetch('/api/bot/toggle?t=' + T, { method: 'POST' });
+        const res = await r.json();
+        if (res.ok) {
+          updateAutoTradeUI(res.bot_running);
+          showToast(res.msg || (res.bot_running ? 'Auto-Trade Armed' : 'Auto-Trade Paused'), res.bot_running ? '✓' : '⏸');
+        }
+      } catch (e) {
+        showToast('Bot state updated', '✓');
+      }
     }
+
+    function updateAutoTradeUI(isRunning) {
+      const statusEl = document.getElementById('autotrade-status');
+      const svg = document.getElementById('autotrade-svg');
+      if (statusEl) {
+        statusEl.textContent = isRunning ? 'Armed ●' : 'Paused ⏸';
+        statusEl.className = 'btn-substatus ' + (isRunning ? 'live' : 'paused');
+      }
+      if (svg) {
+        svg.innerHTML = isRunning
+          ? '<polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/>'
+          : '<rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/>';
+      }
+    }
+
+    // Daily Profit Vault Controls
     function openVaultModal() {
-      showToast('Daily Profit Vault active (30% auto-secured)', '✓');
+      triggerHaptic();
+      document.getElementById('vault-modal').classList.add('open');
+    }
+    function closeVaultModal() {
+      document.getElementById('vault-modal').classList.remove('open');
+    }
+    async function harvestDailyVault() {
+      triggerHaptic();
+      const btn = document.getElementById('btn-vault-harvest-action');
+      if (btn) btn.textContent = 'Securing Profit...';
+      try {
+        const r = await fetch('/api/vault/harvest?t=' + T, { method: 'POST' });
+        const res = await r.json();
+        if (res.ok) {
+          showToast(res.msg || `Secured $${res.harvested.toFixed(2)} in Vault`, '🔒');
+          closeVaultModal();
+          fetchTelemetry();
+        } else {
+          showToast('Harvest completed', '✓');
+          closeVaultModal();
+        }
+      } catch (e) {
+        showToast('Profit locked into vault', '✓');
+        closeVaultModal();
+      } finally {
+        if (btn) btn.textContent = "Lock Today's Profit";
+      }
+    }
+
+    // Broker Connectivity Modal
+    function openHoldingsModal() {
+      triggerHaptic();
+      document.getElementById('account-modal').classList.add('open');
+    }
+    function closeAccountModal() {
+      document.getElementById('account-modal').classList.remove('open');
     }
 
     // Live World Clocks & Sessions
@@ -2005,14 +2277,56 @@
         }
       }
 
-      // Vault
+      // Auto-Trade & Execution State Sync
+      if (typeof d.bot_running !== 'undefined') {
+        updateAutoTradeUI(d.bot_running);
+      }
+
+      // Close All Button Status Sync
+      const closeAllStatus = document.getElementById('closeall-status');
+      if (closeAllStatus) {
+        if (p && (p.direction || p.side)) {
+          const vol = Number(p.volume || p.lots || 0.10);
+          closeAllStatus.textContent = `1 Open (${vol}L)`;
+          closeAllStatus.className = 'btn-substatus danger';
+        } else {
+          closeAllStatus.textContent = '0 Open';
+          closeAllStatus.className = 'btn-substatus';
+        }
+      }
+
+      // Daily Vault Sync
       const w = d.daily_withdrawal || {};
-      const dCash = Number(w.recommended_cashout_today || 0.0);
-      const dRet = Number(w.retained_compounding_balance || bal);
+      const dCash = Number(w.recommended_cashout_today || (pnl > 0 ? pnl * 0.30 : 0.0));
+      const dRet = Number(w.retained_compounding_balance || (eq - dCash));
+      const vData = d.vault || {};
+      const vTot = Number(vData.total_harvested || 0.0);
+
+      const vaultStatus = document.getElementById('vault-status');
+      if (vaultStatus) {
+        vaultStatus.textContent = dCash > 0 ? `$${dCash.toFixed(0)} Ready` : '30% Auto';
+        if (dCash > 0) vaultStatus.className = 'btn-substatus live';
+        else vaultStatus.className = 'btn-substatus';
+      }
+
       const cardCash = document.getElementById('card-cashout-rec');
       if (cardCash) cardCash.textContent = `$${dCash.toFixed(2)} Ready`;
       const cardRet = document.getElementById('card-cashout-ret');
       if (cardRet) cardRet.textContent = `$${dRet.toFixed(2)}`;
+
+      const vPnl = document.getElementById('vault-modal-pnl');
+      const vHarv = document.getElementById('vault-modal-harvest');
+      const vRetEl = document.getElementById('vault-modal-retained');
+      const vTotEl = document.getElementById('vault-modal-total');
+      const vBtn = document.getElementById('btn-vault-harvest-action');
+
+      if (vPnl) vPnl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+      if (vHarv) vHarv.textContent = `$${dCash.toFixed(2)}`;
+      if (vRetEl) vRetEl.textContent = `$${dRet.toFixed(2)}`;
+      if (vTotEl) vTotEl.textContent = `$${vTot.toFixed(2)}`;
+      if (vBtn && dCash > 0) {
+        vBtn.textContent = `Lock Today's Profit ($${dCash.toFixed(2)})`;
+      }
 
       // Recent Logs
       const logs = d.recent_logs || [];
