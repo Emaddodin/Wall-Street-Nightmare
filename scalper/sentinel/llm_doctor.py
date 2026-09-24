@@ -283,13 +283,8 @@ class LLMDoctor:
             return  # Debounce spam
         self._last_alert_time = now
 
-        title = f"🏥 Stratton LLM Doctor Healed Engine ({p.diagnosis})"
-        body = (
-            f"Prescription: {p.prescribed_action}\n"
-            f"Clinical Summary: {p.explanation}\n"
-            f"Recovery Latency: {elapsed_ms:.0f}ms\n"
-            f"Total Heals: {self.total_healings}"
-        )
+        title = f"🏥 Doctor Healed: {p.diagnosis}"
+        body = f"Action: {p.prescribed_action} · Latency: {elapsed_ms:.0f}ms · Total: {self.total_healings}"
 
         # Bark Push
         if send_alert:

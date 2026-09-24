@@ -436,8 +436,8 @@ async def run_live_scalper():
     scalper = LiveBrokerScalper(gw)
 
     push_ntfy(
-        title="🟢 Stratton Oakmont Broker LIVE Armed (REAL ACCOUNT)",
-        message=f"Connected to LiteFinance Real Account. Real Balance: ${acc_snap.balance:.2f} (1:1000 Leverage).\nLaya System 1 & Politician Brain Active.\nSovereign Compounding Ladder Armed (0.05 Lots Baseline).\nDynamic Peak Bag Protection Armed.\nTerminal: https://82-115-21-155.sslip.io/",
+        title="🟢 Stratton Live Engine Armed",
+        message=f"LiteFinance Real · Balance: ${acc_snap.balance:.2f} · 1:1000 · Sovereign Compounding Active",
         tags="rocket,white_check_mark",
     )
 
@@ -465,8 +465,8 @@ async def run_live_scalper():
                         logger.warning("🚨 EMERGENCY FLATTEN SIGNAL RECEIVED FROM DASHBOARD!")
                         res = await gw.flatten_all_positions()
                         push_ntfy(
-                            title="🛑 Manual Emergency Flatten",
-                            message=f"Closed all positions via Dashboard button. Balance: ${res.get('balance', 0):.2f}",
+                            title="🛑 Manual Flatten Executed",
+                            message=f"Closed all positions via Dashboard · Balance: ${res.get('balance', 0):.2f}",
                             tags="warning,hand",
                             priority="urgent",
                         )
@@ -633,8 +633,8 @@ async def run_live_scalper():
                         "equity_after": res.get("balance", acc.balance),
                     })
                     push_ntfy(
-                        title=f"💰 Bag Protection Harvest (+${floating_pnl:.2f})",
-                        message=f"Locked +${floating_pnl:.2f} (Peak was +${peak_pnl:.2f}). Never let a winner become a loss!\nNew Balance: ${res.get('balance', acc.balance):.2f}",
+                        title=f"💰 Bag Locked: +${floating_pnl:.2f}",
+                        message=f"Peak +${peak_pnl:.2f} · Balance: ${res.get('balance', acc.balance):.2f}",
                         tags="moneybag,shield",
                         priority="high",
                     )
@@ -672,8 +672,8 @@ async def run_live_scalper():
                         "equity_after": res.get("balance", acc.balance),
                     })
                     push_ntfy(
-                        title=f"⏳ Stagnation Exit (${floating_pnl:+.2f})",
-                        message=f"{stagnation_reason}\nClosed @ ${current_mid:.2f}. Balance: ${res.get('balance', acc.balance):.2f}",
+                        title=f"⏳ Stagnation Exit: ${floating_pnl:+.2f}",
+                        message=f"Closed @ ${current_mid:.2f} · Balance: ${res.get('balance', acc.balance):.2f}",
                         tags="hourglass,shield" if floating_pnl >= 0 else "hourglass,warning",
                         priority="high" if floating_pnl >= 0 else "default",
                     )
@@ -721,8 +721,8 @@ async def run_live_scalper():
                     })
 
                     push_ntfy(
-                        title=f"🛑 {reason_label} (${floating_pnl:+.2f})",
-                        message=f"Strategy: {saved_stack.get('strategy_type')}\nClosed @ ${current_mid:.2f}. New Balance: ${res.get('balance', acc.balance):.2f}",
+                        title=f"🛑 {reason_label}: ${floating_pnl:+.2f}",
+                        message=f"Closed @ ${current_mid:.2f} · Balance: ${res.get('balance', acc.balance):.2f}",
                         tags="warning,octagonal_sign" if floating_pnl < 0 else "moneybag,shield",
                         priority="urgent" if floating_pnl < 0 else "default",
                     )
@@ -755,8 +755,8 @@ async def run_live_scalper():
                     })
 
                     push_ntfy(
-                        title=f"🌕 Macro Spike Harvest (+${floating_pnl:+.2f})",
-                        message=f"Strategy: {saved_stack.get('strategy_type')}\nGain: +{gain_pts:.2f} pts (${floating_pnl:+.2f})\nNew Balance: ${res.get('balance', acc.balance):.2f}",
+                        title=f"🌕 Spike Harvest: +${floating_pnl:+.2f} (+{gain_pts:.2f} pts)",
+                        message=f"Closed @ ${current_mid:.2f} · Balance: ${res.get('balance', acc.balance):.2f}",
                         tags="rocket,moneybag,trophy",
                         priority="high",
                     )
@@ -813,8 +813,8 @@ async def run_live_scalper():
                                 logger.warning("🛡️ BLATANT TOXIC TRAP VETOED: %s (Trap Prob: %.1f%%) - Trade suppressed for capital protection",
                                                laya_decision.reasoning, laya_decision.trap_probability * 100)
                                 push_ntfy(
-                                    title=f"🛡️ Blatant Trap Veto: {sig.direction} {sig.strategy_type}",
-                                    message=f"Suppressed toxic trap @ ${sig.entry_price:.2f} | Trap Risk: {laya_decision.trap_probability*100:.1f}%\nReason: {laya_decision.reasoning}",
+                                    title=f"🛡️ Trap Veto: {sig.direction} @ ${sig.entry_price:.2f}",
+                                    message=f"Suppressed toxic setup · Trap Risk: {laya_decision.trap_probability*100:.0f}%",
                                     tags="shield,no_entry_sign",
                                     priority="default",
                                 )
@@ -913,8 +913,8 @@ async def run_live_scalper():
                             }
                             stack_tag = f" ({stack_count} Stacked Tickets)" if stack_count > 1 else ""
                             push_ntfy(
-                                title=f"🌕 {laya_decision.setup_grade.upper()}: {sig.direction} {actual_volume} Lots [{sig.strategy_type}]{stack_tag}",
-                                message=f"✅ REAL BROKER FILLED @ ${sig.entry_price:.2f} | SL: ${sig.sl_price:.2f} | Spike: ${effective_spike_target:.2f}\nSizing: {laya_decision.compounding_multiplier:.2f}x | TP Exp: {laya_decision.tp_expansion_multiplier:.2f}x\nPolitician: {laya_decision.political_regime} ({laya_decision.macro_bias})\nBroker Latency: {scalper.last_latency_ms:.1f}ms",
+                                title=f"🌕 {sig.direction} {actual_volume}L @ ${sig.entry_price:.2f}{stack_tag}",
+                                message=f"SL: ${sig.sl_price:.2f} · Spike: ${effective_spike_target:.2f} · Latency: {scalper.last_latency_ms:.0f}ms",
                                 tags="zap,rocket,shield",
                                 priority="high",
                             )
@@ -922,8 +922,8 @@ async def run_live_scalper():
                             err_msg = order_res.get("error", "Unknown error")
                             logger.error("❌ BROKER ORDER FAILED / REJECTED: %s | Requested: %s %.2f lots", err_msg, sig.direction, lot_size)
                             push_ntfy(
-                                title=f"⚠️ Broker Order Rejected: {sig.direction} {lot_size} Lots",
-                                message=f"Signal: {sig.strategy_type} @ ${sig.entry_price:.2f}\nBroker Message: {err_msg}\nBalance: ${acc.balance:.2f} (Margin Protection)",
+                                title=f"⚠️ Rejected: {sig.direction} {lot_size}L @ ${sig.entry_price:.2f}",
+                                message=f"{err_msg} · Balance: ${acc.balance:.2f}",
                                 tags="warning,no_entry_sign",
                                 priority="urgent",
                             )
@@ -939,10 +939,8 @@ async def run_live_scalper():
                     if milestone_bracket not in scalper.milestone_notified:
                         scalper.milestone_notified.add(milestone_bracket)
                         push_ntfy(
-                            title=f"🏦 Daily Cash-Out Milestone: ${milestone_bracket}",
-                            message=f"Today's Profit: +${withdrawal_info['daily_profit']:.2f}\n"
-                                    f"Available Cash-Out: ${withdrawal_info['recommended_cashout_today']:.2f} ({withdrawal_info['withdrawal_rate_pct']}%)\n"
-                                    f"Retained for Compounding: ${withdrawal_info['retained_compounding_balance']:.2f}",
+                            title=f"🏦 Vault Milestone: ${milestone_bracket}",
+                            message=f"Profit: +${withdrawal_info['daily_profit']:.2f} · Ready to Cash-Out: ${withdrawal_info['recommended_cashout_today']:.2f}",
                             tags="moneybag,gem",
                             priority="high",
                         )
