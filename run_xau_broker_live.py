@@ -785,7 +785,7 @@ async def run_live_scalper():
 
                         # Micro-Account Capital Preservation Shield (<$100):
                         if acc.balance < 100.0:
-                            if not laya_decision.is_valid or laya_decision.trap_probability > 0.35 or laya_decision.confluence_score < 7.5:
+                            if not laya_decision.is_valid or laya_decision.trap_probability >= 0.50 or laya_decision.confluence_score < 6.5:
                                 logger.warning("🛡️ MICRO CAPITAL GUARD VETO: Trap Prob: %.1f%%, Confluence: %.1f/10, Valid: %s (%s) - Setup rejected",
                                                laya_decision.trap_probability * 100, laya_decision.confluence_score, laya_decision.is_valid, laya_decision.reasoning)
                                 push_ntfy(

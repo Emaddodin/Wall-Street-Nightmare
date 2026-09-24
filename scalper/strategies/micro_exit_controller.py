@@ -126,29 +126,30 @@ def get_to_the_moon_config(symbol: str = "XAUUSD") -> MicroExitConfig:
 def get_micro_account_config(balance: float = 30.0) -> MicroExitConfig:
     """
     Micro-Account Guardian Configuration ($30 - $100 Accounts):
-    - Immediate Fast BE at +0.35 pts (+35 cents on Gold)
-    - Sweet-spot stall harvest at +0.85 pts (locks +$0.85 on 0.01 lots)
-    - Dynamic peak watermark bag protection (locks if +$1.20 pulls back >18%)
-    - Strict 75s time decay to prevent holding dead chops
-    - Hard risk stop capped at 8% balance ($2.45 on $30 balance)
+    - Fast BE at +0.85 pts (allows breathing room for trend expansion without getting wicked out)
+    - Sweet-spot stall harvest at +1.80 pts (locks +$1.80 on 0.01 lots)
+    - Extended Macro Spike harvest at +3.50 pts (+3.50 pts on Gold)
+    - Dynamic peak watermark bag protection (locks if +$1.50 pulls back >18%)
+    - Time decay aligned with 473-day empirical trade duration (15 min / 900s)
+    - Hard risk stop capped at $2.50 (2.50 pts on 0.01 lots)
     """
-    safe_risk = max(2.00, min(0.08 * balance, 3.50))
-    watermark_floor = max(1.20, 0.05 * balance)
+    safe_risk = max(2.50, min(0.08 * balance, 3.50))
+    watermark_floor = max(1.50, 0.05 * balance)
     return MicroExitConfig(
         symbol="XAUUSD",
         pip_or_pt_size=0.01,
         point_scale_label="pts",
-        fast_be_trigger=0.35,
-        micro_harvest_min=0.55,
-        micro_harvest_target=0.85,
-        micro_harvest_extended=1.60,
+        fast_be_trigger=0.85,
+        micro_harvest_min=1.20,
+        micro_harvest_target=1.80,
+        micro_harvest_extended=3.50,
         watermark_activate_usd=watermark_floor,
         watermark_pullback_pct=0.18,
-        stall_tick_threshold=3,
-        velocity_window_sec=1.5,
-        min_velocity_pts_sec=0.15,
-        time_decay_seconds=75.0,
-        time_decay_profit_floor_usd=0.20,
+        stall_tick_threshold=5,
+        velocity_window_sec=3.0,
+        min_velocity_pts_sec=0.10,
+        time_decay_seconds=900.0,
+        time_decay_profit_floor_usd=0.30,
         hard_risk_stop_usd=safe_risk,
     )
 

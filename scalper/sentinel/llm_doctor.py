@@ -110,6 +110,8 @@ class Layer2SentinelDoctor:
         self._consecutive_fails = 0
         self._last_alert_time = 0.0
         self._trading_paused_by_guard = False
+        self._last_action_time = 0.0
+        self._min_action_interval_sec = 180.0  # 3 minutes cooldown between disruptive interventions
 
     def query_hft_api(self) -> Optional[Dict[str, Any]]:
         """Queries local HFT engine API for quote age and operational metrics."""
@@ -135,11 +137,11 @@ class Layer2SentinelDoctor:
         except Exception:
             return "unknown"
 
-    def get_recent_journal_errors(self, lines: int = 35) -> List[str]:
-        """Scans journalctl for recent crashes, timeouts, and python tracebacks."""
+    def get_recent_journal_errors(self, lines: int = 20) -> List[str]:
+        """Scans journalctl for recent crashes within the last 60 seconds."""
         try:
             res = subprocess.run(
-                ["journalctl", "-u", LIVE_SERVICE_NAME, "-n", str(lines), "--no-pager"],
+                ["journalctl", "-u", LIVE_SERVICE_NAME, "-n", str(lines), "--since", "60 seconds ago", "--no-pager"],
                 capture_output=True,
                 text=True,
                 timeout=3,
@@ -285,6 +287,13 @@ class Layer2SentinelDoctor:
     def actuate_remediation(self, prescription: Prescription) -> bool:
         """Executes the prescribed clinical remediation action."""
         action = prescription.prescribed_action.upper()
+        now = time.time()
+        if action in ("RECYCLE_CHROME", "RESTART_LIVE_SERVICE"):
+            if (now - self._last_action_time) < self._min_action_interval_sec:
+                logger.info("⏳ L2 Remediation %s suppressed: Cooldown active (%.1fs remaining).", action, self._min_action_interval_sec - (now - self._last_action_time))
+                return False
+            self._last_action_time = now
+
         logger.warning("⚡ EXECUTING L2 REMEDIATION [%s]: %s -> %s (%s)", 
                        prescription.domain, prescription.diagnosis, action, prescription.explanation)
 
@@ -455,7 +464,7 @@ class Layer2SentinelDoctor:
             incident_type = "SERVICE_CRASHED"
             severity = "CRITICAL"
 
-        elif quote_age > MAX_QUOTE_STALL_SEC:
+        elif quote_age > 60.0 and (now - self._last_action_time) > 90.0:
             anomaly_detected = True
             incident_domain = "NOC"
             incident_type = "QUOTE_STREAM_STALL"
@@ -474,7 +483,7 @@ class Layer2SentinelDoctor:
             severity = "CRITICAL"
 
         # --- 2. LAYER 2 DEVOPS SRE CHECKS ---
-        elif any("target closed" in e.lower() or "crashed" in e.lower() for e in errors):
+        elif (now - self._last_action_time) > 90.0 and any("target closed" in e.lower() or "crashed" in e.lower() for e in errors):
             anomaly_detected = True
             incident_domain = "DEVOPS"
             incident_type = "CHROME_CDP_SOCKET_CRASH"
