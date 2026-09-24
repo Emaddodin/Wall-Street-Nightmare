@@ -467,11 +467,23 @@ class Layer2SentinelDoctor:
             incident_type = "CHROME_RESOURCE_LEAK"
             severity = "HIGH"
 
+        elif hft_data and float(hft_data.get("balance", 1.0)) <= 0.0 and hft_data.get("bot_running", False):
+            anomaly_detected = True
+            incident_domain = "NOC"
+            incident_type = "ZERO_BALANCE_DOM_STALL"
+            severity = "CRITICAL"
+
         # --- 2. LAYER 2 DEVOPS SRE CHECKS ---
         elif any("target closed" in e.lower() or "crashed" in e.lower() for e in errors):
             anomaly_detected = True
             incident_domain = "DEVOPS"
             incident_type = "CHROME_CDP_SOCKET_CRASH"
+            severity = "HIGH"
+
+        elif any("no_visible_order_button" in e.lower() or "button dispatch failed" in e.lower() for e in errors):
+            anomaly_detected = True
+            incident_domain = "DEVOPS"
+            incident_type = "DOM_BUTTON_OCCLUDED"
             severity = "HIGH"
 
         # --- 3. LAYER 2 FINANCIAL RISK GUARD CHECKS ---

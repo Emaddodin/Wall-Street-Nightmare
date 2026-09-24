@@ -455,8 +455,19 @@ class LiteFinanceGateway:
             used = float(acc_data.get("used", 0.0))
             avail = float(acc_data.get("avail", 0.0))
             change = float(acc_data.get("change", 0.0))
-            equity = round(balance + change, 2)
 
+            if balance <= 0.0 and self._last_account and self._last_account.balance > 0.0:
+                self._consecutive_errors += 1
+                logger.warning("⚠️ DOM portfolio selector returned 0.0 (DOM overlay or session stall). Retaining last known balance ($%.2f | Error #%d)",
+                               self._last_account.balance, self._consecutive_errors)
+                if self._consecutive_errors >= 2:
+                    asyncio.create_task(self._clear_overlays())
+                if self._consecutive_errors >= 6 and not self._reconnecting:
+                    logger.error("🚨 Persistent DOM balance stall. Scheduling gateway auto-reconnect...")
+                    asyncio.create_task(self.reconnect())
+                return self._last_account
+
+            equity = round(balance + change, 2)
             self._last_account = AccountSnapshot(
                 balance=balance,
                 equity=equity,
@@ -555,6 +566,22 @@ class LiteFinanceGateway:
                     }
                     return { success: false, error: 'NO_VISIBLE_ORDER_BUTTON' };
                 }""", {"dir": direction, "vol": vol_str, "sl": sl_str})
+
+                if not isinstance(res, dict) or not res.get("success"):
+                    if isinstance(res, dict) and res.get("error") == "NO_VISIBLE_ORDER_BUTTON":
+                        logger.warning("⚠️ Order button occluded. Clearing overlays and attempting DOM recovery...")
+                        await self._clear_overlays()
+                        await asyncio.sleep(0.25)
+                        res = await self._page.evaluate("""({ dir, vol, sl }) => {
+                            const isBuy = (dir === 'BUY');
+                            const allBtns = Array.from(document.querySelectorAll('button.js_trade_action_open, button[type="submit"], button.btn_green, button.btn_red'));
+                            const btn = allBtns.find(b => b.getBoundingClientRect().width > 0 && ((isBuy && (b.innerText || '').toUpperCase().includes('BUY')) || (!isBuy && (b.innerText || '').toUpperCase().includes('SELL')))) || allBtns.find(b => b.getBoundingClientRect().width > 0);
+                            if (btn) {
+                                btn.click();
+                                return { success: true, text: btn.innerText.trim() };
+                            }
+                            return { success: false, error: 'NO_VISIBLE_ORDER_BUTTON' };
+                        }""", {"dir": direction, "vol": vol_str, "sl": sl_str})
 
                 if not isinstance(res, dict) or not res.get("success"):
                     err_msg = res.get("error", "Button dispatch failed") if isinstance(res, dict) else str(res)

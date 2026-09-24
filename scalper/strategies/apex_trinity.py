@@ -151,8 +151,15 @@ class ApexTrinityStrategy:
         bar1 = df_1m.iloc[-2]
         bar2 = df_1m.iloc[-3]
 
+        ema20 = float(df_1m["ema20"].iloc[-1])
+        ema50 = float(df_1m["ema50"].iloc[-1])
+
         # Bullish FVG: Low of current bar > High of 2 bars ago
         if float(bar0["low"]) > float(bar2["high"]):
+            # Strict Institutional Trend Alignment: Never buy against the 1m/5m trend!
+            if curr_px < ema50 or ema20 < ema50:
+                return None
+
             gap_lo = float(bar2["high"])
             gap_hi = float(bar0["low"])
             gap_size = gap_hi - gap_lo
@@ -160,7 +167,10 @@ class ApexTrinityStrategy:
                 ce = round((gap_hi + gap_lo) / 2.0, 2)
                 # Tap test: bar dipped into gap or is near CE
                 if float(bar0["low"]) <= ce + (0.3 * atr) and curr_px >= ce - 0.20:
-                    sl_px = round(float(bar2["low"]) - 0.30, 2)
+                    raw_sl = float(bar2["low"]) - 0.30
+                    # Tightly clamp stop to at most 1.8 ATR to prevent oversize drawdowns
+                    max_sl_dist = min(3.00, 1.8 * atr)
+                    sl_px = round(max(raw_sl, curr_px - max_sl_dist), 2)
                     tp1_px = round(curr_px + (2.5 * atr), 2)
                     spike_px = round(curr_px + (5.0 * atr), 2)
                     return ApexSignal(
@@ -170,22 +180,28 @@ class ApexTrinityStrategy:
                         tp1_price=tp1_px,
                         spike_target=spike_px,
                         strategy_type="SILVER_BULLET_FVG",
-                        ict_concepts=["Silver Bullet BISI FVG", "Consequent Encroachment Tap", "NY AM Killzone"],
+                        ict_concepts=["Silver Bullet BISI FVG", "Consequent Encroachment Tap", "Trend Aligned EMA20/50"],
                         atr_1m=atr,
-                        reasoning=f"NY Silver Bullet: Bullish FVG tap at CE ${ce:.2f} (Gap: ${gap_size:.2f})",
+                        reasoning=f"NY Silver Bullet: Bullish FVG tap at CE ${ce:.2f} (Gap: ${gap_size:.2f} | Trend Aligned)",
                         timestamp=curr_time,
                         confidence_score=9.2,
                     )
 
         # Bearish FVG: High of current bar < Low of 2 bars ago
         elif float(bar0["high"]) < float(bar2["low"]):
+            # Strict Institutional Trend Alignment: Never sell against the 1m/5m trend!
+            if curr_px > ema50 or ema20 > ema50:
+                return None
+
             gap_hi = float(bar2["low"])
             gap_lo = float(bar0["high"])
             gap_size = gap_hi - gap_lo
             if gap_size >= 0.70:
                 ce = round((gap_hi + gap_lo) / 2.0, 2)
                 if float(bar0["high"]) >= ce - (0.3 * atr) and curr_px <= ce + 0.20:
-                    sl_px = round(float(bar2["high"]) + 0.30, 2)
+                    raw_sl = float(bar2["high"]) + 0.30
+                    max_sl_dist = min(3.00, 1.8 * atr)
+                    sl_px = round(min(raw_sl, curr_px + max_sl_dist), 2)
                     tp1_px = round(curr_px - (2.5 * atr), 2)
                     spike_px = round(curr_px - (5.0 * atr), 2)
                     return ApexSignal(
@@ -195,9 +211,9 @@ class ApexTrinityStrategy:
                         tp1_price=tp1_px,
                         spike_target=spike_px,
                         strategy_type="SILVER_BULLET_FVG",
-                        ict_concepts=["Silver Bullet SIBI FVG", "Consequent Encroachment Tap", "NY AM Killzone"],
+                        ict_concepts=["Silver Bullet SIBI FVG", "Consequent Encroachment Tap", "Trend Aligned EMA20/50"],
                         atr_1m=atr,
-                        reasoning=f"NY Silver Bullet: Bearish FVG tap at CE ${ce:.2f} (Gap: ${gap_size:.2f})",
+                        reasoning=f"NY Silver Bullet: Bearish FVG tap at CE ${ce:.2f} (Gap: ${gap_size:.2f} | Trend Aligned)",
                         timestamp=curr_time,
                         confidence_score=9.2,
                     )
