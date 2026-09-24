@@ -562,22 +562,8 @@ async def run_live_scalper():
                     scalper.active_stack["sl_price"] = new_sl
                     logger.info("🛡️ 'TO THE MOON' BE RATCHET LOCKED: SL moved to BE+0.20 ($%.2f) at +%.2f pts", new_sl, gain_pts)
 
-                    # Multi-Order Momentum Pyramiding: Stack an additional runner when position is risk-free
-                    if not scalper.active_stack.get("pyramided", False) and floating_pnl >= 3.0:
-                        pyr_lot = 0.02
-                        margin_per_001 = max(8.0, (current_mid * 100.0 * 0.01) / 500.0)
-                        if (acc.available - (pyr_lot / 0.01 * margin_per_001)) >= 10.0:
-                            logger.info("🚀 MOMENTUM PYRAMID TRIGGER: Stacking +%.2f lots on risk-free position (Floating: +$%.2f)", pyr_lot, floating_pnl)
-                            pyr_res = await gw.open_market_order(direction, pyr_lot, sl_price=new_sl)
-                            scalper.active_stack["pyramided"] = True  # Flag pyramid attempted regardless to prevent spam
-                            if pyr_res.get("success"):
-                                scalper.active_stack["volume"] = round(scalper.active_stack["volume"] + pyr_lot, 2)
-                                push_ntfy(
-                                    title=f"🚀 Multi-Order Pyramid Stacked: +{pyr_lot} Lots {direction}",
-                                    message=f"Total Stack: {scalper.active_stack['volume']} Lots | Locked BE SL: ${new_sl:.2f}\nFloating PnL: +${floating_pnl:.2f} (Filling the Gap on Runner Expansion)",
-                                    tags="rocket,fire",
-                                    priority="high",
-                                Shakespeare="default")
+                    # Breakeven lock is 100% sacred: No premature pyramiding before TP1 lock
+                    # Keeps trades strictly risk-free ($0.00 / +$0.80) on pullback to entry
 
                 # Ratchet 2: Fast Scalp Profit Lock at +1.8 ATR (TP1 Zone) -> Ratchet SL to +1.0 ATR
                 if not scalper.active_stack.get("tp1_ratchet_hit", False) and gain_pts >= 1.8 * atr:
@@ -585,6 +571,23 @@ async def run_live_scalper():
                     locked_sl = entry_px + (1.0 * atr) if direction == "BUY" else entry_px - (1.0 * atr)
                     scalper.active_stack["sl_price"] = locked_sl
                     logger.info("💰 'TO THE MOON' SCALP PROFIT LOCK: SL ratcheted to +1.0 ATR ($%.2f) at +%.2f pts", locked_sl, gain_pts)
+
+                    # Multi-Order Momentum Pyramiding: Stack runner ONLY after TP1 is banked and profit is locked
+                    if not scalper.active_stack.get("pyramided", False) and acc.balance >= 150.0:
+                        pyr_lot = 0.02
+                        margin_per_001 = max(8.0, (current_mid * 100.0 * 0.01) / 500.0)
+                        if (acc.available - (pyr_lot / 0.01 * margin_per_001)) >= 20.0:
+                            logger.info("🚀 MOMENTUM PYRAMID TRIGGER: Stacking +%.2f lots on locked profit runner (Floating: +$%.2f)", pyr_lot, floating_pnl)
+                            pyr_res = await gw.open_market_order(direction, pyr_lot, sl_price=locked_sl)
+                            scalper.active_stack["pyramided"] = True
+                            if pyr_res.get("success"):
+                                scalper.active_stack["volume"] = round(scalper.active_stack["volume"] + pyr_lot, 2)
+                                push_ntfy(
+                                    title=f"🚀 Multi-Order Pyramid Stacked: +{pyr_lot} Lots {direction}",
+                                    message=f"Total Stack: {scalper.active_stack['volume']} Lots | Locked SL: ${locked_sl:.2f}\nFloating PnL: +${floating_pnl:.2f}",
+                                    tags="rocket,fire",
+                                    priority="high",
+                                )
 
                 # Check if executable price hit current active software Stop Loss
                 sl_hit = (direction == "BUY" and quote.bid <= scalper.active_stack["sl_price"]) or \
