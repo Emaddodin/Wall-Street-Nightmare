@@ -23,6 +23,9 @@ import numpy as np
 import pandas as pd
 
 
+from scalper.strategies.volume_profile import VolumeProfileEngine, VolumeProfileResult
+
+
 @dataclass
 class ApexSignal:
     direction: str  # "BUY" or "SELL"
@@ -30,12 +33,17 @@ class ApexSignal:
     sl_price: float
     tp1_price: float  # 60% scale out
     spike_target: float  # full momentum extension
-    strategy_type: str  # "BREAKOUT_RETEST", "SILVER_BULLET_FVG", "TURTLE_SOUP_SWEEP"
+    strategy_type: str  # "BREAKOUT_RETEST", "SILVER_BULLET_FVG", "TURTLE_SOUP_SWEEP", "HOLD_LONG_POC_BOUNCE", "HOLD_LONG_VAH_BREAKOUT", "SCALP_SELL_ASIAN_SWEEP"
     ict_concepts: List[str]
     atr_1m: float
     reasoning: str
     timestamp: float
     confidence_score: float = 8.5
+    vp_poc: float = 0.0
+    vp_vah: float = 0.0
+    vp_val: float = 0.0
+    is_hold_long: bool = False
+    is_scalp_sell: bool = False
 
 
 @dataclass
@@ -68,6 +76,7 @@ class ApexTrinityStrategy:
         self.active_5m_breakout: Optional[Dict[str, Any]] = None
         self.last_signal_time: float = 0.0
         self.min_signal_cooldown_sec: float = 180.0  # 3 minutes cooldown between entries
+        self.vp_engine = VolumeProfileEngine()
 
     @staticmethod
     def compute_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
@@ -83,7 +92,7 @@ class ApexTrinityStrategy:
 
     def evaluate(self, candles_1m: List[Dict[str, Any]]) -> Optional[ApexSignal]:
         """
-        Evaluates 1m candle history against the ICT Trinity Matrix.
+        Evaluates 1m candle history against the ICT Trinity Matrix + Volume Profile Engine.
         Returns ApexSignal if high-confluence entry is identified, else None.
         """
         if len(candles_1m) < self.min_warmup:
@@ -109,11 +118,23 @@ class ApexTrinityStrategy:
         if (curr_time - self.last_signal_time) < self.min_signal_cooldown_sec:
             return None
 
+        # Compute rolling 120-bar causal Volume Profile
+        vp = self.vp_engine.compute_from_candles(candles_1m, lookback_bars=120)
+
+        # -------------------------------------------------------------
+        # SETUP 0: INSTITUTIONAL VOLUME PROFILE & ASYMMETRIC POSTURE
+        # -------------------------------------------------------------
+        if vp.is_valid:
+            vp_sig = self._evaluate_volume_profile(df_1m, curr_px, atr, curr_time, vp)
+            if vp_sig:
+                self.last_signal_time = curr_time
+                return vp_sig
+
         # -------------------------------------------------------------
         # SETUP 2: ICT SILVER BULLET (London 07:00-08:00 UTC & NY 14:00-15:00 UTC)
         # -------------------------------------------------------------
         if (14 <= utc_hour < 15) or (7 <= utc_hour < 8):
-            sb_signal = self._evaluate_silver_bullet(df_1m, curr_px, atr, curr_time)
+            sb_signal = self._evaluate_silver_bullet(df_1m, curr_px, atr, curr_time, vp)
             if sb_signal:
                 self.last_signal_time = curr_time
                 return sb_signal
@@ -122,7 +143,7 @@ class ApexTrinityStrategy:
         # SETUP 3: ICT LONDON ASIAN SWEEP / TURTLE SOUP (06:00 - 09:00 UTC)
         # -------------------------------------------------------------
         if 6 <= utc_hour < 9:
-            ts_signal = self._evaluate_turtle_soup(df_1m, curr_px, atr, curr_time)
+            ts_signal = self._evaluate_turtle_soup(df_1m, curr_px, atr, curr_time, vp)
             if ts_signal:
                 self.last_signal_time = curr_time
                 return ts_signal
@@ -130,15 +151,161 @@ class ApexTrinityStrategy:
         # -------------------------------------------------------------
         # SETUP 1: 5m S&R BREAKOUT + 1m RETEST (ACTIVE ALL SESSIONS)
         # -------------------------------------------------------------
-        bo_signal = self._evaluate_breakout_retest(df_1m, curr_px, atr, curr_time)
+        bo_signal = self._evaluate_breakout_retest(df_1m, curr_px, atr, curr_time, vp)
         if bo_signal:
             self.last_signal_time = curr_time
             return bo_signal
 
         return None
 
+    def _evaluate_volume_profile(
+        self,
+        df_1m: pd.DataFrame,
+        curr_px: float,
+        atr: float,
+        curr_time: float,
+        vp: VolumeProfileResult,
+    ) -> Optional[ApexSignal]:
+        """
+        Institutional Volume Profile Strategy Engine:
+        1. HOLD_LONG_POC_BOUNCE:
+           Trend is Bullish (curr_px > EMA20 > EMA50).
+           Price dips into Point of Control (POC +- 0.35 ATR) and forms a strong bullish rejection pin (lower wick >= 0.45).
+           Targets: Asymmetric Hold Long with TP1 at +3.5 ATR, Spike at +6.5 ATR.
+        2. HOLD_LONG_VAH_BREAKOUT:
+           Price is above EMA50 and above Value Area High (VAH).
+           Candle retests VAH from above with lower rejection wick >= 0.45, closing bullish.
+           Targets: TP1 at +4.0 ATR, Spike at +7.0 ATR.
+        3. SCALP_SELL_ASIAN_SWEEP:
+           Asian High swept poking above VAH, but fails to sustain auction and closes back INSIDE Value Area.
+           Upper rejection wick >= 0.50.
+           Targets: Strict scalp target at +1.8 ATR (POC Magnet), never held as a runner.
+        """
+        if len(df_1m) < 20 or not vp.is_valid:
+            return None
+
+        if "datetime" not in df_1m.columns and "open_time" in df_1m.columns:
+            df_1m = df_1m.copy()
+            df_1m["datetime"] = pd.to_datetime(df_1m["open_time"], unit="ms", utc=True)
+
+        last_bar = df_1m.iloc[-1]
+        o, h, l, c = float(last_bar["open"]), float(last_bar["high"]), float(last_bar["low"]), float(last_bar["close"])
+        rng = max(0.15, h - l)
+        lower_wick = max(0.0, min(o, c) - l)
+        upper_wick = max(0.0, h - max(o, c))
+        lower_wick_ratio = lower_wick / rng
+        upper_wick_ratio = upper_wick / rng
+
+        ema20 = float(df_1m["ema20"].iloc[-1])
+        ema50 = float(df_1m["ema50"].iloc[-1])
+
+        # ---------------------------------------------------------
+        # SETUP 0.1: HOLD LONG - POC BOUNCE (High Expectancy Trend Continuation)
+        # ---------------------------------------------------------
+        if curr_px > ema20 > ema50:
+            poc_dist = abs(l - vp.poc)
+            poc_tapped = (l <= vp.poc + (0.35 * atr) and c >= vp.poc - 0.15) or (poc_dist <= 0.35 * atr)
+            if poc_tapped and lower_wick_ratio >= 0.45 and c >= o:
+                raw_sl = min(l - 0.20, vp.poc - 0.30)
+                max_sl_dist = min(2.80, 1.8 * atr)
+                sl_px = round(max(raw_sl, curr_px - max_sl_dist), 2)
+                tp1_px = round(curr_px + (3.5 * atr), 2)
+                spike_px = round(curr_px + (6.5 * atr), 2)
+                return ApexSignal(
+                    direction="BUY",
+                    entry_price=curr_px,
+                    sl_price=sl_px,
+                    tp1_price=tp1_px,
+                    spike_target=spike_px,
+                    strategy_type="HOLD_LONG_POC_BOUNCE",
+                    ict_concepts=["Volume Profile POC Bounce", "Value Area Accumulation", "Secular Gold Bull Trend"],
+                    atr_1m=atr,
+                    reasoning=f"Hold Long: Bullish POC bounce @ ${vp.poc:.2f} (Wick: {lower_wick_ratio*100:.0f}%, VAH: ${vp.vah:.2f})",
+                    timestamp=curr_time,
+                    confidence_score=9.5,
+                    vp_poc=vp.poc,
+                    vp_vah=vp.vah,
+                    vp_val=vp.val,
+                    is_hold_long=True,
+                    is_scalp_sell=False,
+                )
+
+        # ---------------------------------------------------------
+        # SETUP 0.2: HOLD LONG - VAH BREAKOUT & RETEST
+        # ---------------------------------------------------------
+        if curr_px > ema50 and curr_px >= vp.vah:
+            vah_retest = (l <= vp.vah + (0.35 * atr) and c >= vp.vah - 0.10)
+            if vah_retest and lower_wick_ratio >= 0.45 and c >= o:
+                raw_sl = min(l - 0.20, vp.vah - 0.40)
+                max_sl_dist = min(2.80, 1.8 * atr)
+                sl_px = round(max(raw_sl, curr_px - max_sl_dist), 2)
+                tp1_px = round(curr_px + (4.0 * atr), 2)
+                spike_px = round(curr_px + (7.0 * atr), 2)
+                return ApexSignal(
+                    direction="BUY",
+                    entry_price=curr_px,
+                    sl_price=sl_px,
+                    tp1_price=tp1_px,
+                    spike_target=spike_px,
+                    strategy_type="HOLD_LONG_VAH_BREAKOUT",
+                    ict_concepts=["VAH Breakout & Retest", "Institutional Value Expansion", "Trend Aligned EMA50"],
+                    atr_1m=atr,
+                    reasoning=f"Hold Long: VAH breakout retest @ ${vp.vah:.2f} (Wick: {lower_wick_ratio*100:.0f}%, POC: ${vp.poc:.2f})",
+                    timestamp=curr_time,
+                    confidence_score=9.3,
+                    vp_poc=vp.poc,
+                    vp_vah=vp.vah,
+                    vp_val=vp.val,
+                    is_hold_long=True,
+                    is_scalp_sell=False,
+                )
+
+        # ---------------------------------------------------------
+        # SETUP 0.3: SCALP SELL - ASIAN HIGH + VAH LIQUIDITY SWEEP
+        # ---------------------------------------------------------
+        today_date = df_1m.iloc[-1]["datetime"].date()
+        asia_bars = df_1m[
+            (df_1m["datetime"].dt.date == today_date)
+            & (df_1m["datetime"].dt.hour >= 0)
+            & (df_1m["datetime"].dt.hour < 4)
+        ]
+        if len(asia_bars) >= 60:
+            asia_high = float(asia_bars["high"].max())
+            if h >= asia_high and h >= vp.vah and c < vp.vah and upper_wick_ratio >= 0.50:
+                raw_sl = h + 0.25
+                max_sl_dist = min(2.50, 1.5 * atr)
+                sl_px = round(min(raw_sl, curr_px + max_sl_dist), 2)
+                tp1_dist = max(1.50, min(2.20, abs(curr_px - vp.poc)))
+                tp1_px = round(curr_px - tp1_dist, 2)
+                spike_px = round(curr_px - (2.5 * atr), 2)
+                return ApexSignal(
+                    direction="SELL",
+                    entry_price=curr_px,
+                    sl_price=sl_px,
+                    tp1_price=tp1_px,
+                    spike_target=spike_px,
+                    strategy_type="SCALP_SELL_ASIAN_SWEEP",
+                    ict_concepts=["Asian High + VAH Liquidity Sweep", "Value Area Mean Reversion", "Tactical Scalp Short"],
+                    atr_1m=atr,
+                    reasoning=f"Scalp Sell: Asian High (${asia_high:.2f}) + VAH (${vp.vah:.2f}) sweep, rejection wick {upper_wick_ratio*100:.0f}%",
+                    timestamp=curr_time,
+                    confidence_score=8.8,
+                    vp_poc=vp.poc,
+                    vp_vah=vp.vah,
+                    vp_val=vp.val,
+                    is_hold_long=False,
+                    is_scalp_sell=True,
+                )
+
+        return None
+
     def _evaluate_silver_bullet(
-        self, df_1m: pd.DataFrame, curr_px: float, atr: float, curr_time: float
+        self,
+        df_1m: pd.DataFrame,
+        curr_px: float,
+        atr: float,
+        curr_time: float,
+        vp: Optional[VolumeProfileResult] = None,
     ) -> Optional[ApexSignal]:
         """
         ICT Silver Bullet: 3-candle displacement creating an FVG during 14:00-15:00 UTC.
@@ -173,6 +340,9 @@ class ApexTrinityStrategy:
                     sl_px = round(max(raw_sl, curr_px - max_sl_dist), 2)
                     tp1_px = round(curr_px + (2.5 * atr), 2)
                     spike_px = round(curr_px + (5.0 * atr), 2)
+                    poc_val = vp.poc if vp else 0.0
+                    vah_val = vp.vah if vp else 0.0
+                    val_val = vp.val if vp else 0.0
                     return ApexSignal(
                         direction="BUY",
                         entry_price=curr_px,
@@ -185,6 +355,11 @@ class ApexTrinityStrategy:
                         reasoning=f"NY Silver Bullet: Bullish FVG tap at CE ${ce:.2f} (Gap: ${gap_size:.2f} | Trend Aligned)",
                         timestamp=curr_time,
                         confidence_score=9.2,
+                        vp_poc=poc_val,
+                        vp_vah=vah_val,
+                        vp_val=val_val,
+                        is_hold_long=True,
+                        is_scalp_sell=False,
                     )
 
         # Bearish FVG: High of current bar < Low of 2 bars ago
@@ -204,6 +379,9 @@ class ApexTrinityStrategy:
                     sl_px = round(min(raw_sl, curr_px + max_sl_dist), 2)
                     tp1_px = round(curr_px - (2.5 * atr), 2)
                     spike_px = round(curr_px - (5.0 * atr), 2)
+                    poc_val = vp.poc if vp else 0.0
+                    vah_val = vp.vah if vp else 0.0
+                    val_val = vp.val if vp else 0.0
                     return ApexSignal(
                         direction="SELL",
                         entry_price=curr_px,
@@ -216,11 +394,21 @@ class ApexTrinityStrategy:
                         reasoning=f"NY Silver Bullet: Bearish FVG tap at CE ${ce:.2f} (Gap: ${gap_size:.2f} | Trend Aligned)",
                         timestamp=curr_time,
                         confidence_score=9.2,
+                        vp_poc=poc_val,
+                        vp_vah=vah_val,
+                        vp_val=val_val,
+                        is_hold_long=False,
+                        is_scalp_sell=True,
                     )
         return None
 
     def _evaluate_turtle_soup(
-        self, df_1m: pd.DataFrame, curr_px: float, atr: float, curr_time: float
+        self,
+        df_1m: pd.DataFrame,
+        curr_px: float,
+        atr: float,
+        curr_time: float,
+        vp: Optional[VolumeProfileResult] = None,
     ) -> Optional[ApexSignal]:
         """
         ICT Turtle Soup: Liquidity sweep of the Asian Session range (00:00-04:00 UTC)
@@ -243,6 +431,10 @@ class ApexTrinityStrategy:
         o, h, l, c = float(last_bar["open"]), float(last_bar["high"]), float(last_bar["low"]), float(last_bar["close"])
         rng = max(0.20, h - l)
 
+        poc_val = vp.poc if vp else 0.0
+        vah_val = vp.vah if vp else 0.0
+        val_val = vp.val if vp else 0.0
+
         # Bullish Turtle Soup: Low sweeps below Asian Low, but closes back above with a hammer wick
         if l < asia_low and c > asia_low:
             sweep_wick = min(o, c) - l
@@ -264,6 +456,11 @@ class ApexTrinityStrategy:
                     reasoning=f"Turtle Soup Long: Asian low ${asia_low:.2f} swept by ${(asia_low - l):.2f} with {(sweep_wick/rng)*100:.0f}% wick",
                     timestamp=curr_time,
                     confidence_score=9.4,
+                    vp_poc=poc_val,
+                    vp_vah=vah_val,
+                    vp_val=val_val,
+                    is_hold_long=True,
+                    is_scalp_sell=False,
                 )
 
         # Bearish Turtle Soup: High sweeps above Asian High, but closes back below with a shooting star wick
@@ -287,11 +484,21 @@ class ApexTrinityStrategy:
                     reasoning=f"Turtle Soup Short: Asian high ${asia_high:.2f} swept by ${(h - asia_high):.2f} with {(sweep_wick/rng)*100:.0f}% wick",
                     timestamp=curr_time,
                     confidence_score=9.4,
+                    vp_poc=poc_val,
+                    vp_vah=vah_val,
+                    vp_val=val_val,
+                    is_hold_long=False,
+                    is_scalp_sell=True,
                 )
         return None
 
     def _evaluate_breakout_retest(
-        self, df_1m: pd.DataFrame, curr_px: float, atr: float, curr_time: float
+        self,
+        df_1m: pd.DataFrame,
+        curr_px: float,
+        atr: float,
+        curr_time: float,
+        vp: Optional[VolumeProfileResult] = None,
     ) -> Optional[ApexSignal]:
         """
         5m S&R Breakout + 1m Retest + Pin Bar (Momentum Continuation).
@@ -345,6 +552,10 @@ class ApexTrinityStrategy:
         o, h, l, c = float(last_1m["open"]), float(last_1m["high"]), float(last_1m["low"]), float(last_1m["close"])
         rng = max(0.10, h - l)
 
+        poc_val = vp.poc if vp else 0.0
+        vah_val = vp.vah if vp else 0.0
+        val_val = vp.val if vp else 0.0
+
         if b_type == "UP":
             trend_ok = curr_px > float(last_1m["ema20"]) > float(last_1m["ema50"])
             retest_ok = l <= lvl + (0.8 * atr) and h >= lvl - (0.3 * atr)
@@ -369,6 +580,11 @@ class ApexTrinityStrategy:
                     reasoning=f"5m S&R Breakout UP + 1m Retest @ ${lvl:.2f} + Pin Wick {wick_ratio:.2f}",
                     timestamp=curr_time,
                     confidence_score=9.0,
+                    vp_poc=poc_val,
+                    vp_vah=vah_val,
+                    vp_val=val_val,
+                    is_hold_long=True,
+                    is_scalp_sell=False,
                 )
 
         elif b_type == "DOWN":
@@ -395,6 +611,11 @@ class ApexTrinityStrategy:
                     reasoning=f"5m S&R Breakout DOWN + 1m Retest @ ${lvl:.2f} + Pin Wick {wick_ratio:.2f}",
                     timestamp=curr_time,
                     confidence_score=9.0,
+                    vp_poc=poc_val,
+                    vp_vah=vah_val,
+                    vp_val=val_val,
+                    is_hold_long=False,
+                    is_scalp_sell=True,
                 )
         return None
 

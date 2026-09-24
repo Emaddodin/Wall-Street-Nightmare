@@ -99,59 +99,88 @@ def get_default_config(symbol: str) -> MicroExitConfig:
         )
 
 
-def get_to_the_moon_config(symbol: str = "XAUUSD") -> MicroExitConfig:
+def get_to_the_moon_config(symbol: str = "XAUUSD", direction: str = "BUY") -> MicroExitConfig:
     """
     Configuration for the Sovereign Compounding "To The Moon" Engine ($10k-$25k/day).
-    Targets +2.5 to +8.0 ATR Macro Spike Expansions with Dynamic Peak Watermark Bag Protection.
-    Guarantees that a +$300 floating profit locks cash and NEVER reverses into a -$500 loss.
+    Asymmetric Posture:
+    - BUY (Hold Long): Targets +4.00 to +8.00 ATR Macro Spike Expansions.
+    - SELL (Scalp Sell): Tactical scalp targets (+2.20 pts), fast BE (+0.80 pts), strict 15m lifespan.
     """
+    is_buy = direction.upper() == "BUY"
     return MicroExitConfig(
         symbol="XAUUSD",
         pip_or_pt_size=0.01,
         point_scale_label="pts",
-        fast_be_trigger=1.20,          # +1.20 pts (+1.0 ATR) -> moves SL to BE + $0.30 (Risk-Free)
-        micro_harvest_min=2.50,        # +2.50 pts
-        micro_harvest_target=4.00,     # +4.00 pts (+2.5 ATR primary scale-out target)
-        micro_harvest_extended=8.00,   # +8.00 pts (+5.0 ATR Macro Spike Harvest)
-        watermark_activate_usd=60.0,   # Activate trailing watermark once profit >= $60 (or 6% equity)
-        watermark_pullback_pct=0.18,   # 18% pullback buffer (at +$300 peak, locks +$246)
-        stall_tick_threshold=5,
+        fast_be_trigger=1.20 if is_buy else 0.80,
+        micro_harvest_min=2.50 if is_buy else 1.50,
+        micro_harvest_target=4.00 if is_buy else 2.20,
+        micro_harvest_extended=8.00 if is_buy else 4.00,
+        watermark_activate_usd=60.0,
+        watermark_pullback_pct=0.18,
+        stall_tick_threshold=5 if is_buy else 3,
         velocity_window_sec=5.0,
         min_velocity_pts_sec=0.10,
-        time_decay_seconds=2700.0,     # 45 minutes max duration for macro trend expansion
-        hard_risk_stop_usd=100.0,      # Dynamic safety risk ceiling
+        time_decay_seconds=2700.0 if is_buy else 900.0,
+        hard_risk_stop_usd=100.0,
     )
 
 
-def get_micro_account_config(balance: float = 30.0) -> MicroExitConfig:
+def get_micro_account_config(balance: float = 30.0, direction: str = "BUY") -> MicroExitConfig:
     """
     Micro-Account Guardian Configuration ($30 - $100 Accounts):
-    - Fast BE at +1.20 pts (locks risk-free stop to Entry + 0.10)
-    - TP1 Target: +3.50 pts (+3.5 pts on 0.01 lots = +$3.50)
-    - Extended Macro Spike harvest: +6.50 pts (+$6.50)
-    - Dynamic peak watermark protection: locks once profit >= $2.00 and pulls back > 22%
-    - Time decay aligned with 473-day empirical trade duration (20 min / 1200s)
-    - Hard risk stop capped at $2.20 (2.20 pts on 0.01 lots)
+    Asymmetric Posture:
+    - BUY ("Hold Long"):
+      * Fast BE at +1.20 pts
+      * TP1 Target: +3.50 pts (+$3.50 on 0.01 lots)
+      * Extended Macro Spike harvest: +6.50 pts (+$6.50)
+      * 20m lifespan (1200s), stall threshold 20
+    - SELL ("Scalp Sell"):
+      * Rapid BE at +0.80 pts
+      * Scalp Target: +1.80 pts (+$1.80 on 0.01 lots)
+      * Extended limit: +2.50 pts
+      * 10m lifespan (600s), stall threshold 8
     """
     safe_risk = max(1.80, min(0.08 * balance, 2.50))
     watermark_floor = max(2.00, 0.06 * balance)
-    return MicroExitConfig(
-        symbol="XAUUSD",
-        pip_or_pt_size=0.01,
-        point_scale_label="pts",
-        fast_be_trigger=1.20,
-        micro_harvest_min=2.50,
-        micro_harvest_target=3.50,
-        micro_harvest_extended=6.50,
-        watermark_activate_usd=watermark_floor,
-        watermark_pullback_pct=0.22,
-        stall_tick_threshold=20,
-        velocity_window_sec=5.0,
-        min_velocity_pts_sec=0.10,
-        time_decay_seconds=1200.0,
-        time_decay_profit_floor_usd=0.50,
-        hard_risk_stop_usd=safe_risk,
-    )
+    is_buy = direction.upper() == "BUY"
+
+    if is_buy:
+        return MicroExitConfig(
+            symbol="XAUUSD",
+            pip_or_pt_size=0.01,
+            point_scale_label="pts",
+            fast_be_trigger=1.20,
+            micro_harvest_min=2.50,
+            micro_harvest_target=3.50,
+            micro_harvest_extended=6.50,
+            watermark_activate_usd=watermark_floor,
+            watermark_pullback_pct=0.22,
+            stall_tick_threshold=20,
+            velocity_window_sec=5.0,
+            min_velocity_pts_sec=0.10,
+            time_decay_seconds=1200.0,
+            time_decay_profit_floor_usd=0.50,
+            hard_risk_stop_usd=safe_risk,
+        )
+    else:
+        # Tactical Scalp Sell
+        return MicroExitConfig(
+            symbol="XAUUSD",
+            pip_or_pt_size=0.01,
+            point_scale_label="pts",
+            fast_be_trigger=0.80,
+            micro_harvest_min=1.20,
+            micro_harvest_target=1.80,
+            micro_harvest_extended=2.50,
+            watermark_activate_usd=watermark_floor,
+            watermark_pullback_pct=0.20,
+            stall_tick_threshold=8,
+            velocity_window_sec=4.0,
+            min_velocity_pts_sec=0.15,
+            time_decay_seconds=600.0,
+            time_decay_profit_floor_usd=0.30,
+            hard_risk_stop_usd=safe_risk,
+        )
 
 
 
