@@ -225,6 +225,21 @@ class LiteFinanceGateway:
 
                     // 3. Pre-cached single-shot fast execution function with broker SL
                     window.__executeFastMarketOrder = (dir, vol, sl = null) => {
+                        // Clear any lingering popups or overlays before interacting
+                        try {
+                            const popups = document.querySelectorAll('.popup, .modal, [class*="popup"], [class*="modal"]');
+                            popups.forEach(p => {
+                                const closeBtn = p.querySelector('.close, [class*="close"], button, a');
+                                if (closeBtn && closeBtn.getBoundingClientRect().width > 0) {
+                                    try { closeBtn.click(); } catch(e) { p.remove(); }
+                                } else {
+                                    p.remove();
+                                }
+                            });
+                            const overlays = document.querySelectorAll('.website_overlay, .overlay');
+                            overlays.forEach(o => o.remove());
+                        } catch(e) {}
+
                         const isBuy = (dir === 'BUY');
                         const radioId = isBuy ? '#trade_buy_1' : '#trade_sell_1';
                         const radio = document.querySelector(radioId);
@@ -236,10 +251,12 @@ class LiteFinanceGateway:
                         if (label) label.click();
 
                         const inp = document.querySelector('#volume_value_1');
-                        if (inp && inp.value !== vol) {
+                        if (inp) {
+                            inp.focus();
                             inp.value = vol;
                             inp.dispatchEvent(new Event('input', { bubbles: true }));
                             inp.dispatchEvent(new Event('change', { bubbles: true }));
+                            inp.dispatchEvent(new Event('keyup', { bubbles: true }));
                         }
 
                         if (sl) applySL(sl);
@@ -468,7 +485,22 @@ class LiteFinanceGateway:
             vol_str = f"{volume:.2f}"
             sl_str = f"{sl_price:.2f}" if (sl_price and sl_price > 0) else None
             try:
-                # Atomic single-shot order execution inside Chrome's V8 engine with broker SL
+                # 1. Clear any lingering popups or overlays before order dispatch
+                await self._page.evaluate("""() => {
+                    const popups = document.querySelectorAll('.popup, .modal, [class*="popup"], [class*="modal"]');
+                    popups.forEach(p => {
+                        const closeBtn = p.querySelector('.close, [class*="close"], button, a');
+                        if (closeBtn && closeBtn.getBoundingClientRect().width > 0) {
+                            try { closeBtn.click(); } catch(e) { p.remove(); }
+                        } else {
+                            p.remove();
+                        }
+                    });
+                    const overlays = document.querySelectorAll('.website_overlay, .overlay');
+                    overlays.forEach(o => o.remove());
+                }""")
+
+                # 2. Atomic order dispatch
                 res = await self._page.evaluate("""({ dir, vol, sl }) => {
                     if (typeof window.__executeFastMarketOrder === 'function') {
                         return window.__executeFastMarketOrder(dir, vol, sl);
@@ -485,9 +517,11 @@ class LiteFinanceGateway:
 
                     const inp = document.querySelector('#volume_value_1');
                     if (inp) {
+                        inp.focus();
                         inp.value = vol;
                         inp.dispatchEvent(new Event('input', { bubbles: true }));
                         inp.dispatchEvent(new Event('change', { bubbles: true }));
+                        inp.dispatchEvent(new Event('keyup', { bubbles: true }));
                     }
 
                     // Click order dispatch button
@@ -504,17 +538,75 @@ class LiteFinanceGateway:
                     return { success: false, error: 'NO_VISIBLE_ORDER_BUTTON' };
                 }""", {"dir": direction, "vol": vol_str, "sl": sl_str})
 
-                latency_ms = (time.perf_counter() - t0) * 1000.0
-
                 if not isinstance(res, dict) or not res.get("success"):
                     err_msg = res.get("error", "Button dispatch failed") if isinstance(res, dict) else str(res)
                     logger.error("❌ BROKER ORDER DISPATCH FAILED: %s", err_msg)
                     return {"success": False, "error": err_msg}
 
+                # 3. VERIFICATION & BROKER RESPONSE INSPECTION
+                # Wait 200ms for LiteFinance DOM to process request
+                await asyncio.sleep(0.20)
+
+                broker_check = await self._page.evaluate("""() => {
+                    // Check for error modals / popups
+                    const popups = Array.from(document.querySelectorAll('.popup, .modal, [class*="popup"], [class*="modal"]')).filter(p => p.getBoundingClientRect().width > 0 && p.getBoundingClientRect().height > 0);
+                    for (const p of popups) {
+                        const text = (p.innerText || '').trim();
+                        if (text.includes('Not enough funds') || text.includes('Attention') || text.includes('Error') || text.includes('rejected') || text.includes('failed') || text.includes('Invalid')) {
+                            // Dismiss popup
+                            const closeBtn = p.querySelector('.close, [class*="close"], a, button');
+                            if (closeBtn) {
+                                try { closeBtn.click(); } catch(e) { p.remove(); }
+                            } else {
+                                p.remove();
+                            }
+                            return { rejected: true, reason: text.replace(/\\n+/g, ' ') };
+                        }
+                    }
+
+                    // Check for confirmation modals
+                    const confirmBtns = Array.from(document.querySelectorAll('button, a.btn')).filter(x => {
+                        const t = (x.innerText || '').trim();
+                        return (t === 'Confirm' || t === 'Yes' || t === 'OK') && x.getBoundingClientRect().width > 0;
+                    });
+                    if (confirmBtns.length > 0) {
+                        confirmBtns[0].click();
+                    }
+
+                    const openTrades = document.querySelectorAll('.js_open_trades tr, [class*="open_trades"] tr');
+                    return { rejected: false, openTradesCount: openTrades.length };
+                }""")
+
+                if broker_check.get("rejected"):
+                    rej_reason = broker_check.get("reason", "Broker rejected order")
+                    logger.error("❌ BROKER REJECTED ORDER: %s | Requested: %s %.2f lots", rej_reason, direction, volume)
+                    return {"success": False, "error": rej_reason}
+
+                # 4. Multi-tick confirmation: Ensure assets_used > 0 or trade table updated
+                confirmed = False
+                for _ in range(6):
+                    await asyncio.sleep(0.20)
+                    acc = await self.get_account_snapshot(force_fresh=True)
+                    if acc.assets_used > 0.0 or broker_check.get("openTradesCount", 0) > 0:
+                        confirmed = True
+                        break
+
+                latency_ms = (time.perf_counter() - t0) * 1000.0
                 clicked_btn = res.get("text", "ORDER_CLICKED")
+
+                if not confirmed:
+                    # Final check for error popups that appeared late
+                    late_err = await self._page.evaluate("""() => {
+                        const p = document.querySelector('.popup, .modal, .toast, .notification');
+                        return p ? (p.innerText || '').replace(/\\n+/g, ' ') : null;
+                    }""")
+                    err_msg = late_err or "Broker did not report active position (assets_used remained 0)"
+                    logger.warning("⚠️ ORDER CONFIRMATION TIMEOUT: %s", err_msg)
+                    return {"success": False, "error": err_msg}
+
                 logger.info(
-                    "⚡ ULTRA-FAST BROKER ORDER SENT: %s %.2f lots | SL: %s | Dispatch Latency: %.2fms | Button: %s",
-                    direction, volume, sl_str or "NONE", latency_ms, clicked_btn
+                    "⚡ ULTRA-FAST BROKER ORDER CONFIRMED: %s %.2f lots | SL: %s | Assets Used: $%.2f | Latency: %.2fms | Button: %s",
+                    direction, volume, sl_str or "NONE", acc.assets_used, latency_ms, clicked_btn
                 )
 
                 return {

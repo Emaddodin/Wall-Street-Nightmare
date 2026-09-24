@@ -22,6 +22,7 @@ import asyncio
 import csv
 import json
 import logging
+import math
 import os
 import signal
 import sys
@@ -178,12 +179,12 @@ def sync_dashboard_state(
         "status": "ACTIVE" if bot_running else "PAUSED",
         "bot_running": bot_running,
         "fsm_state": "IN_POSITION" if active_pos else ("PAUSED" if not bot_running else "SCANNING"),
-        "mode": "BROKER LIVE (LiteFinance MT5 Demo #91456523)",
+        "mode": "BROKER LIVE (LiteFinance Real Account)",
         "symbol": "XAUUSD",
         "balance": round(balance, 2),
         "equity": round(equity, 2),
-        "realized_pnl": round(balance - 100.0, 2),
-        "pnl_pct": round((equity - 100.0) / 100.0 * 100.0, 2),
+        "realized_pnl": round(balance - 59.87, 2),
+        "pnl_pct": round((equity - 59.87) / 59.87 * 100.0, 2) if 59.87 > 0 else 0.0,
         "current_tier": tier,
         "current_price": mid_px,
         "mid_price": mid_px,
@@ -295,32 +296,48 @@ class LiveBrokerScalper:
         else:
             return "London Close / Asian Pre-Market"
 
-    def compute_lot_size(self, balance: float) -> float:
+    def compute_lot_size(self, balance: float, current_price: float = 4285.0) -> float:
         """
-        "To The Moon" Sovereign Compounding Ladder:
-        Calibrated with micro-balance safety:
-          - Balance < $50:    0.02 lots (safe for current demo balance $35.11)
-          - $50 - $200 Tier:  0.05 lots
-          - $200 - $400 Tier: 0.10 lots
-          - $400 - $800 Tier: 0.20 lots (0.33 with Titan boost)
-          - $800 - $1500:     0.40 lots (0.66 with Titan boost)
-          - $1500 - $3000:    0.80 lots (1.32 with Titan boost)
-          - $3000+ Tier:      min(5.00, round(balance / 2000.0, 2))
+        "To The Moon" Sovereign Compounding Ladder (Calibrated for LiteFinance 1:500 Leverage):
+        XAUUSD contract = 100 oz. At ~$4285/oz:
+        - 1.00 lot margin = $857.00
+        - 0.01 lot margin = $8.57
+
+        Calibrated Tiers (keeping base margin ~25-45% of balance, leaving buffer for A+ boost & noise):
+          - Balance < $35:    0.01 lots ($8.57 margin)
+          - $35 - $75 Tier:   0.02 lots ($17.14 margin = 28.6% of $59.87 balance) -> ACTIVE TIER!
+          - $75 - $150 Tier:  0.04 lots ($34.28 margin)
+          - $150 - $300 Tier: 0.08 lots ($68.56 margin)
+          - $300 - $600 Tier: 0.15 lots ($128.55 margin)
+          - $600 - $1200:     0.30 lots ($257.10 margin)
+          - $1200 - $2500:    0.60 lots ($514.20 margin)
+          - $2500 - $5000:    1.20 lots ($1028.40 margin)
+          - $5000+ Tier:      min(10.00, round(balance / 4000.0, 2))
         """
-        if balance < 50.0:
-            return 0.02
-        elif balance < 200.0:
-            return 0.05
-        elif balance < 400.0:
-            return 0.10
-        elif balance < 800.0:
-            return 0.20
-        elif balance < 1500.0:
-            return 0.40
-        elif balance < 3000.0:
-            return 0.80
+        if balance < 35.0:
+            lots = 0.01
+        elif balance < 75.0:
+            lots = 0.02
+        elif balance < 150.0:
+            lots = 0.04
+        elif balance < 300.0:
+            lots = 0.08
+        elif balance < 600.0:
+            lots = 0.15
+        elif balance < 1200.0:
+            lots = 0.30
+        elif balance < 2500.0:
+            lots = 0.60
+        elif balance < 5000.0:
+            lots = 1.20
         else:
-            return min(5.00, round(balance / 2000.0, 2))
+            lots = min(10.00, round(balance / 4000.0, 2))
+
+        # Absolute Margin Safety Guard (1:500 leverage):
+        # Never allow base lot size to exceed 50% of total balance in required margin!
+        margin_per_001 = max(8.0, (current_price * 100.0 * 0.01) / 500.0)
+        max_safe_lots = math.floor((balance * 0.50) / margin_per_001) * 0.01
+        return max(0.01, min(lots, round(max_safe_lots, 2)))
 
     def is_in_killzone(self, hour_utc: Optional[int] = None) -> bool:
         hr = hour_utc if hour_utc is not None else datetime.now(timezone.utc).hour
@@ -406,8 +423,8 @@ async def run_live_scalper():
     scalper = LiveBrokerScalper(gw)
 
     push_ntfy(
-        title="🟢 Stratton Oakmont Broker LIVE Armed",
-        message=f"Connected to LiteFinance MT5 Demo #91456523. Initial Balance: ${acc_snap.balance:.2f} (1:1000 Leverage).\nLaya System 1 & Politician Brain Active.\nDynamic Peak Bag Protection Armed.\nTerminal: https://82-115-21-155.sslip.io/",
+        title="🟢 Stratton Oakmont Broker LIVE Armed (REAL ACCOUNT)",
+        message=f"Connected to LiteFinance Real Account. Real Balance: ${acc_snap.balance:.2f} (1:1000 Leverage).\nLaya System 1 & Politician Brain Active.\nSovereign Compounding Ladder Armed (0.05 Lots Baseline).\nDynamic Peak Bag Protection Armed.\nTerminal: https://82-115-21-155.sslip.io/",
         tags="rocket,white_check_mark",
     )
 
@@ -476,8 +493,8 @@ async def run_live_scalper():
                 # 2.1 Ghost Position Watchdog (if broker closed order or hit SL externally)
                 if acc.assets_used <= 0.0:
                     scalper.ghost_position_ticks += 1
-                    if scalper.ghost_position_ticks >= 4:
-                        logger.warning("👻 GHOST POSITION DETECTED: Broker reports 0 assets used for 4 ticks. Clearing active stack.")
+                    if scalper.ghost_position_ticks >= 8:
+                        logger.warning("👻 GHOST POSITION DETECTED: Broker reports 0 assets used for 8 ticks. Clearing active stack.")
                         scalper.active_stack = None
                         scalper.ghost_position_ticks = 0
                         continue
@@ -498,18 +515,18 @@ async def run_live_scalper():
                 # Distance moved in favorable direction in points ($/oz)
                 gain_pts = (current_mid - entry_px) if direction == "BUY" else (entry_px - current_mid)
 
-                # 2.2 Stagnation & Maximum Safe Holding Duration (from TradeJournalRAG)
+                # 2.2 High-Velocity Scalping Stagnation & Holding Duration
                 time_held_sec = time.time() - scalper.active_stack["open_time"]
-                max_duration_sec = scalper.active_stack.get("max_safe_duration_sec", 1500.0) # ~25 mins default
+                max_duration_sec = scalper.active_stack.get("max_safe_duration_sec", 600.0) # ~10 mins scalp default
                 stagnation_exit = False
                 stagnation_reason = ""
                 if time_held_sec >= max_duration_sec:
-                    if floating_pnl >= 3.0:
+                    if floating_pnl >= 2.0:
                         stagnation_exit = True
-                        stagnation_reason = f"Stagnation Harvest: Locked +${floating_pnl:.2f} after {int(time_held_sec//60)}m (Historical Twin Edge Expired)"
-                    elif time_held_sec >= (max_duration_sec * 1.4):
+                        stagnation_reason = f"Scalp Duration Harvest: Locked +${floating_pnl:.2f} after {int(time_held_sec//60)}m (High-Velocity Edge Captured)"
+                    elif time_held_sec >= (max_duration_sec * 1.25):
                         stagnation_exit = True
-                        stagnation_reason = f"Stagnation Scratch: Exited at ${floating_pnl:.2f} after {int(time_held_sec//60)}m (Avoid Lingering Reversal)"
+                        stagnation_reason = f"Scalp Stagnation Scratch: Exited at ${floating_pnl:.2f} after {int(time_held_sec//60)}m (Protect Capital from Reversal)"
 
                 # --- "To The Moon" Sovereign Trailing Ratchets & Bag Protection ---
 
@@ -524,19 +541,19 @@ async def run_live_scalper():
                     if pullback_pct >= 0.18:
                         watermark_exit = True
 
-                # Ratchet 1: Fast Breakeven Lock at +1.0 ATR (Guarantees Risk-Free Cushion)
-                if not scalper.active_stack.get("be_ratchet_hit", False) and gain_pts >= 1.0 * atr:
+                # Ratchet 1: Accelerated Breakeven Lock at +0.75 ATR (Fast Risk-Free Cushion for 0.10 Lots)
+                if not scalper.active_stack.get("be_ratchet_hit", False) and gain_pts >= 0.75 * atr:
                     scalper.active_stack["be_ratchet_hit"] = True
-                    new_sl = entry_px + 0.30 if direction == "BUY" else entry_px - 0.30
+                    new_sl = entry_px + 0.20 if direction == "BUY" else entry_px - 0.20
                     scalper.active_stack["sl_price"] = new_sl
-                    logger.info("🛡️ 'TO THE MOON' BE RATCHET LOCKED: SL moved to BE+0.30 ($%.2f) at +%.2f pts", new_sl, gain_pts)
+                    logger.info("🛡️ 'TO THE MOON' BE RATCHET LOCKED: SL moved to BE+0.20 ($%.2f) at +%.2f pts", new_sl, gain_pts)
 
-                # Ratchet 2: Profit Lock at +2.5 ATR (TP1 Zone) -> Ratchet SL to +1.5 ATR
-                if not scalper.active_stack.get("tp1_ratchet_hit", False) and gain_pts >= 2.5 * atr:
+                # Ratchet 2: Fast Scalp Profit Lock at +1.8 ATR (TP1 Zone) -> Ratchet SL to +1.0 ATR
+                if not scalper.active_stack.get("tp1_ratchet_hit", False) and gain_pts >= 1.8 * atr:
                     scalper.active_stack["tp1_ratchet_hit"] = True
-                    locked_sl = entry_px + (1.5 * atr) if direction == "BUY" else entry_px - (1.5 * atr)
+                    locked_sl = entry_px + (1.0 * atr) if direction == "BUY" else entry_px - (1.0 * atr)
                     scalper.active_stack["sl_price"] = locked_sl
-                    logger.info("💰 'TO THE MOON' PROFIT LOCK: SL ratcheted to +1.5 ATR ($%.2f) at +%.2f pts", locked_sl, gain_pts)
+                    logger.info("💰 'TO THE MOON' SCALP PROFIT LOCK: SL ratcheted to +1.0 ATR ($%.2f) at +%.2f pts", locked_sl, gain_pts)
 
                 # Check if price hit current active software Stop Loss
                 sl_hit = (direction == "BUY" and current_mid <= scalper.active_stack["sl_price"]) or \
@@ -715,9 +732,11 @@ async def run_live_scalper():
                     sig: Optional[ApexSignal] = scalper.evaluate_strategy()
                     if sig:
                         acc = await gw.get_account_snapshot(force_fresh=True)
-                        base_lot_size = scalper.compute_lot_size(acc.balance)
+                        base_lot_size = scalper.compute_lot_size(acc.balance, current_price=quote.mid)
 
-                        # --- LAYA SYSTEM 1 DECISION & ICT RAG VALIDATION ---
+                        # --- LAYA SYSTEM 1 DECISION & ICT RAG VALIDATION (WITH TJR GATEWAYS) ---
+                        recent_high = max(c["high"] for c in scalper.candles_1m[-30:]) if len(scalper.candles_1m) >= 5 else sig.entry_price + (sig.atr_1m * 3.0)
+                        recent_low = min(c["low"] for c in scalper.candles_1m[-30:]) if len(scalper.candles_1m) >= 5 else sig.entry_price - (sig.atr_1m * 3.0)
                         market_state = {
                             "direction": sig.direction,
                             "entry_price": sig.entry_price,
@@ -727,20 +746,46 @@ async def run_live_scalper():
                             "setup_type": sig.strategy_type,
                             "hour_utc": datetime.now(timezone.utc).hour,
                             "trend_aligned": True,
+                            "atr_1m": sig.atr_1m,
+                            "recent_high": recent_high,
+                            "recent_low": recent_low,
                         }
                         laya_decision = laya_oracle.evaluate_setup_sync(market_state)
 
+                        # Smart & Bold Directive:
+                        # VETO only on BLATANT, catastrophic toxic traps (Trap Prob >= 80% or Fatal Politician Red Line)
+                        # All other moderate warnings (< 80% Trap Prob) are overridden to execute boldly on base lot size!
                         if not laya_decision.is_valid:
-                            logger.warning("🛡️ LAYA / POLITICIAN SHIELD VETOED SETUP: %s (Trap Prob: %.1f%%)", laya_decision.reasoning, laya_decision.trap_probability * 100)
-                            push_ntfy(
-                                title="🛡️ System Guarantee Shield Veto",
-                                message=f"Vetoed {sig.direction} ({sig.strategy_type}) @ ${sig.entry_price:.2f} | Trap Risk: {laya_decision.trap_probability*100:.1f}%\nReason: {laya_decision.reasoning}",
-                                tags="shield,no_entry_sign",
-                                priority="default",
+                            is_blatant_trap = (
+                                laya_decision.trap_probability >= 0.80 or
+                                "Politician Shield Veto" in getattr(laya_decision, "matched_ict_concepts", []) or
+                                (getattr(laya_decision, "setup_grade", "") == "toxic_trap" and laya_decision.trap_probability >= 0.80)
                             )
+                            if is_blatant_trap:
+                                logger.warning("🛡️ BLATANT TOXIC TRAP VETOED: %s (Trap Prob: %.1f%%) - Trade suppressed for capital protection",
+                                               laya_decision.reasoning, laya_decision.trap_probability * 100)
+                                push_ntfy(
+                                    title=f"🛡️ Blatant Trap Veto: {sig.direction} {sig.strategy_type}",
+                                    message=f"Suppressed toxic trap @ ${sig.entry_price:.2f} | Trap Risk: {laya_decision.trap_probability*100:.1f}%\nReason: {laya_decision.reasoning}",
+                                    tags="shield,no_entry_sign",
+                                    priority="default",
+                                )
+                                continue
+
+                            logger.info("⚡ SMART & BOLD OVERRIDE: %s (Trap Prob: %.1f%%) -> Executing trade on base lot size (%.2f lots)", 
+                                        laya_decision.reasoning, laya_decision.trap_probability * 100, base_lot_size)
+                            lot_size = base_lot_size
+                            boost_tag = " (Smart & Bold Override - Base Sizing)"
+                            effective_spike_target = sig.spike_target
                         else:
-                            # Apply dynamic compounding multiplier (up to 1.65x on Macro Sovereign Titan)
-                            lot_size = round(base_lot_size * max(1.0, laya_decision.compounding_multiplier), 2)
+                            # Apply dynamic compounding multiplier (up to 1.50x on Macro Sovereign Titan)
+                            boosted_lots = round(base_lot_size * max(1.0, laya_decision.compounding_multiplier), 2)
+                            
+                            # Hard margin cap: Boosted trade must never exceed 70% of available margin at 1:500 leverage!
+                            margin_per_001 = max(8.0, (sig.entry_price * 100.0 * 0.01) / 500.0)
+                            max_allowed_lots = math.floor((acc.available * 0.70) / margin_per_001) * 0.01
+                            lot_size = max(0.01, min(boosted_lots, round(max_allowed_lots, 2)))
+                            
                             boost_tag = f" (Laya {laya_decision.setup_grade} {laya_decision.compounding_multiplier:.2f}x Boost | TP {laya_decision.tp_expansion_multiplier:.2f}x)" if laya_decision.compounding_multiplier > 1.0 else ""
                             
                             # Apply Macro Target Expansion (The Sword)
@@ -749,38 +794,47 @@ async def run_live_scalper():
                                 expansion_dist = sig.atr_1m * (laya_decision.tp_expansion_multiplier - 1.0) * 2.5
                                 effective_spike_target = (sig.spike_target + expansion_dist) if sig.direction == "BUY" else (sig.spike_target - expansion_dist)
 
-                            logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f | TP1: $%.2f | Spike: $%.2f | Lots: %.2f%s | Confluence: %.1f/10",
-                                        sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, sig.tp1_price, effective_spike_target, lot_size, boost_tag, laya_decision.confluence_score)
+                        logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f | TP1: $%.2f | Spike: $%.2f | Lots: %.2f%s | Confluence: %.1f/10 | TJR: %s (%s)",
+                                    sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, sig.tp1_price, effective_spike_target, lot_size, boost_tag, laya_decision.confluence_score, getattr(laya_decision, "tjr_dealing_range", "EQ"), getattr(laya_decision, "tjr_notes", ""))
 
-                            order_res = await gw.open_market_order(sig.direction, lot_size, sl_price=sig.sl_price)
-                            if order_res.get("success"):
-                                scalper.last_latency_ms = order_res.get("latency_ms", 0.0)
-                                scalper.active_stack = {
-                                    "direction": sig.direction,
-                                    "volume": lot_size,
-                                    "entry_price": sig.entry_price,
-                                    "sl_price": sig.sl_price,
-                                    "tp1_price": sig.tp1_price,
-                                    "spike_target": effective_spike_target,
-                                    "atr_1m": sig.atr_1m,
-                                    "strategy_type": sig.strategy_type,
-                                    "open_time": time.time(),
-                                    "max_safe_duration_sec": max(15, min(35, getattr(laya_decision, "max_safe_holding_min", 25))) * 60,
-                                    "floating_pnl": 0.0,
-                                    "peak_pnl": 0.0,
-                                    "be_ratchet_hit": False,
-                                    "tp1_ratchet_hit": False,
-                                    "laya_grade": laya_decision.setup_grade,
-                                    "ict_concepts": sig.ict_concepts,
-                                    "political_regime": laya_decision.political_regime,
-                                    "macro_bias": laya_decision.macro_bias,
-                                }
-                                push_ntfy(
-                                    title=f"🌕 {laya_decision.setup_grade.upper()}: {sig.direction} {lot_size} Lots [{sig.strategy_type}]",
-                                    message=f"Entry: ${sig.entry_price:.2f} | SL: ${sig.sl_price:.2f} | Spike: ${effective_spike_target:.2f}\nSizing: {laya_decision.compounding_multiplier:.2f}x | TP Exp: {laya_decision.tp_expansion_multiplier:.2f}x\nPolitician: {laya_decision.political_regime} ({laya_decision.macro_bias})\nLatency: {scalper.last_latency_ms:.1f}ms",
-                                    tags="zap,rocket,shield",
-                                    priority="high",
-                                )
+                        order_res = await gw.open_market_order(sig.direction, lot_size, sl_price=sig.sl_price)
+                        if order_res.get("success"):
+                            scalper.last_latency_ms = order_res.get("latency_ms", 0.0)
+                            scalper.active_stack = {
+                                "direction": sig.direction,
+                                "volume": lot_size,
+                                "entry_price": sig.entry_price,
+                                "sl_price": sig.sl_price,
+                                "tp1_price": sig.tp1_price,
+                                "spike_target": effective_spike_target,
+                                "atr_1m": sig.atr_1m,
+                                "strategy_type": sig.strategy_type,
+                                "open_time": time.time(),
+                                "max_safe_duration_sec": max(6, min(15, getattr(laya_decision, "max_safe_holding_min", 10))) * 60,
+                                "floating_pnl": 0.0,
+                                "peak_pnl": 0.0,
+                                "be_ratchet_hit": False,
+                                "tp1_ratchet_hit": False,
+                                "laya_grade": laya_decision.setup_grade,
+                                "ict_concepts": sig.ict_concepts,
+                                "political_regime": laya_decision.political_regime,
+                                "macro_bias": laya_decision.macro_bias,
+                            }
+                            push_ntfy(
+                                title=f"🌕 {laya_decision.setup_grade.upper()}: {sig.direction} {lot_size} Lots [{sig.strategy_type}]",
+                                message=f"✅ REAL BROKER FILLED @ ${sig.entry_price:.2f} | SL: ${sig.sl_price:.2f} | Spike: ${effective_spike_target:.2f}\nSizing: {laya_decision.compounding_multiplier:.2f}x | TP Exp: {laya_decision.tp_expansion_multiplier:.2f}x\nPolitician: {laya_decision.political_regime} ({laya_decision.macro_bias})\nBroker Latency: {scalper.last_latency_ms:.1f}ms",
+                                tags="zap,rocket,shield",
+                                priority="high",
+                            )
+                        else:
+                            err_msg = order_res.get("error", "Unknown error")
+                            logger.error("❌ BROKER ORDER FAILED / REJECTED: %s | Requested: %s %.2f lots", err_msg, sig.direction, lot_size)
+                            push_ntfy(
+                                title=f"⚠️ Broker Order Rejected: {sig.direction} {lot_size} Lots",
+                                message=f"Signal: {sig.strategy_type} @ ${sig.entry_price:.2f}\nBroker Message: {err_msg}\nBalance: ${acc.balance:.2f} (Margin Protection)",
+                                tags="warning,no_entry_sign",
+                                priority="urgent",
+                            )
 
             # 4. Sync telemetry to mobile dashboard (every ~1s)
             if tick_count % 20 == 0:
@@ -801,6 +855,12 @@ async def run_live_scalper():
                             priority="high",
                         )
 
+                status_msg = "Trading on LiteFinance Real Account"
+                if scalper.active_stack:
+                    status_msg = f"In {scalper.active_stack['direction']} position ({scalper.active_stack['volume']} lots)"
+                elif getattr(scalper, "trading_paused", False):
+                    status_msg = "Auto-trade paused via dashboard"
+
                 sync_dashboard_state(
                     balance=acc.balance,
                     equity=acc.equity,
@@ -813,7 +873,7 @@ async def run_live_scalper():
                     laya_telemetry=laya_oracle.get_telemetry(),
                     daily_withdrawal=withdrawal_info,
                     bot_running=not getattr(scalper, "trading_paused", False),
-                    message=("Trading on LiteFinance MT5 Demo" if not scalper.active_stack else f"In {scalper.active_stack['direction']} position ({scalper.active_stack['volume']} lots)") if not getattr(scalper, "trading_paused", False) else "Auto-trade paused via dashboard",
+                    message=status_msg,
                 )
 
             # Micro-yield (20ms) to keep CPU cool while maintaining sub-millisecond reactivity

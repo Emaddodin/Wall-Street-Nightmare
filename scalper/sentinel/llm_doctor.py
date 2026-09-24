@@ -59,7 +59,7 @@ HFT_API_URL = os.getenv("HFT_API_URL", "http://127.0.0.1:8088/api/hft")
 LIVE_SERVICE_NAME = os.getenv("LIVE_SERVICE_NAME", "stratton-xau-live.service")
 NTFY_URL = os.getenv("NTFY_URL", "https://ntfy.sh/tbt-96c0dc08c297676b")
 
-MAX_QUOTE_STALL_SEC = 20.0
+MAX_QUOTE_STALL_SEC = 45.0
 POLL_INTERVAL_SEC = 4.0
 
 
