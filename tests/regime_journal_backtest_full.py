@@ -603,12 +603,24 @@ def run_full_regime_backtest(
             writer.writerow(asdict(row))
     print(f"📁 Saved complete per-trade journal ({total_trades} trades) to {csv_path}")
 
+    # Export Daily Summaries CSV ($60 USD Sovereign Compounding)
+    daily_csv_path = ROOT_DIR / "data" / "trump_regime_daily_60_usd_compounding.csv"
+    with open(daily_csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=[
+            "day_num", "date", "start_balance", "end_balance", "day_pnl",
+            "withdrawn_today", "cumulative_withdrawn", "trades_count", "wins", "win_rate_pct"
+        ])
+        writer.writeheader()
+        writer.writerows(daily_summaries)
+    print(f"📊 Saved daily compounding ledger to {daily_csv_path}")
+
     # Export JSON Analytics Summary
     json_path = ROOT_DIR / "data" / "regime_analytics_summary_full.json"
     with open(json_path, "w") as f:
         json.dump(analytics_summary, f, indent=2)
     print(f"📊 Saved empirical regime analytics summary to {json_path}")
 
+    analytics_summary["daily_summaries"] = daily_summaries
     return analytics_summary
 
 

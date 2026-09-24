@@ -37,7 +37,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from tests.run_daily_trump_backtest_hardened import run_daily_trump_backtest
+from tests.regime_journal_backtest_full import run_full_regime_backtest
 
 
 def build_formatted_excel(
@@ -184,9 +184,9 @@ def build_formatted_excel(
         n_trades = int(row["trades_count"])
         n_wins = int(row["wins"])
         wr_pct = float(row["win_rate_pct"])
-        dd_pct = float(row["drawdown_pct"])
         tot_wealth = end_bal + c_vault
         running_peak = max(running_peak, tot_wealth)
+        dd_pct = float(row.get("drawdown_pct", (running_peak - tot_wealth) / running_peak * 100.0 if running_peak > 0 else 0.0))
 
         status = "VAULT HARVEST" if v_today > 0 else ("GROWTH DAY" if pnl > 0 else "DEFENSIVE SHIELD")
 
@@ -361,6 +361,7 @@ def build_formatted_excel(
         ("6. Post-Loss Cooldown & 2-Loss Lockout", "Imposes a 5-minute freeze after any loss, and a 60-minute complete lockout after 2 consecutive losses to prevent emotional revenge trading."),
         ("7. Live Spread Blowout Veto (> $0.45)", "Monitors broker bid-ask spread in real time; vetoes entries if spread expands beyond $0.45/oz during news spikes or liquidity vacuums."),
         ("8. Sovereign Daily Withdrawal Compounding", "Automatically vaults 30% to 70% of daily realized profits into the Stratton Vault, banking profits as hard cash while compounding the rest."),
+        ("9. TradeJournalRAG Sub-Millisecond Memory Oracle", "Vectorizes 6,613 Trump regime trades; predicts twin win rates, trap risks, and max safe holding duration to veto toxic setups in live execution."),
     ]
 
     for idx, (title, desc) in enumerate(safeguards, start=5):
@@ -369,8 +370,8 @@ def build_formatted_excel(
         ws_defense.cell(row=idx, column=2).border = thin_border
         ws_defense.cell(row=idx, column=3).border = thin_border
 
-    ws_defense.column_dimensions["B"].width = 45
-    ws_defense.column_dimensions["C"].width = 95
+    ws_defense.column_dimensions["B"].width = 50
+    ws_defense.column_dimensions["C"].width = 100
 
     # Save Workbook
     output_excel_path.parent.mkdir(parents=True, exist_ok=True)
@@ -383,34 +384,31 @@ def main() -> None:
     print(" BUILDING TRUMP REGIME DAILY COMPOUNDING EXCEL LEDGER ($60 USD)")
     print("=" * 70)
 
-    # 1. Run backtest with $60.00 starting balance
-    summary = run_daily_trump_backtest(
+    # 1. Run full regime backtest with $60.00 starting balance
+    summary = run_full_regime_backtest(
         data_dir="data/candles",
         start_date_str="2025-01-21",
         starting_balance=60.0,
         enable_daily_withdrawal=True,
-        buffer_equity=150.0,
+        buffer_equity=200.0,
     )
 
-    daily_csv = ROOT_DIR / "data" / "trump_regime_daily_report.csv"
+    daily_csv = ROOT_DIR / "data" / "trump_regime_daily_60_usd_compounding.csv"
     target_excel = ROOT_DIR / "data" / "trump_regime_daily_60_usd_compounding.xlsx"
-    target_csv = ROOT_DIR / "data" / "trump_regime_daily_60_usd_compounding.csv"
-
-    # Copy / save CSV version
-    df = pd.read_csv(daily_csv)
-    df.to_csv(target_csv, index=False)
-    print(f"Saved compounding CSV to: {target_csv}")
+    trades_csv = ROOT_DIR / "data" / "regime_trade_journal_full.csv"
 
     # 2. Build Rich Formatted Excel
     build_formatted_excel(
         daily_csv_path=daily_csv,
         output_excel_path=target_excel,
+        trades_csv_path=trades_csv,
         starting_balance=60.0,
     )
 
     print("\nSummary Results starting with $60.00 across 473 Days:")
     for k, v in summary.items():
-        print(f"  {k}: {v}")
+        if k != "daily_summaries":
+            print(f"  {k}: {v}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,5 @@
+ticket_id,symbol,entry_time,exit_time,direction,entry_price,exit_price,stop_loss,take_profit,position_size,risk_pts,reward_pts,rr_realized,realized_pnl,is_win,exit_reason,holding_bars,mae_pts,mfe_pts,session_window,htf_bias,sweep_side,sweep_penetration_pips,displacement_ratio,fvg_size_atr,dealing_range_coordinate,planned_rr,atr_14,laya_authorized,laya_regime,laya_grade,laya_probability
+478,XAUUSD,478,480,SHORT,4320.82,4320.06,4322.25,4318.37,0.14,1.11,2.77,0.68,10.57,1,WATERMARK_LOCK,2,0.0,1.74,NY_AM,BEARISH,BUY_SIDE,1.9,2.08,1.08,0.662,2.5,0.91,1,DUAL_CONFIRMATION,3,0.85
+541,XAUUSD,541,543,LONG,4318.46,4319.47,4317.18,4320.53,0.14,0.96,2.39,1.05,14.07,1,WATERMARK_LOCK,2,0.39,1.23,NY_AM,BULLISH,SELL_SIDE,7.3,1.43,0.22,0.357,2.5,0.58,1,DUAL_CONFIRMATION,3,0.85
+661,XAUUSD,661,662,LONG,4316.42,4316.41,4315.96,4316.41,0.17,0.13,0.32,-0.01,-0.02,0,TP_HIT,1,0.0,0.69,NY_AM,BULLISH,SELL_SIDE,1.8,2.2,1.14,0.056,2.5,0.46,1,DUAL_CONFIRMATION,3,0.947
+822,XAUUSD,822,823,SHORT,4302.16,4292.46,4311.26,4280.57,0.14,8.77,21.92,1.11,135.87,1,WATERMARK_LOCK,1,0.0,12.16,NY_AM,BEARISH,BUY_SIDE,32.2,4.37,0.96,0.6,2.5,2.86,1,DUAL_CONFIRMATION,3,0.85

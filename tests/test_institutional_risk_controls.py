@@ -58,22 +58,22 @@ def test_sovereign_compounding_sizing():
     """
     scalper = LiveBrokerScalper(gateway=MagicMock(), symbol="XAUUSD")
     
-    # $700 account -> base 0.20 lots (up to 0.33 with Titan boost)
+    # $700 account -> base 0.40 lots (shifted up 1 tier from 0.20)
     count_700, lot_700, vol_700 = scalper.compute_stack_sizing(balance=700.0, mode="TO_THE_MOON")
-    assert 0.20 <= vol_700 <= 0.35
+    assert 0.40 <= vol_700 <= 0.66
     assert count_700 >= 1
     
-    # $1,200 account -> base 0.40 lots (up to 0.66 with Titan boost)
+    # $1,200 account -> base 0.80 lots (shifted up 1 tier from 0.40)
     count_1200, lot_1200, vol_1200 = scalper.compute_stack_sizing(balance=1200.0, mode="TO_THE_MOON")
-    assert 0.40 <= vol_1200 <= 0.70
+    assert 0.80 <= vol_1200 <= 1.35
     
-    # $2,000 account -> base 0.80 lots (up to 1.32 with Titan boost)
+    # $2,000 account -> base 1.50 lots (shifted up 1 tier from 0.80)
     count_2000, lot_2000, vol_2000 = scalper.compute_stack_sizing(balance=2000.0, mode="TO_THE_MOON")
-    assert 0.80 <= vol_2000 <= 1.35
+    assert 1.50 <= vol_2000 <= 2.50
     
-    # $10,000 account -> capped at 5.0 lots
+    # $10,000 account -> 8.33 lots (capped at 10.0 lots on shifted ladder)
     count_10k, lot_10k, vol_10k = scalper.compute_stack_sizing(balance=10000.0, mode="TO_THE_MOON")
-    assert vol_10k == 5.0
+    assert vol_10k == 8.33
 
 
 def test_friday_curfew_and_weekend():

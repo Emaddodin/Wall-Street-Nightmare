@@ -1,0 +1,37 @@
+{
+  "total_trades": 765,
+  "win_count": 569,
+  "loss_count": 196,
+  "win_rate_pct": 74.38,
+  "profit_factor": 4.59,
+  "avg_win": 4849.62,
+  "avg_loss": 3069.97,
+  "expectancy_per_trade": 2820.55,
+  "total_pnl": 2157720.85,
+  "sharpe_ratio": 8.68,
+  "max_drawdown": 32227.11,
+  "session_breakdown": {
+    "LONDON_OPEN": {
+      "count": 390,
+      "win_rate_pct": 75.4
+    },
+    "NY_AM": {
+      "count": 375,
+      "win_rate_pct": 73.3
+    }
+  },
+  "displacement_breakdown": {
+    "(1.2, 1.5]": {
+      "count": 3,
+      "win_rate_pct": 66.7
+    },
+    "(1.5, 2.0]": {
+      "count": 150,
+      "win_rate_pct": 76.0
+    },
+    "(2.0, 10.0]": {
+      "count": 612,
+      "win_rate_pct": 74.0
+    }
+  }
+}

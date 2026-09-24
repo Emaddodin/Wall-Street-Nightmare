@@ -32,6 +32,10 @@ old/
 # Runtime log at the repo root
 *.log
 
-# corrupted by an old editor crash (duplicated blocks); kept on disk only
-scalper/tools/walkforward.py
-open-antigravity-patcher/
+# Media and temporary artifacts
+*.mp4
+*.MP4
+scratch/
+.agents/
+skills-lock.json
+tjr/historical_data/
