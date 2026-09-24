@@ -7,7 +7,7 @@
 [![Architecture: Laya System 1](https://img.shields.io/badge/AI-ModernBERT%20%280.45ms%29-purple.svg)]()
 [![Sentinel: Autonomous LLM Doctor](https://img.shields.io/badge/healer-Qwen2.5--1.5B-green.svg)]()
 
-High-frequency, institutional-grade automated trading engine engineered for real-time Gold (**XAUUSD**) micro-structure scalping. Features sub-second headless broker execution via Playwright CDP, non-autoregressive neural validation (**Laya System 1**), macroeconomic/geopolitical regime intelligence (**Politician Brain**), TJR 50% equilibrium dealing range gateways, and an autonomous local LLM self-healing doctor.
+High-frequency, institutional-grade automated trading engine engineered for real-time Gold (**XAUUSD**) micro-structure scalping. Features sub-second headless broker execution via Playwright CDP, non-autoregressive neural validation (**Laya System 1**), macroeconomic/geopolitical regime intelligence (**Politician Brain**), 473-day empirical trade journal twin memory (**Trade Journal RAG**), and an autonomous local LLM self-healing doctor.
 
 ---
 
@@ -29,9 +29,9 @@ High-frequency, institutional-grade automated trading engine engineered for real
                          ├────────────────────────────────┤
                          ▼                                ▼
             ┌─────────────────────────┐      ┌─────────────────────────┐
-            │ Unified Politician Brain│      │   TJR Microstructure    │
-            │ (Sword: 1.65x Alpha     │      │   (50% Equilibrium EQ   │
-            │  Shield: Counter Shock) │      │   & Rejection Wick 55%) │
+            │ Unified Politician Brain│      │   Semantic ICT Memory   │
+            │ (Sword: 1.65x Alpha     │      │   (288 Concept Library  │
+            │  Shield: Counter Shock) │      │   & Judas Swings)       │
             └────────────┬────────────┘      └────────────┬────────────┘
                          │                                │
                          ├────────────────────────────────┤
@@ -85,13 +85,10 @@ High-frequency, institutional-grade automated trading engine engineered for real
   - When target lot size exceeds $0.04$ lots, orders are automatically split into two rapid execution tranches ($60\% / 40\%$) to reduce broker slippage and fill volume gaps.
   - Margin verification runs before dispatching secondary tranches to guarantee account safety.
 
-### B. TJR Microstructure Gateways (`tjr/` & `scalper/brain/laya_oracle.py`)
-- **50% Equilibrium Dealing Range**:
-  - Longs are gated to **Discount** (lower 50% of the dealing range), providing high reward-to-risk asymmetry.
-  - Shorts are gated to **Premium** (upper 50% of the dealing range).
-  - **Anti-Chase Hard Cap**: If an entry occurs in extreme expansion ($>80\%$ range pos), lot size multiplier is strictly capped at $1.0\text{x}$.
-- **Liquidity Sweep Rejection**:
-  - Rejection wicks $\ge 0.55$ wick ratio earn an immediate $+0.6$ confluence bonus and reduce trap probability by $-10\%$.
+### B. Semantic ICT Memory & Historical Trade Twins (`scalper/brain/trade_journal_rag.py`)
+- **288 Institutional ICT Concept Playbook**: Real-time semantic indexing of London & New York Judas Swings, Fair Value Gaps (BISI/SIBI), Consequent Encroachment (50% CE), Order Blocks, and Liquidity Pools.
+- **Trade Journal RAG Historical Twins**: Continuously matches current live market setups against 473 days of empirical execution memory to calculate true historical win rate, trap risk percentage, and optimal holding horizons.
+- **Smart & Bold Veto Logic**: Hard vetoes only blatant, catastrophic toxic traps ($\ge 80\%$ failure rate), permitting high-expectancy setups to compound boldly.
 
 ### C. Laya System 1 Decision Oracle (`scalper/brain/laya_oracle.py`)
 - Powered by `convaiinnovations/laya` (non-autoregressive ModernBERT architecture).
@@ -210,8 +207,6 @@ The mobile control terminal (`scalper/app/`) runs on an Apple Human Interface Gu
 │   └── tests/                       # Backtesting & verification suite
 │       ├── regime_journal_backtest_full.py
 │       └── test_institutional_risk_controls.py
-├── tjr/                             # TJR Microstructure Strategy Assets
-│   └── tjr_microstructure_manifest.json
 └── data/                            # Persistent data, vaults, and trade logs
     ├── stratton_vault.json
     ├── regime_trade_journal_full.csv

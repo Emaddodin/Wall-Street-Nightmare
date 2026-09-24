@@ -55,9 +55,6 @@ class LayaDecision:
     rag_twin_win_rate: float = 80.0
     rag_trap_risk: float = 0.15
     rag_dominant_exit: str = "MACRO_SPIKE_HARVEST"
-    tjr_dealing_range: str = "EQUILIBRIUM"  # "DISCOUNT", "PREMIUM", "EQUILIBRIUM"
-    tjr_sweep_confirmed: bool = False
-    tjr_notes: str = ""
 
 
 class LayaOracle:
@@ -122,26 +119,6 @@ class LayaOracle:
         session = str(market_state.get("session", "London/NY")).strip()
         trend_aligned = bool(market_state.get("trend_aligned", True))
 
-        # --- TJR MICROSTRUCTURE GATEWAY PREPARATION ---
-        recent_high = float(market_state.get("recent_high", entry_px + 2.50))
-        recent_low = float(market_state.get("recent_low", entry_px - 2.50))
-        range_span = max(0.50, recent_high - recent_low)
-        range_pos = max(0.0, min(1.0, (entry_px - recent_low) / range_span))
-
-        # TJR Gateway 1: Liquidity Sweep Rejection (Wick >= 0.45)
-        tjr_sweep_confirmed = wick_ratio >= 0.45
-
-        # TJR Gateway 2: 50% Equilibrium Discount/Premium Classification
-        if range_pos <= 0.45:
-            tjr_dealing_range = "DISCOUNT"
-        elif range_pos >= 0.55:
-            tjr_dealing_range = "PREMIUM"
-        else:
-            tjr_dealing_range = "EQUILIBRIUM"
-
-        tjr_favorable_range = (direction == "BUY" and range_pos <= 0.50) or (direction == "SELL" and range_pos >= 0.50)
-        tjr_chase_extreme = (direction == "BUY" and range_pos > 0.70) or (direction == "SELL" and range_pos < 0.30)
-
         # 1. Consult Macro Watchdog
         macro_allowed, macro_reason = self.watchdog.is_entry_allowed()
         if not macro_allowed:
@@ -162,9 +139,6 @@ class LayaOracle:
                 macro_bias=self.politician._current_bias.value,
                 geopolitical_heat=self.politician._geopolitical_heat_index,
                 tp_expansion_multiplier=1.0,
-                tjr_dealing_range=tjr_dealing_range,
-                tjr_sweep_confirmed=tjr_sweep_confirmed,
-                tjr_notes="Vetoed by Macro Watchdog",
             )
 
         # 2. Consult 473-Day Empirical Macro Regime Priors
@@ -194,9 +168,6 @@ class LayaOracle:
                 macro_bias=self.politician._current_bias.value,
                 geopolitical_heat=self.politician._geopolitical_heat_index,
                 tp_expansion_multiplier=1.0,
-                tjr_dealing_range=tjr_dealing_range,
-                tjr_sweep_confirmed=tjr_sweep_confirmed,
-                tjr_notes="Vetoed by 473-Day Regime Prior",
             )
 
         # 3. Consult Politician & Fundamental Brain (Geopolitical & Tariff Realities)
@@ -219,9 +190,6 @@ class LayaOracle:
                 macro_bias=pol_eval.macro_bias.value,
                 geopolitical_heat=pol_eval.geopolitical_heat_index,
                 tp_expansion_multiplier=1.0,
-                tjr_dealing_range=tjr_dealing_range,
-                tjr_sweep_confirmed=tjr_sweep_confirmed,
-                tjr_notes="Vetoed by Politician Shield",
             )
 
         # 3.5 Consult 473-Day Granular Trade Journal RAG (Historical Twins Empirical Memory)
@@ -256,9 +224,6 @@ class LayaOracle:
                 rag_twin_win_rate=rag_eval.win_rate_pct,
                 rag_trap_risk=rag_eval.trap_risk_pct,
                 rag_dominant_exit=rag_eval.dominant_exit_reason,
-                tjr_dealing_range=tjr_dealing_range,
-                tjr_sweep_confirmed=tjr_sweep_confirmed,
-                tjr_notes="Vetoed by Trade Journal RAG Twins",
             )
 
         # 4. Retrieve Matching ICT Knowledge Concepts
@@ -277,8 +242,6 @@ class LayaOracle:
                     "rejection_wick_ratio": f"{wick_ratio:.2f}",
                     "session": session,
                     "trend_aligned": "Yes" if trend_aligned else "No",
-                    "dealing_range_position": f"{range_pos*100:.1f}% ({tjr_dealing_range})",
-                    "tjr_sweep_confirmed": "Yes" if tjr_sweep_confirmed else "No",
                     "institutional_ict_principles": rules_text,
                     "geopolitical_regime": pol_eval.regime.value,
                     "macro_bias": pol_eval.macro_bias.value,
@@ -315,25 +278,6 @@ class LayaOracle:
                 conf_score = float(answers.get("confluence_score", {}).get("score", 7.5))
                 confidence = float(answers.get("setup_grade", {}).get("confidence", 0.85))
 
-                # --- TJR MICROSTRUCTURE GATEWAYS INTEGRATION ---
-                tjr_notes_parts = []
-                if tjr_sweep_confirmed:
-                    conf_score = min(10.0, conf_score + 0.6)
-                    trap_prob = max(0.05, trap_prob - 0.10)
-                    if "TJR Liquidity Sweep Rejection" not in matched_titles:
-                        matched_titles.append("TJR Liquidity Sweep Rejection")
-                    tjr_notes_parts.append(f"Sweep Wick {wick_ratio:.2f}")
-
-                if tjr_favorable_range:
-                    conf_score = min(10.0, conf_score + 0.5)
-                    eq_tag = f"TJR 50% {tjr_dealing_range.capitalize()} Gateway"
-                    if eq_tag not in matched_titles:
-                        matched_titles.append(eq_tag)
-                    tjr_notes_parts.append(f"Equilibrium {tjr_dealing_range} ({range_pos*100:.1f}%)")
-                elif tjr_chase_extreme:
-                    trap_prob = min(0.95, trap_prob + 0.15)
-                    tjr_notes_parts.append(f"Chasing Extreme ({range_pos*100:.1f}%)")
-
                 is_valid = (trap_prob < 0.60) and (grade != "toxic_trap")
 
                 # Dynamic Compounding Multiplier with Empirical & Political Priors:
@@ -345,10 +289,6 @@ class LayaOracle:
                     compounding_mult = 1.00
                 else:
                     compounding_mult = 0.00
-
-                # TJR Compounding Boost for Discount/Premium alignment
-                if tjr_favorable_range and grade in ("A_plus_prime", "high_probability", "macro_sovereign_titan") and is_valid:
-                    compounding_mult = min(1.65, max(compounding_mult, 1.45))
 
                 # Blend with empirical regime priors
                 if regime_eval.regime_grade == "A_plus_prime":
@@ -368,10 +308,6 @@ class LayaOracle:
                 if pol_eval.alpha_boost_multiplier >= 1.50 and grade in ("A_plus_prime", "high_probability"):
                     grade = "macro_sovereign_titan"
                     conf_score = min(10.0, max(conf_score, 9.8))
-
-                # TJR Anti-Chase Hard Cap (Strictly cap at 1.0x when buying deep premium or selling deep discount)
-                if tjr_chase_extreme:
-                    compounding_mult = min(compounding_mult, 1.00)
 
                 latency = (time.perf_counter() - t0) * 1000.0
                 decision = LayaDecision(
@@ -394,9 +330,6 @@ class LayaOracle:
                     rag_twin_win_rate=rag_eval.win_rate_pct,
                     rag_trap_risk=rag_eval.trap_risk_pct,
                     rag_dominant_exit=rag_eval.dominant_exit_reason,
-                    tjr_dealing_range=tjr_dealing_range,
-                    tjr_sweep_confirmed=tjr_sweep_confirmed,
-                    tjr_notes=" | ".join(tjr_notes_parts) if tjr_notes_parts else "Standard Equilibrium",
                 )
                 self._last_decision = decision
                 return decision
@@ -412,26 +345,6 @@ class LayaOracle:
             trap_prob += 0.25
 
         conf_score = max(regime_eval.confluence_boost, 9.0 if (wick_ratio >= 0.55 and trend_aligned) else 7.5 if (wick_ratio >= 0.45) else 4.0)
-
-        # --- TJR MICROSTRUCTURE GATEWAYS INTEGRATION (FALLBACK) ---
-        tjr_notes_parts = []
-        if tjr_sweep_confirmed:
-            conf_score = min(10.0, conf_score + 0.6)
-            trap_prob = max(0.05, trap_prob - 0.10)
-            if "TJR Liquidity Sweep Rejection" not in matched_titles:
-                matched_titles.append("TJR Liquidity Sweep Rejection")
-            tjr_notes_parts.append(f"Sweep Wick {wick_ratio:.2f}")
-
-        if tjr_favorable_range:
-            conf_score = min(10.0, conf_score + 0.5)
-            eq_tag = f"TJR 50% {tjr_dealing_range.capitalize()} Gateway"
-            if eq_tag not in matched_titles:
-                matched_titles.append(eq_tag)
-            tjr_notes_parts.append(f"Equilibrium {tjr_dealing_range} ({range_pos*100:.1f}%)")
-        elif tjr_chase_extreme:
-            trap_prob = min(0.95, trap_prob + 0.15)
-            tjr_notes_parts.append(f"Chasing Extreme ({range_pos*100:.1f}%)")
-
         grade = (
             "A_plus_prime"
             if (conf_score >= 8.5 and trap_prob <= 0.20)
@@ -448,10 +361,6 @@ class LayaOracle:
             1.50 if grade == "A_plus_prime" else 1.25 if grade == "high_probability" else 1.00 if is_valid else 0.00,
         )
 
-        # TJR Compounding & Safety Gating
-        if tjr_favorable_range and grade in ("A_plus_prime", "high_probability", "macro_sovereign_titan") and is_valid:
-            compounding_mult = min(1.65, max(compounding_mult, 1.45))
-
         # Blend with Trade Journal RAG Twins
         if rag_eval.recommendation == "SOVEREIGN_CONFLUENCE":
             conf_score = min(10.0, max(conf_score, 9.5))
@@ -465,10 +374,6 @@ class LayaOracle:
         if pol_eval.alpha_boost_multiplier >= 1.50 and grade in ("A_plus_prime", "high_probability"):
             grade = "macro_sovereign_titan"
             conf_score = min(10.0, max(conf_score, 9.8))
-
-        # TJR Anti-Chase Hard Cap (Strictly cap at 1.0x when buying deep premium or selling deep discount)
-        if tjr_chase_extreme:
-            compounding_mult = min(compounding_mult, 1.00)
 
         latency = (time.perf_counter() - t0) * 1000.0
 
@@ -492,9 +397,6 @@ class LayaOracle:
             rag_twin_win_rate=rag_eval.win_rate_pct,
             rag_trap_risk=rag_eval.trap_risk_pct,
             rag_dominant_exit=rag_eval.dominant_exit_reason,
-            tjr_dealing_range=tjr_dealing_range,
-            tjr_sweep_confirmed=tjr_sweep_confirmed,
-            tjr_notes=" | ".join(tjr_notes_parts) if tjr_notes_parts else "Standard Equilibrium",
         )
         self._last_decision = decision
         return decision
@@ -547,11 +449,6 @@ class LayaOracle:
                 "trap_risk": f"{last_dec.rag_trap_risk*100:.1f}%" if last_dec else "15.0%",
                 "max_safe_holding_min": last_dec.max_safe_holding_min if last_dec else 25,
                 "dominant_exit": last_dec.rag_dominant_exit if last_dec else "MACRO_SPIKE_HARVEST",
-            },
-            "tjr_gateway": {
-                "dealing_range": getattr(last_dec, "tjr_dealing_range", "EQUILIBRIUM") if last_dec else "EQUILIBRIUM",
-                "sweep_confirmed": getattr(last_dec, "tjr_sweep_confirmed", False) if last_dec else False,
-                "notes": getattr(last_dec, "tjr_notes", "Armed") if last_dec else "Armed",
             },
         }
 

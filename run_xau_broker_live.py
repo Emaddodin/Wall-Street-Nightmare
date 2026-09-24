@@ -779,7 +779,7 @@ async def run_live_scalper():
                         acc = await gw.get_account_snapshot(force_fresh=True)
                         base_lot_size = scalper.compute_lot_size(acc.balance, current_price=quote.mid)
 
-                        # --- LAYA SYSTEM 1 DECISION & ICT RAG VALIDATION (WITH TJR GATEWAYS) ---
+                        # --- LAYA SYSTEM 1 DECISION & ICT RAG VALIDATION ---
                         recent_high = max(c["high"] for c in scalper.candles_1m[-30:]) if len(scalper.candles_1m) >= 5 else sig.entry_price + (sig.atr_1m * 3.0)
                         recent_low = min(c["low"] for c in scalper.candles_1m[-30:]) if len(scalper.candles_1m) >= 5 else sig.entry_price - (sig.atr_1m * 3.0)
                         market_state = {
@@ -852,8 +852,8 @@ async def run_live_scalper():
                         else:
                             broker_sl = round(max(sig.sl_price, sig.entry_price + min_sl_dist), 2)
 
-                        logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f (Broker SL: $%.2f) | TP1: $%.2f | Spike: $%.2f | Lots: %.2f%s | Confluence: %.1f/10 | TJR: %s (%s)",
-                                    sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, broker_sl, sig.tp1_price, effective_spike_target, lot_size, boost_tag, laya_decision.confluence_score, getattr(laya_decision, "tjr_dealing_range", "EQ"), getattr(laya_decision, "tjr_notes", ""))
+                        logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f (Broker SL: $%.2f) | TP1: $%.2f | Spike: $%.2f | Lots: %.2f%s | Confluence: %.1f/10",
+                                    sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, broker_sl, sig.tp1_price, effective_spike_target, lot_size, boost_tag, laya_decision.confluence_score)
 
                         # Multi-Order Stacking: If lot_size >= 0.04, split into 2 rapid tickets to fill the volume gap
                         if lot_size >= 0.04:
