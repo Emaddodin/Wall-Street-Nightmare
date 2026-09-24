@@ -247,7 +247,9 @@ class ApexTrinityStrategy:
         if l < asia_low and c > asia_low:
             sweep_wick = min(o, c) - l
             if (sweep_wick / rng) >= 0.50:  # At least 50% wick below Asian low
-                sl_px = round(l - 0.30, 2)
+                raw_sl = l - 0.30
+                max_sl_dist = min(3.00, 1.8 * atr)
+                sl_px = round(max(raw_sl, curr_px - max_sl_dist), 2)
                 tp1_px = round(curr_px + (2.5 * atr), 2)
                 spike_px = round(curr_px + (5.0 * atr), 2)
                 return ApexSignal(
@@ -268,7 +270,9 @@ class ApexTrinityStrategy:
         elif h > asia_high and c < asia_high:
             sweep_wick = h - max(o, c)
             if (sweep_wick / rng) >= 0.50:  # At least 50% wick above Asian high
-                sl_px = round(h + 0.30, 2)
+                raw_sl = h + 0.30
+                max_sl_dist = min(3.00, 1.8 * atr)
+                sl_px = round(min(raw_sl, curr_px + max_sl_dist), 2)
                 tp1_px = round(curr_px - (2.5 * atr), 2)
                 spike_px = round(curr_px - (5.0 * atr), 2)
                 return ApexSignal(
@@ -347,7 +351,9 @@ class ApexTrinityStrategy:
             lower_wick = min(o, c) - l
             wick_ratio = lower_wick / rng
             if trend_ok and retest_ok and (wick_ratio >= 0.45 and c >= o):
-                sl_px = round(l - 0.20, 2)
+                raw_sl = l - 0.20
+                max_sl_dist = min(3.00, 1.8 * atr)
+                sl_px = round(max(raw_sl, curr_px - max_sl_dist), 2)
                 tp1_px = round(curr_px + (2.5 * atr), 2)
                 spike_px = round(curr_px + (5.0 * atr), 2)
                 self.active_5m_breakout = None
@@ -371,7 +377,9 @@ class ApexTrinityStrategy:
             upper_wick = h - max(o, c)
             wick_ratio = upper_wick / rng
             if trend_ok and retest_ok and (wick_ratio >= 0.45 and c <= o):
-                sl_px = round(h + 0.20, 2)
+                raw_sl = h + 0.20
+                max_sl_dist = min(3.00, 1.8 * atr)
+                sl_px = round(min(raw_sl, curr_px + max_sl_dist), 2)
                 tp1_px = round(curr_px - (2.5 * atr), 2)
                 spike_px = round(curr_px - (5.0 * atr), 2)
                 self.active_5m_breakout = None

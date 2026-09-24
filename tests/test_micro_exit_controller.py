@@ -147,3 +147,36 @@ def test_eurusd_pip_calibration():
     assert dec.should_exit
     assert dec.metric_label == "SWEET_SPOT_STALL"
     assert "pips" in dec.reason
+
+
+def test_micro_account_30usd_protection():
+    """
+    Verifies that on a $30.64 account:
+    - 0.01 lot position
+    - Hard risk stop is strictly clamped at ~$2.45 (never -$15.00)
+    - Fast BE triggers at +0.35 pts
+    - Sweet spot stall locks profit at +0.85 pts
+    """
+    from scalper.strategies.micro_exit_controller import get_micro_account_config
+    cfg = get_micro_account_config(balance=30.64)
+    assert cfg.hard_risk_stop_usd == pytest.approx(2.45, abs=0.05)
+    assert cfg.fast_be_trigger == 0.35
+    assert cfg.micro_harvest_target == 0.85
+
+    controller = MicroExitController(cfg)
+    t0 = 6000.0
+    controller.arm_position(
+        entry_price=3010.00,
+        direction="BUY",
+        total_volume=0.01,
+        sl_price=3007.50,
+        open_time=t0,
+    )
+    assert controller.dynamic_hard_stop <= 2.50
+
+    # Test that a -$2.46 loss triggers emergency exit
+    dec = controller.evaluate_tick(3007.54, floating_pnl=-2.46, current_time=t0 + 10.0)
+    assert dec.should_exit
+    assert dec.urgency == "EMERGENCY"
+    assert dec.metric_label == "HARD_STOP"
+

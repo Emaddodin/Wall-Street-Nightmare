@@ -123,6 +123,36 @@ def get_to_the_moon_config(symbol: str = "XAUUSD") -> MicroExitConfig:
     )
 
 
+def get_micro_account_config(balance: float = 30.0) -> MicroExitConfig:
+    """
+    Micro-Account Guardian Configuration ($30 - $100 Accounts):
+    - Immediate Fast BE at +0.35 pts (+35 cents on Gold)
+    - Sweet-spot stall harvest at +0.85 pts (locks +$0.85 on 0.01 lots)
+    - Dynamic peak watermark bag protection (locks if +$1.20 pulls back >18%)
+    - Strict 75s time decay to prevent holding dead chops
+    - Hard risk stop capped at 8% balance ($2.45 on $30 balance)
+    """
+    safe_risk = max(2.00, min(0.08 * balance, 3.50))
+    watermark_floor = max(1.20, 0.05 * balance)
+    return MicroExitConfig(
+        symbol="XAUUSD",
+        pip_or_pt_size=0.01,
+        point_scale_label="pts",
+        fast_be_trigger=0.35,
+        micro_harvest_min=0.55,
+        micro_harvest_target=0.85,
+        micro_harvest_extended=1.60,
+        watermark_activate_usd=watermark_floor,
+        watermark_pullback_pct=0.18,
+        stall_tick_threshold=3,
+        velocity_window_sec=1.5,
+        min_velocity_pts_sec=0.15,
+        time_decay_seconds=75.0,
+        time_decay_profit_floor_usd=0.20,
+        hard_risk_stop_usd=safe_risk,
+    )
+
+
 
 class MicroExitController:
     """
@@ -172,7 +202,7 @@ class MicroExitController:
             structural_dist = abs(self.entry_price - self.sl_price)
             multiplier = 100.0 if self.cfg.symbol == "XAUUSD" else 100000.0
             computed_risk = structural_dist * multiplier * self.total_volume
-            self.dynamic_hard_stop = max(self.cfg.hard_risk_stop_usd, computed_risk * 1.15)
+            self.dynamic_hard_stop = min(self.cfg.hard_risk_stop_usd, max(1.50, computed_risk * 1.15))
         else:
             self.dynamic_hard_stop = self.cfg.hard_risk_stop_usd
 

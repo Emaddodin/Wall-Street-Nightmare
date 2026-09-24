@@ -47,6 +47,12 @@ import scalper.pa.candles as pa_candles
 from bark_integration import send_alert, push_bark
 from scalper.brain.laya_oracle import get_laya_oracle, LayaOracle
 from scalper.strategies.apex_trinity import ApexTrinityStrategy, ApexSignal
+from scalper.strategies.micro_exit_controller import (
+    MicroExitController,
+    get_micro_account_config,
+    get_to_the_moon_config,
+    ExitDecision,
+)
 
 # Logging
 logging.basicConfig(
@@ -154,13 +160,16 @@ def save_vault_state(state: Dict[str, Any]) -> None:
 
 
 def push_ntfy(title: str, message: str, tags: str = "zap,chart", priority: str = "high") -> None:
-    """Dispatches push notification asynchronously without blocking the event loop."""
+    """Dispatches one-liner push notification asynchronously without blocking the event loop."""
     try:
+        clean_msg = " · ".join([line.strip() for line in message.strip().splitlines() if line.strip()])
+        clean_title = title.strip()
         loop = asyncio.get_running_loop()
-        loop.run_in_executor(None, send_alert, title, message, priority)
+        loop.run_in_executor(None, send_alert, clean_title, clean_msg, priority)
     except RuntimeError:
         try:
-            send_alert(title=title, message=message, priority=priority)
+            clean_msg = " · ".join([line.strip() for line in message.strip().splitlines() if line.strip()])
+            send_alert(title=title.strip(), message=clean_msg, priority=priority)
         except Exception:
             pass
     except Exception as e:
@@ -248,6 +257,7 @@ class LiveBrokerScalper:
         self.circuit_breaker_active: bool = False
         self.trading_paused: bool = False
         self.ghost_position_ticks: int = 0
+        self.micro_exit: MicroExitController = MicroExitController(get_micro_account_config(balance=30.0))
 
     def compute_daily_withdrawal(self, current_balance: float) -> Dict[str, Any]:
         """
@@ -529,191 +539,132 @@ async def run_live_scalper():
                 exec_px = quote.bid if direction == "BUY" else quote.ask
                 gain_pts = (exec_px - entry_px) if direction == "BUY" else (entry_px - exec_px)
 
-                # 2.2 High-Velocity Scalping Stagnation & Holding Duration
                 time_held_sec = time.time() - scalper.active_stack["open_time"]
-                max_duration_sec = scalper.active_stack.get("max_safe_duration_sec", 600.0) # ~10 mins scalp default
-                stagnation_exit = False
-                stagnation_reason = ""
-                if time_held_sec >= max_duration_sec:
-                    if floating_pnl >= 2.0:
-                        stagnation_exit = True
-                        stagnation_reason = f"Scalp Duration Harvest: Locked +${floating_pnl:.2f} after {int(time_held_sec//60)}m (High-Velocity Edge Captured)"
-                    elif time_held_sec >= (max_duration_sec * 1.25):
-                        stagnation_exit = True
-                        stagnation_reason = f"Scalp Stagnation Scratch: Exited at ${floating_pnl:.2f} after {int(time_held_sec//60)}m (Protect Capital from Reversal)"
 
-                # --- "To The Moon" Sovereign Trailing Ratchets & Bag Protection ---
-
-                # EDGE FIX 1: Dynamic Peak Watermark Bag Protection
-                # If floating profit reached threshold (+8% on micro accounts, min $2.80) and drops by >= 18% of peak -> LOCK CASH & EXIT!
-                peak_pnl = scalper.active_stack.get("peak_pnl", 0.0)
+                # Ensure MicroExitController config matches current balance
                 if acc.balance < 100.0:
-                    min_peak_threshold = max(2.80, 0.08 * acc.balance)
-                elif acc.balance < 300.0:
-                    min_peak_threshold = max(7.00, 0.06 * acc.balance)
+                    scalper.micro_exit.cfg = get_micro_account_config(balance=acc.balance)
                 else:
-                    min_peak_threshold = max(25.0, 0.05 * acc.balance)
+                    scalper.micro_exit.cfg = get_to_the_moon_config("XAUUSD")
 
-                watermark_exit = False
-                if peak_pnl >= min_peak_threshold:
-                    pullback_usd = peak_pnl - floating_pnl
-                    pullback_pct = pullback_usd / peak_pnl
-                    if pullback_pct >= 0.18:
-                        watermark_exit = True
+                # Microsecond in-position decision engine (MicroExitController)
+                exit_dec: ExitDecision = scalper.micro_exit.evaluate_tick(
+                    current_price=exec_px,
+                    floating_pnl=floating_pnl,
+                    current_time=time.time(),
+                )
 
-                # Ratchet 1: Accelerated Breakeven Lock at +0.75 ATR (Fast Risk-Free Cushion)
-                if not scalper.active_stack.get("be_ratchet_hit", False) and gain_pts >= 0.75 * atr:
+                # Ratchet 1: Sync Breakeven lock if triggered by MicroExit
+                if scalper.micro_exit.be_locked and not scalper.active_stack.get("be_ratchet_hit", False):
                     scalper.active_stack["be_ratchet_hit"] = True
-                    new_sl = entry_px + 0.20 if direction == "BUY" else entry_px - 0.20
-                    scalper.active_stack["sl_price"] = new_sl
-                    logger.info("🛡️ 'TO THE MOON' BE RATCHET LOCKED: SL moved to BE+0.20 ($%.2f) at +%.2f pts", new_sl, gain_pts)
+                    scalper.active_stack["sl_price"] = scalper.micro_exit.sl_price
+                    logger.info("🛡️ DYNAMIC BE RATCHET LOCKED: SL moved to $%.2f at +%.2f pts", scalper.micro_exit.sl_price, gain_pts)
 
-                    # Breakeven lock is 100% sacred: No premature pyramiding before TP1 lock
-                    # Keeps trades strictly risk-free ($0.00 / +$0.80) on pullback to entry
-
-                # Ratchet 2: Fast Scalp Profit Lock at +1.8 ATR (TP1 Zone) -> Ratchet SL to +1.0 ATR
+                # Ratchet 2: Scalp TP1 Profit Lock at +1.8 ATR (TP1 Zone)
                 if not scalper.active_stack.get("tp1_ratchet_hit", False) and gain_pts >= 1.8 * atr:
                     scalper.active_stack["tp1_ratchet_hit"] = True
                     locked_sl = entry_px + (1.0 * atr) if direction == "BUY" else entry_px - (1.0 * atr)
                     scalper.active_stack["sl_price"] = locked_sl
-                    logger.info("💰 'TO THE MOON' SCALP PROFIT LOCK: SL ratcheted to +1.0 ATR ($%.2f) at +%.2f pts", locked_sl, gain_pts)
+                    scalper.micro_exit.sl_price = locked_sl
+                    logger.info("💰 SCALP PROFIT LOCK: SL ratcheted to +1.0 ATR ($%.2f) at +%.2f pts", locked_sl, gain_pts)
 
-                    # Multi-Order Momentum Pyramiding: Stack runner ONLY after TP1 is banked and profit is locked
+                    # Multi-Order Momentum Pyramiding: ONLY if balance >= $150
                     if not scalper.active_stack.get("pyramided", False) and acc.balance >= 150.0:
                         pyr_lot = 0.02
                         margin_per_001 = max(8.0, (current_mid * 100.0 * 0.01) / 500.0)
                         if (acc.available - (pyr_lot / 0.01 * margin_per_001)) >= 20.0:
-                            logger.info("🚀 MOMENTUM PYRAMID TRIGGER: Stacking +%.2f lots on locked profit runner (Floating: +$%.2f)", pyr_lot, floating_pnl)
+                            logger.info("🚀 MOMENTUM PYRAMID TRIGGER: Stacking +%.2f lots on runner (Floating: +$%.2f)", pyr_lot, floating_pnl)
                             pyr_res = await gw.open_market_order(direction, pyr_lot, sl_price=locked_sl)
                             scalper.active_stack["pyramided"] = True
                             if pyr_res.get("success"):
                                 scalper.active_stack["volume"] = round(scalper.active_stack["volume"] + pyr_lot, 2)
                                 push_ntfy(
                                     title=f"🚀 Multi-Order Pyramid Stacked: +{pyr_lot} Lots {direction}",
-                                    message=f"Total Stack: {scalper.active_stack['volume']} Lots | Locked SL: ${locked_sl:.2f}\nFloating PnL: +${floating_pnl:.2f}",
+                                    message=f"Total: {scalper.active_stack['volume']} Lots · Locked SL: ${locked_sl:.2f} · Floating: +${floating_pnl:.2f}",
                                     tags="rocket,fire",
                                     priority="high",
                                 )
 
-                # Check if executable price hit current active software Stop Loss
+                # Structure Invalidation Scratch:
+                # If trade has aged >= 35s and the latest completed 1m candle closed breaking the prior candle's swing in reverse,
+                # scratch early if negative to save 60-70% of risk stop
+                structure_exit = False
+                structure_reason = ""
+                if time_held_sec >= 35.0 and len(scalper.candles_1m) >= 2:
+                    last_c = scalper.candles_1m[-1]
+                    prev_c = scalper.candles_1m[-2]
+                    if direction == "BUY" and last_c["close"] < prev_c["low"] and floating_pnl < 0:
+                        structure_exit = True
+                        structure_reason = f"Structure Invalidation: 1m bar broke below prior swing low ({last_c['close']:.2f} < {prev_c['low']:.2f})"
+                    elif direction == "SELL" and last_c["close"] > prev_c["high"] and floating_pnl < 0:
+                        structure_exit = True
+                        structure_reason = f"Structure Invalidation: 1m bar broke above prior swing high ({last_c['close']:.2f} > {prev_c['high']:.2f})"
+
+                # Active software Stop Loss check
                 sl_hit = (direction == "BUY" and quote.bid <= scalper.active_stack["sl_price"]) or \
                          (direction == "SELL" and quote.ask >= scalper.active_stack["sl_price"])
 
-                # Hard single-trade loss ceiling (Strict risk floor calibrated by account size)
-                # On micro accounts (<$100), loss is hard-capped strictly at $2.50 - $4.50 (never -$15.00!)
-                if acc.balance < 100.0:
-                    dynamic_risk_stop = max(2.50, min(0.08 * acc.balance, 4.50))
-                elif acc.balance < 250.0:
-                    dynamic_risk_stop = max(4.50, min(0.06 * acc.balance, 10.00))
-                else:
-                    tier_mult = max(1.0, acc.balance / 1000.0)
-                    dynamic_risk_stop = max(10.00, min(0.05 * acc.balance, 35.0 if acc.balance < 1000.0 else tier_mult * 25.0))
-                dynamic_spike_target = max(RAPID_SPIKE_TARGET_USD, (acc.balance / 100.0) * 50.0)
-
-                # Check Friday 20:30 UTC force-flatten
+                # Friday 20:30 UTC force-flatten
                 now_utc = datetime.now(timezone.utc)
                 friday_force_flatten = (now_utc.weekday() == 4 and (now_utc.hour > 20 or (now_utc.hour == 20 and now_utc.minute >= 30)))
 
-                # Check Macro Spike Harvest (+5.0 ATR or dynamic spike target)
-                hit_macro_spike = gain_pts >= 5.0 * atr or floating_pnl >= dynamic_spike_target
+                # Macro Spike Harvest (+5.0 ATR or rapid spike target)
+                hit_macro_spike = gain_pts >= 5.0 * atr or (acc.balance >= 100.0 and floating_pnl >= RAPID_SPIKE_TARGET_USD)
 
-                # Exit Handling
-                if watermark_exit:
-                    logger.info("💰 PEAK WATERMARK BAG PROTECTION: Locked +$%.2f (Peak was +$%.2f, -18%% pullback)", floating_pnl, peak_pnl)
-                    saved_stack = dict(scalper.active_stack)
-                    try:
-                        res = await gw.flatten_all_positions()
-                    finally:
-                        scalper.active_stack = None
+                # Master Exit Decision Arbiter
+                should_exit = False
+                exit_reason = ""
+                exit_label = "NORMAL"
 
-                    scalper.consecutive_losses = 0
-                    log_live_trade({
-                        "timestamp": time.time(),
-                        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                        "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
-                        "symbol": "XAUUSD",
-                        "direction": direction,
-                        "strategy": saved_stack.get("strategy_type", "TO_THE_MOON"),
-                        "entry_price": entry_px,
-                        "exit_price": current_mid,
-                        "volume": saved_stack["volume"],
-                        "peak_floating_pnl": peak_pnl,
-                        "realized_pnl": floating_pnl,
-                        "exit_reason": "BAG_PROTECTION_WATERMARK_LOCK",
-                        "duration_min": max(1, int((time.time() - saved_stack["open_time"]) // 60)),
-                        "balance_after": res.get("balance", acc.balance),
-                        "equity_after": res.get("balance", acc.balance),
-                    })
-                    push_ntfy(
-                        title=f"💰 Bag Locked: +${floating_pnl:.2f}",
-                        message=f"Peak +${peak_pnl:.2f} · Balance: ${res.get('balance', acc.balance):.2f}",
-                        tags="moneybag,shield",
-                        priority="high",
-                    )
-
-                elif stagnation_exit:
-                    logger.info("⏳ %s: Mid: $%.2f | Floating PnL: $%.2f", stagnation_reason, current_mid, floating_pnl)
-                    saved_stack = dict(scalper.active_stack)
-                    try:
-                        res = await gw.flatten_all_positions()
-                    finally:
-                        scalper.active_stack = None
-
-                    if floating_pnl < 0:
-                        scalper.consecutive_losses += 1
-                        scalper.daily_realized_loss += abs(floating_pnl)
-                        scalper.cooldown_until = time.time() + 180.0
-                    else:
-                        scalper.consecutive_losses = 0
-
-                    log_live_trade({
-                        "timestamp": time.time(),
-                        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                        "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
-                        "symbol": "XAUUSD",
-                        "direction": direction,
-                        "strategy": saved_stack.get("strategy_type", "TO_THE_MOON"),
-                        "entry_price": entry_px,
-                        "exit_price": current_mid,
-                        "volume": saved_stack["volume"],
-                        "peak_floating_pnl": peak_pnl,
-                        "realized_pnl": floating_pnl,
-                        "exit_reason": "STAGNATION_TIME_DECAY_EXIT",
-                        "duration_min": max(1, int((time.time() - saved_stack["open_time"]) // 60)),
-                        "balance_after": res.get("balance", acc.balance),
-                        "equity_after": res.get("balance", acc.balance),
-                    })
-                    push_ntfy(
-                        title=f"⏳ Stagnation Exit: ${floating_pnl:+.2f}",
-                        message=f"Closed @ ${current_mid:.2f} · Balance: ${res.get('balance', acc.balance):.2f}",
-                        tags="hourglass,shield" if floating_pnl >= 0 else "hourglass,warning",
-                        priority="high" if floating_pnl >= 0 else "default",
-                    )
-
-                elif sl_hit or floating_pnl <= -dynamic_risk_stop or friday_force_flatten:
+                if friday_force_flatten:
+                    should_exit = True
+                    exit_reason = "Friday Weekend Force-Flatten"
+                    exit_label = "FRIDAY_FLATTEN"
+                elif exit_dec.should_exit:
+                    should_exit = True
+                    exit_reason = exit_dec.reason
+                    exit_label = exit_dec.metric_label
+                elif structure_exit:
+                    should_exit = True
+                    exit_reason = structure_reason
+                    exit_label = "STRUCTURE_INVALIDATION"
+                elif sl_hit:
+                    should_exit = True
                     is_trailing = scalper.active_stack.get("be_ratchet_hit", False)
-                    reason_label = "Friday Weekend Force-Flatten" if friday_force_flatten else ("Trailing Profit Lock" if (is_trailing and floating_pnl > 0) else ("Trailing BE Hit" if is_trailing else "Risk Stop Hit"))
-                    logger.warning("🛑 %s: Mid: $%.2f, SL: $%.2f, Floating PnL: $%.2f", reason_label, current_mid, scalper.active_stack["sl_price"], floating_pnl)
+                    exit_reason = "Trailing SL Cushion Hit" if is_trailing else "Risk Stop Hit"
+                    exit_label = "TRAILING_SL" if is_trailing else "RISK_STOP"
+                elif hit_macro_spike:
+                    should_exit = True
+                    exit_reason = f"Macro Spike Harvest (+{gain_pts:.2f} pts)"
+                    exit_label = "MACRO_SPIKE_HARVEST"
+
+                # Execute Flatten & Accounting if exit triggered
+                if should_exit:
+                    logger.info("🚨 EXIT TRIGGERED [%s]: %s | Exec: $%.2f | Floating: $%.2f | Peak: $%.2f",
+                                exit_label, exit_reason, exec_px, floating_pnl, scalper.active_stack.get("peak_pnl", 0.0))
                     saved_stack = dict(scalper.active_stack)
                     try:
                         res = await gw.flatten_all_positions()
                     finally:
                         scalper.active_stack = None
 
+                    # Loss and cooldown tracking
                     if floating_pnl < 0:
                         scalper.consecutive_losses += 1
                         scalper.daily_realized_loss += abs(floating_pnl)
-                        scalper.cooldown_until = time.time() + 300.0  # 5 min cooldown
+                        cd_time = 90.0 if abs(floating_pnl) < 1.0 else 240.0
+                        scalper.cooldown_until = time.time() + cd_time
                         if scalper.consecutive_losses >= 2:
-                            scalper.lockout_until = time.time() + 3600.0  # 60 min lockout
+                            scalper.lockout_until = time.time() + 1800.0  # 30 min lockout
 
-                        max_day_loss = min(50.0, max(20.0, scalper.daily_start_balance * 0.08))
+                        max_day_loss = min(50.0, max(10.0, scalper.daily_start_balance * 0.15))
                         if scalper.daily_realized_loss >= max_day_loss:
                             scalper.circuit_breaker_active = True
                             scalper.trading_paused = True
                     else:
                         scalper.consecutive_losses = 0
 
+                    bal_after = res.get("balance", acc.balance)
                     log_live_trade({
                         "timestamp": time.time(),
                         "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
@@ -722,56 +673,30 @@ async def run_live_scalper():
                         "direction": direction,
                         "strategy": saved_stack.get("strategy_type", "TO_THE_MOON"),
                         "entry_price": entry_px,
-                        "exit_price": current_mid,
+                        "exit_price": exec_px,
                         "volume": saved_stack["volume"],
-                        "peak_floating_pnl": peak_pnl,
+                        "peak_floating_pnl": saved_stack.get("peak_pnl", 0.0),
                         "realized_pnl": floating_pnl,
-                        "exit_reason": reason_label,
-                        "duration_min": max(1, int((time.time() - saved_stack["open_time"]) // 60)),
-                        "balance_after": res.get("balance", acc.balance),
-                        "equity_after": res.get("balance", acc.balance),
+                        "exit_reason": f"{exit_label}: {exit_reason}",
+                        "duration_min": max(1, int(time_held_sec // 60)),
+                        "balance_after": bal_after,
+                        "equity_after": bal_after,
                     })
 
-                    push_ntfy(
-                        title=f"🛑 {reason_label}: ${floating_pnl:+.2f}",
-                        message=f"Closed @ ${current_mid:.2f} · Balance: ${res.get('balance', acc.balance):.2f}",
-                        tags="warning,octagonal_sign" if floating_pnl < 0 else "moneybag,shield",
-                        priority="urgent" if floating_pnl < 0 else "default",
-                    )
-
-                elif hit_macro_spike:
-                    logger.info("🌕 'TO THE MOON' MACRO SPIKE HARVEST: Mid: $%.2f | Gain: +%.2f pts | Floating PnL: +$%.2f", current_mid, gain_pts, floating_pnl)
-                    saved_stack = dict(scalper.active_stack)
-                    try:
-                        res = await gw.flatten_all_positions()
-                    finally:
-                        scalper.active_stack = None
-
-                    scalper.consecutive_losses = 0
-                    log_live_trade({
-                        "timestamp": time.time(),
-                        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                        "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
-                        "symbol": "XAUUSD",
-                        "direction": direction,
-                        "strategy": saved_stack.get("strategy_type", "TO_THE_MOON"),
-                        "entry_price": entry_px,
-                        "exit_price": current_mid,
-                        "volume": saved_stack["volume"],
-                        "peak_floating_pnl": peak_pnl,
-                        "realized_pnl": floating_pnl,
-                        "exit_reason": "MACRO_SPIKE_HARVEST",
-                        "duration_min": max(1, int((time.time() - saved_stack["open_time"]) // 60)),
-                        "balance_after": res.get("balance", acc.balance),
-                        "equity_after": res.get("balance", acc.balance),
-                    })
-
-                    push_ntfy(
-                        title=f"🌕 Spike Harvest: +${floating_pnl:+.2f} (+{gain_pts:.2f} pts)",
-                        message=f"Closed @ ${current_mid:.2f} · Balance: ${res.get('balance', acc.balance):.2f}",
-                        tags="rocket,moneybag,trophy",
-                        priority="high",
-                    )
+                    if floating_pnl >= 0:
+                        push_ntfy(
+                            title=f"💰 Locked: +${floating_pnl:.2f}",
+                            message=f"{exit_label} @ ${exec_px:.2f} · Peak: +${saved_stack.get('peak_pnl', 0.0):.2f} · Bal: ${bal_after:.2f}",
+                            tags="moneybag,shield",
+                            priority="high",
+                        )
+                    else:
+                        push_ntfy(
+                            title=f"🛑 Cut: ${floating_pnl:.2f}",
+                            message=f"{exit_label} @ ${exec_px:.2f} · Bal: ${bal_after:.2f}",
+                            tags="octagonal_sign,warning",
+                            priority="urgent",
+                        )
 
             # 3. Check for Strategy Entry if Flat (evaluated every ~250ms)
             elif (
@@ -794,53 +719,80 @@ async def run_live_scalper():
                         acc = await gw.get_account_snapshot(force_fresh=True)
                         base_lot_size = scalper.compute_lot_size(acc.balance, current_price=quote.mid)
 
-                        # --- LAYA SYSTEM 1 DECISION & ICT RAG VALIDATION ---
+                        # --- REAL WICK & REAL TREND CALCULATION ---
                         recent_high = max(c["high"] for c in scalper.candles_1m[-30:]) if len(scalper.candles_1m) >= 5 else sig.entry_price + (sig.atr_1m * 3.0)
                         recent_low = min(c["low"] for c in scalper.candles_1m[-30:]) if len(scalper.candles_1m) >= 5 else sig.entry_price - (sig.atr_1m * 3.0)
+                        
+                        last_c = scalper.candles_1m[-1]
+                        c_range = max(0.01, last_c["high"] - last_c["low"])
+                        if sig.direction == "BUY":
+                            real_wick = round(max(0.0, min(last_c["open"], last_c["close"]) - last_c["low"]) / c_range, 3)
+                        else:
+                            real_wick = round(max(0.0, last_c["high"] - max(last_c["open"], last_c["close"])) / c_range, 3)
+
+                        # Trend alignment using EMA20 and EMA50
+                        closes = [c["close"] for c in scalper.candles_1m]
+                        if len(closes) >= 50:
+                            s_closes = pd.Series(closes)
+                            ema20 = float(s_closes.ewm(span=20).mean().iloc[-1])
+                            ema50 = float(s_closes.ewm(span=50).mean().iloc[-1])
+                            real_trend = (quote.mid >= ema50 and ema20 >= ema50) if sig.direction == "BUY" else (quote.mid <= ema50 and ema20 <= ema50)
+                        else:
+                            real_trend = True
+
                         market_state = {
                             "direction": sig.direction,
                             "entry_price": sig.entry_price,
                             "sl_price": sig.sl_price,
-                            "wick_ratio": getattr(scalper, "last_wick_ratio", 0.65),
+                            "wick_ratio": real_wick,
                             "session": sig.strategy_type,
                             "setup_type": sig.strategy_type,
                             "hour_utc": datetime.now(timezone.utc).hour,
-                            "trend_aligned": True,
+                            "trend_aligned": real_trend,
                             "atr_1m": sig.atr_1m,
                             "recent_high": recent_high,
                             "recent_low": recent_low,
                         }
                         laya_decision = laya_oracle.evaluate_setup_sync(market_state)
 
-                        # Smart & Bold Directive:
-                        # VETO only on BLATANT, catastrophic toxic traps (Trap Prob >= 80% or Fatal Politician Red Line)
-                        # All other moderate warnings (< 80% Trap Prob) are overridden to execute boldly on base lot size!
-                        if not laya_decision.is_valid:
-                            is_blatant_trap = (
-                                laya_decision.trap_probability >= 0.80 or
-                                "Politician Shield Veto" in getattr(laya_decision, "matched_ict_concepts", []) or
-                                (getattr(laya_decision, "setup_grade", "") == "toxic_trap" and laya_decision.trap_probability >= 0.80)
-                            )
-                            if is_blatant_trap:
-                                logger.warning("🛡️ BLATANT TOXIC TRAP VETOED: %s (Trap Prob: %.1f%%) - Trade suppressed for capital protection",
-                                               laya_decision.reasoning, laya_decision.trap_probability * 100)
+                        # Micro-Account Capital Preservation Shield (<$100):
+                        if acc.balance < 100.0:
+                            if not laya_decision.is_valid or laya_decision.trap_probability > 0.35 or laya_decision.confluence_score < 7.5:
+                                logger.warning("🛡️ MICRO CAPITAL GUARD VETO: Trap Prob: %.1f%%, Confluence: %.1f/10, Valid: %s (%s) - Setup rejected",
+                                               laya_decision.trap_probability * 100, laya_decision.confluence_score, laya_decision.is_valid, laya_decision.reasoning)
                                 push_ntfy(
-                                    title=f"🛡️ Trap Veto: {sig.direction} @ ${sig.entry_price:.2f}",
-                                    message=f"Suppressed toxic setup · Trap Risk: {laya_decision.trap_probability*100:.0f}%",
+                                    title=f"🛡️ Micro Veto: {sig.direction} @ ${sig.entry_price:.2f}",
+                                    message=f"Trap: {laya_decision.trap_probability*100:.0f}% · Score: {laya_decision.confluence_score:.1f}/10 · Rejected for capital safety",
                                     tags="shield,no_entry_sign",
                                     priority="default",
                                 )
                                 continue
 
-                            logger.info("⚡ SMART & BOLD OVERRIDE: %s (Trap Prob: %.1f%%) -> Executing trade on base lot size (%.2f lots)", 
-                                        laya_decision.reasoning, laya_decision.trap_probability * 100, base_lot_size)
-                            lot_size = base_lot_size
-                            boost_tag = " (Smart & Bold Override - Base Sizing)"
+                            lot_size = 0.01
+                            boost_tag = " (Micro Protection: Strictly 0.01L Locked)"
                         else:
-                            if acc.balance < 100.0:
-                                # Strict micro protection: Never boost above base lot on accounts <$100!
+                            # Standard account sizing (>=$100)
+                            if not laya_decision.is_valid:
+                                is_blatant_trap = (
+                                    laya_decision.trap_probability >= 0.80 or
+                                    "Politician Shield Veto" in getattr(laya_decision, "matched_ict_concepts", []) or
+                                    (getattr(laya_decision, "setup_grade", "") == "toxic_trap" and laya_decision.trap_probability >= 0.80)
+                                )
+                                if is_blatant_trap:
+                                    logger.warning("🛡️ BLATANT TOXIC TRAP VETOED: %s (Trap Prob: %.1f%%) - Trade suppressed for capital protection",
+                                                   laya_decision.reasoning, laya_decision.trap_probability * 100)
+                                    push_ntfy(
+                                        title=f"🛡️ Trap Veto: {sig.direction} @ ${sig.entry_price:.2f}",
+                                        message=f"Suppressed toxic setup · Trap Risk: {laya_decision.trap_probability*100:.0f}%",
+                                        tags="shield,no_entry_sign",
+                                        priority="default",
+                                    )
+                                    continue
+
+                                logger.info("⚡ SMART & BOLD OVERRIDE: %s (Trap Prob: %.1f%%) -> Executing trade on base lot size (%.2f lots)", 
+                                            laya_decision.reasoning, laya_decision.trap_probability * 100, base_lot_size)
                                 lot_size = base_lot_size
-                                boost_tag = " (Micro Protection: Base 0.01L Locked)"
+                                boost_tag = " (Smart & Bold Override - Base Sizing)"
                             else:
                                 # Apply dynamic compounding multiplier (up to 1.50x on Macro Sovereign Titan)
                                 boosted_lots = round(base_lot_size * max(1.0, laya_decision.compounding_multiplier), 2)
@@ -905,6 +857,21 @@ async def run_live_scalper():
                             actual_volume = order_res.get("volume", lot_size)
                             stack_count = order_res.get("stack_count", 1)
                             scalper.last_latency_ms = order_res.get("latency_ms", 0.0)
+
+                            # Arm MicroExitController immediately upon order confirmation
+                            if acc.balance < 100.0:
+                                scalper.micro_exit.cfg = get_micro_account_config(balance=acc.balance)
+                            else:
+                                scalper.micro_exit.cfg = get_to_the_moon_config("XAUUSD")
+
+                            scalper.micro_exit.arm_position(
+                                entry_price=sig.entry_price,
+                                direction=sig.direction,
+                                total_volume=actual_volume,
+                                sl_price=sig.sl_price,
+                                open_time=time.time(),
+                            )
+
                             scalper.active_stack = {
                                 "direction": sig.direction,
                                 "volume": actual_volume,
