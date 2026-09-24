@@ -317,26 +317,26 @@ class LiveBrokerScalper:
         if balance < 35.0:
             lots = 0.01
         elif balance < 75.0:
-            lots = 0.02
+            lots = 0.03  # Active Tier for $59.87 ($25.62 margin)
         elif balance < 150.0:
-            lots = 0.04
+            lots = 0.05
         elif balance < 300.0:
-            lots = 0.08
+            lots = 0.10
         elif balance < 600.0:
-            lots = 0.15
+            lots = 0.20
         elif balance < 1200.0:
-            lots = 0.30
+            lots = 0.40
         elif balance < 2500.0:
-            lots = 0.60
+            lots = 0.80
         elif balance < 5000.0:
-            lots = 1.20
+            lots = 1.60
         else:
-            lots = min(10.00, round(balance / 4000.0, 2))
+            lots = min(10.00, round(balance / 3000.0, 2))
 
         # Absolute Margin Safety Guard (1:500 leverage):
-        # Never allow base lot size to exceed 50% of total balance in required margin!
+        # Never allow base lot size to exceed 55% of total balance in required margin!
         margin_per_001 = max(8.0, (current_price * 100.0 * 0.01) / 500.0)
-        max_safe_lots = math.floor((balance * 0.50) / margin_per_001) * 0.01
+        max_safe_lots = math.floor((balance * 0.55) / margin_per_001) * 0.01
         return max(0.01, min(lots, round(max_safe_lots, 2)))
 
     def is_in_killzone(self, hour_utc: Optional[int] = None) -> bool:
@@ -541,12 +541,29 @@ async def run_live_scalper():
                     if pullback_pct >= 0.18:
                         watermark_exit = True
 
-                # Ratchet 1: Accelerated Breakeven Lock at +0.75 ATR (Fast Risk-Free Cushion for 0.10 Lots)
+                # Ratchet 1: Accelerated Breakeven Lock at +0.75 ATR (Fast Risk-Free Cushion)
                 if not scalper.active_stack.get("be_ratchet_hit", False) and gain_pts >= 0.75 * atr:
                     scalper.active_stack["be_ratchet_hit"] = True
                     new_sl = entry_px + 0.20 if direction == "BUY" else entry_px - 0.20
                     scalper.active_stack["sl_price"] = new_sl
                     logger.info("🛡️ 'TO THE MOON' BE RATCHET LOCKED: SL moved to BE+0.20 ($%.2f) at +%.2f pts", new_sl, gain_pts)
+
+                    # Multi-Order Momentum Pyramiding: Stack an additional runner when position is risk-free
+                    if not scalper.active_stack.get("pyramided", False) and floating_pnl >= 3.0:
+                        pyr_lot = 0.02
+                        margin_per_001 = max(8.0, (current_mid * 100.0 * 0.01) / 500.0)
+                        if (acc.available - (pyr_lot / 0.01 * margin_per_001)) >= 10.0:
+                            logger.info("🚀 MOMENTUM PYRAMID TRIGGER: Stacking +%.2f lots on risk-free position (Floating: +$%.2f)", pyr_lot, floating_pnl)
+                            pyr_res = await gw.open_market_order(direction, pyr_lot, sl_price=new_sl)
+                            if pyr_res.get("success"):
+                                scalper.active_stack["volume"] = round(scalper.active_stack["volume"] + pyr_lot, 2)
+                                scalper.active_stack["pyramided"] = True
+                                push_ntfy(
+                                    title=f"🚀 Multi-Order Pyramid Stacked: +{pyr_lot} Lots {direction}",
+                                    message=f"Total Stack: {scalper.active_stack['volume']} Lots | Locked BE SL: ${new_sl:.2f}\nFloating PnL: +${floating_pnl:.2f} (Filling the Gap on Runner Expansion)",
+                                    tags="rocket,fire",
+                                    priority="high",
+                                )
 
                 # Ratchet 2: Fast Scalp Profit Lock at +1.8 ATR (TP1 Zone) -> Ratchet SL to +1.0 ATR
                 if not scalper.active_stack.get("tp1_ratchet_hit", False) and gain_pts >= 1.8 * atr:
@@ -781,9 +798,9 @@ async def run_live_scalper():
                             # Apply dynamic compounding multiplier (up to 1.50x on Macro Sovereign Titan)
                             boosted_lots = round(base_lot_size * max(1.0, laya_decision.compounding_multiplier), 2)
                             
-                            # Hard margin cap: Boosted trade must never exceed 70% of available margin at 1:500 leverage!
+                            # Hard margin cap: Boosted trade must never exceed 75% of available margin at 1:500 leverage!
                             margin_per_001 = max(8.0, (sig.entry_price * 100.0 * 0.01) / 500.0)
-                            max_allowed_lots = math.floor((acc.available * 0.70) / margin_per_001) * 0.01
+                            max_allowed_lots = math.floor((acc.available * 0.75) / margin_per_001) * 0.01
                             lot_size = max(0.01, min(boosted_lots, round(max_allowed_lots, 2)))
                             
                             boost_tag = f" (Laya {laya_decision.setup_grade} {laya_decision.compounding_multiplier:.2f}x Boost | TP {laya_decision.tp_expansion_multiplier:.2f}x)" if laya_decision.compounding_multiplier > 1.0 else ""
@@ -797,12 +814,32 @@ async def run_live_scalper():
                         logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f | TP1: $%.2f | Spike: $%.2f | Lots: %.2f%s | Confluence: %.1f/10 | TJR: %s (%s)",
                                     sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, sig.tp1_price, effective_spike_target, lot_size, boost_tag, laya_decision.confluence_score, getattr(laya_decision, "tjr_dealing_range", "EQ"), getattr(laya_decision, "tjr_notes", ""))
 
-                        order_res = await gw.open_market_order(sig.direction, lot_size, sl_price=sig.sl_price)
+                        # Multi-Order Stacking: If lot_size >= 0.04, split into 2 rapid tickets to fill the volume gap
+                        if lot_size >= 0.04:
+                            tranche1 = round(lot_size * 0.60, 2)
+                            tranche2 = round(lot_size - tranche1, 2)
+                            logger.info("⚡ MULTI-ORDER DISPATCH: Order 1 = %.2f lots | Order 2 = %.2f lots (Target: %.2f lots)", tranche1, tranche2, lot_size)
+                            order_res1 = await gw.open_market_order(sig.direction, tranche1, sl_price=sig.sl_price)
+                            if order_res1.get("success"):
+                                await asyncio.sleep(0.15)
+                                order_res2 = await gw.open_market_order(sig.direction, tranche2, sl_price=sig.sl_price)
+                                total_vol = tranche1 + (tranche2 if order_res2.get("success") else 0.0)
+                                order_res = order_res1
+                                order_res["volume"] = total_vol
+                                order_res["stack_count"] = 2 if order_res2.get("success") else 1
+                            else:
+                                order_res = order_res1
+                        else:
+                            order_res = await gw.open_market_order(sig.direction, lot_size, sl_price=sig.sl_price)
+
                         if order_res.get("success"):
+                            actual_volume = order_res.get("volume", lot_size)
+                            stack_count = order_res.get("stack_count", 1)
                             scalper.last_latency_ms = order_res.get("latency_ms", 0.0)
                             scalper.active_stack = {
                                 "direction": sig.direction,
-                                "volume": lot_size,
+                                "volume": actual_volume,
+                                "stack_count": stack_count,
                                 "entry_price": sig.entry_price,
                                 "sl_price": sig.sl_price,
                                 "tp1_price": sig.tp1_price,
@@ -815,13 +852,15 @@ async def run_live_scalper():
                                 "peak_pnl": 0.0,
                                 "be_ratchet_hit": False,
                                 "tp1_ratchet_hit": False,
+                                "pyramided": False,
                                 "laya_grade": laya_decision.setup_grade,
                                 "ict_concepts": sig.ict_concepts,
                                 "political_regime": laya_decision.political_regime,
                                 "macro_bias": laya_decision.macro_bias,
                             }
+                            stack_tag = f" ({stack_count} Stacked Tickets)" if stack_count > 1 else ""
                             push_ntfy(
-                                title=f"🌕 {laya_decision.setup_grade.upper()}: {sig.direction} {lot_size} Lots [{sig.strategy_type}]",
+                                title=f"🌕 {laya_decision.setup_grade.upper()}: {sig.direction} {actual_volume} Lots [{sig.strategy_type}]{stack_tag}",
                                 message=f"✅ REAL BROKER FILLED @ ${sig.entry_price:.2f} | SL: ${sig.sl_price:.2f} | Spike: ${effective_spike_target:.2f}\nSizing: {laya_decision.compounding_multiplier:.2f}x | TP Exp: {laya_decision.tp_expansion_multiplier:.2f}x\nPolitician: {laya_decision.political_regime} ({laya_decision.macro_bias})\nBroker Latency: {scalper.last_latency_ms:.1f}ms",
                                 tags="zap,rocket,shield",
                                 priority="high",
