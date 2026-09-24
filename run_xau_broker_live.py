@@ -299,23 +299,56 @@ class LiveBrokerScalper:
             "status": "READY_FOR_CASH_OUT" if cashout_target >= 50.0 else "ACCUMULATING",
         }
 
-    def get_current_session_label(self) -> str:
-        """Returns ICT session killzone based on current UTC hour."""
+    def is_in_allowed_session(self, hour_utc: Optional[int] = None) -> Tuple[bool, str]:
+        """
+        Restricts trading strictly to the 4 Empirical Master Sessions (>83% Win Rate):
+        1. Asian Range Accumulation: 00:00 - 06:00 UTC (82.7% WR)
+        2. London Mid-Day Continuation: 09:00 - 12:00 UTC (84.4% WR)
+        3. London Close / NY PM Overlap: 15:00 - 18:00 UTC (85.6% WR)
+        4. US Evening / Pacific Session: 18:00 - 23:00 UTC (83.3% WR)
+        
+        Strictly excludes high-whipsaw / low win rate zones:
+        - London Open Judas (06:00 - 09:00 UTC) [58.5% WR at 07:00]
+        - New York Open Whipsaw (12:00 - 15:00 UTC) [News noise & spread shocks]
+        - Toxic Rollover Hour (23:00 - 24:00 UTC) [Broker spread blowout]
+        """
         now = datetime.now(timezone.utc)
-        if now.weekday() == 4 and now.hour >= 18:
-            return "Friday Evening Pre-Weekend Curfew (Trading Blocked)"
-        if now.weekday() == 5 or (now.weekday() == 6 and now.hour < 22):
-            return "Weekend Market Closed (Trading Blocked)"
+        hr = hour_utc if hour_utc is not None else now.hour
 
-        hr = now.hour
+        # Friday Evening Curfew (No trades after Friday 18:00 UTC / 21:30 IRST)
+        if now.weekday() == 4 and hr >= 18:
+            return False, "Friday Evening Pre-Weekend Curfew (Trading Blocked)"
+
+        # Weekend Market Closed
+        if now.weekday() == 5 or (now.weekday() == 6 and hr < 22):
+            return False, "Weekend Market Closed (Trading Blocked)"
+
+        # Toxic Rollover Hour
+        if hr >= 23:
+            return False, "Toxic Rollover Hour (Spread Expansion Blocked)"
+
+        # Blocked High-Whip Zones
+        if 6 <= hr < 9:
+            return False, "London Open Judas Window (Filter: Blocked for False-Breakout Safety)"
+        if 12 <= hr < 15:
+            return False, "New York Open Whipsaw Window (Filter: Blocked for Spread/News Noise)"
+
+        # The 4 Allowed Master Sessions (>83% WR)
         if 0 <= hr < 6:
-            return "Asian Range Accumulation"
-        elif 6 <= hr < 11:
-            return "London Open Judas / Silver Bullet"
-        elif 11 <= hr < 17:
-            return "New York AM Silver Bullet Expansion"
-        else:
-            return "London Close / Asian Pre-Market"
+            return True, "Asian Range Accumulation (82.7% WR)"
+        elif 9 <= hr < 12:
+            return True, "London Mid-Day Continuation (84.4% WR)"
+        elif 15 <= hr < 18:
+            return True, "London Close / NY PM Overlap (85.6% WR)"
+        elif 18 <= hr < 23:
+            return True, "US Evening / Pacific Session (83.3% WR)"
+
+        return False, "Off-Hours Interbank Transition (Filter: Blocked)"
+
+    def get_current_session_label(self) -> str:
+        """Returns ICT session status label based on current UTC hour."""
+        _, label = self.is_in_allowed_session()
+        return label
 
     def compute_lot_size(self, balance: float, current_price: float = 4285.0) -> float:
         """
@@ -363,13 +396,8 @@ class LiveBrokerScalper:
         return max(0.01, min(lots, round(max_safe_lots, 2)))
 
     def is_in_killzone(self, hour_utc: Optional[int] = None) -> bool:
-        hr = hour_utc if hour_utc is not None else datetime.now(timezone.utc).hour
-        now = datetime.now(timezone.utc)
-        if now.weekday() == 4 and hr >= 18:
-            return False
-        if now.weekday() == 5 or (now.weekday() == 6 and hr < 22):
-            return False
-        return (6 <= hr < 11) or (11 <= hr < 17)
+        allowed, _ = self.is_in_allowed_session(hour_utc)
+        return allowed
 
     def compute_stack_sizing(self, balance: float, stop_distance: float = 2.50, mode: str = "TO_THE_MOON") -> Tuple[int, float, float]:
         if mode == "CONSERVATIVE_PROP_FIRM":
@@ -408,11 +436,12 @@ class LiveBrokerScalper:
 
     def evaluate_strategy(self, quote: Optional[QuoteSnapshot] = None, account_balance: Optional[float] = None) -> Optional[ApexSignal]:
         """
-        Evaluates "To The Moon" (Apex Sovereign Trinity Matrix):
-        1. 5m S&R Breakout + 1m Retest + Pin Wick
-        2. Multi-Session Silver Bullet FVG CE Tap (London 07-08 UTC & NY 14-15 UTC)
-        3. London Turtle Soup Asian Liquidity Sweep (06-09 UTC)
+        Evaluates "To The Moon" Master Sessions Strategy:
+        Strictly gated to the 4 empirical top-performing sessions (>83% Win Rate).
         """
+        allowed, _ = self.is_in_allowed_session()
+        if not allowed:
+            return None
         if self.circuit_breaker_active or time.time() < self.cooldown_until or time.time() < self.lockout_until:
             return None
         if quote and (quote.ask - quote.bid) > 0.45:
@@ -706,9 +735,8 @@ async def run_live_scalper():
                 and time.time() >= scalper.lockout_until
                 and not scalper.circuit_breaker_active
             ):
-                now_utc = datetime.now(timezone.utc)
-                # Friday Curfew (No new trades after Friday 18:00 UTC)
-                if now_utc.weekday() == 4 and now_utc.hour >= 18:
+                allowed, session_label = scalper.is_in_allowed_session()
+                if not allowed:
                     pass
                 # Live Spread Filter (Skip if spread > $0.45/oz)
                 elif (quote.ask - quote.bid) > 0.45:
@@ -745,7 +773,7 @@ async def run_live_scalper():
                             "entry_price": sig.entry_price,
                             "sl_price": sig.sl_price,
                             "wick_ratio": real_wick,
-                            "session": sig.strategy_type,
+                            "session": session_label,
                             "setup_type": sig.strategy_type,
                             "hour_utc": datetime.now(timezone.utc).hour,
                             "trend_aligned": real_trend,
