@@ -242,21 +242,18 @@ def send_alert(
     except Exception as exc:
         logger.debug("Native WebPush error in send_alert: %s", exc)
 
-    if DISCONNECT_BARK_NTFY:
-        logger.info("📱 Native Web Push delivered to %d device(s): '%s' (Bark & Ntfy disconnected).", sent, title)
-        return True
-
-    # Legacy external dispatch only if explicitly re-enabled
+    # 2. Bark push if configured
     keys = get_bark_keys()
     if keys:
-        return push_bark(
-            title=title,
-            message=message,
-            group=group,
-            url=url,
-            icon=icon,
-        )
-    return _push_ntfy_fallback(title=title, message=message, priority=priority)
+        try:
+            push_bark(title=title, message=message, group=group, url=url, icon=icon, priority=priority)
+        except Exception as be:
+            logger.debug("Bark dispatch error: %s", be)
+
+    # 3. Always dispatch via Ntfy as reliable zero-friction fallback
+    ntfy_ok = _push_ntfy_fallback(title=title, message=message, priority=priority)
+    logger.info("Dispatched alert '%s' -> WebPush: %d sub(s) | Ntfy: %s", title, sent, ntfy_ok)
+    return True
 
 
 async def send_alert_async(

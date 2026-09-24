@@ -174,7 +174,7 @@ class LiteFinanceGateway:
                             const aText = a.innerText || '';
                             const bid = parseFloat(bText.replace(/[^0-9.]/g, ''));
                             const ask = parseFloat(aText.replace(/[^0-9.]/g, ''));
-                            if (bid && ask && (bid !== lastBid || ask !== lastAsk)) {
+                            if (bid && ask && bid > 0 && ask > 0 && ask >= bid && (bid !== lastBid || ask !== lastAsk)) {
                                 lastBid = bid;
                                 lastAsk = ask;
                                 const mid = Math.round(((bid + ask) / 2.0) * 100) / 100;
@@ -342,9 +342,19 @@ class LiteFinanceGateway:
                     return !!bid;
                 }""")
                 if not has_panel:
-                    logger.warning("Trading panel not detected immediately, waiting an extra 3 seconds...")
-                    await self._page.wait_for_timeout(3000)
+                    logger.warning("Trading panel not detected immediately, waiting an extra 4 seconds...")
+                    await self._page.wait_for_timeout(4000)
                     await self._clear_overlays()
+                    has_panel = await self._page.evaluate("""() => {
+                        const bid = document.querySelector('.js_value_price_bid');
+                        return !!bid;
+                    }""")
+
+                if not has_panel:
+                    cur_url = self._page.url
+                    logger.error("❌ LiteFinance trading panel not found (Current URL: %s). Session may need re-authentication.", cur_url)
+                    self._connected = False
+                    return False
 
                 self._connected = True
                 logger.info("✅ LiteFinance Gateway successfully connected and ready with Ultra-Fast Streaming.")
@@ -485,9 +495,17 @@ class LiteFinanceGateway:
             vol_str = f"{volume:.2f}"
             sl_str = f"{sl_price:.2f}" if (sl_price and sl_price > 0) else None
             try:
+                # 0. Capture initial broker state before order dispatch to verify incremental fill
+                initial_acc = await self.get_account_snapshot()
+                initial_assets = initial_acc.assets_used if initial_acc else 0.0
+                initial_trades = await self._page.evaluate("""() => {
+                    const rows = document.querySelectorAll('.js_open_trades tr, [class*="open_trades"] tr, .portfolio_table tr');
+                    return rows.length;
+                }""")
+
                 # 1. Clear any lingering popups or overlays before order dispatch
                 await self._page.evaluate("""() => {
-                    const popups = document.querySelectorAll('.popup, .modal, [class*="popup"], [class*="modal"]');
+                    const popups = document.querySelectorAll('.popup, .modal, .toast, .notification, .alert, [class*="popup"], [class*="modal"]');
                     popups.forEach(p => {
                         const closeBtn = p.querySelector('.close, [class*="close"], button, a');
                         if (closeBtn && closeBtn.getBoundingClientRect().width > 0) {
@@ -548,11 +566,11 @@ class LiteFinanceGateway:
                 await asyncio.sleep(0.20)
 
                 broker_check = await self._page.evaluate("""() => {
-                    // Check for error modals / popups
-                    const popups = Array.from(document.querySelectorAll('.popup, .modal, [class*="popup"], [class*="modal"]')).filter(p => p.getBoundingClientRect().width > 0 && p.getBoundingClientRect().height > 0);
+                    // Check for error modals / popups / alerts
+                    const popups = Array.from(document.querySelectorAll('.popup, .modal, .toast, .notification, .alert, [class*="popup"], [class*="modal"], [class*="toast"], [class*="notification"]')).filter(p => p.getBoundingClientRect().width > 0 && p.getBoundingClientRect().height > 0);
                     for (const p of popups) {
                         const text = (p.innerText || '').trim();
-                        if (text.includes('Not enough funds') || text.includes('Attention') || text.includes('Error') || text.includes('rejected') || text.includes('failed') || text.includes('Invalid')) {
+                        if (text.includes('Not enough funds') || text.includes('Attention') || text.includes('Error') || text.includes('rejected') || text.includes('failed') || text.includes('Invalid') || text.includes('disabled') || text.includes('cannot open')) {
                             // Dismiss popup
                             const closeBtn = p.querySelector('.close, [class*="close"], a, button');
                             if (closeBtn) {
@@ -573,7 +591,7 @@ class LiteFinanceGateway:
                         confirmBtns[0].click();
                     }
 
-                    const openTrades = document.querySelectorAll('.js_open_trades tr, [class*="open_trades"] tr');
+                    const openTrades = document.querySelectorAll('.js_open_trades tr, [class*="open_trades"] tr, .portfolio_table tr');
                     return { rejected: false, openTradesCount: openTrades.length };
                 }""")
 
@@ -582,14 +600,21 @@ class LiteFinanceGateway:
                     logger.error("❌ BROKER REJECTED ORDER: %s | Requested: %s %.2f lots", rej_reason, direction, volume)
                     return {"success": False, "error": rej_reason}
 
-                # 4. Multi-tick confirmation: Ensure assets_used > 0 or trade table updated
+                # 4. Multi-tick confirmation: Ensure assets_used or trade table incremented
                 confirmed = False
-                for _ in range(6):
+                for _ in range(10):  # Up to 2.0s buffer for broker settlement
                     await asyncio.sleep(0.20)
                     acc = await self.get_account_snapshot(force_fresh=True)
-                    if acc.assets_used > 0.0 or broker_check.get("openTradesCount", 0) > 0:
-                        confirmed = True
-                        break
+                    current_trades = broker_check.get("openTradesCount", 0)
+                    if initial_assets <= 0.0:
+                        if acc.assets_used > 0.0 or current_trades > 0:
+                            confirmed = True
+                            break
+                    else:
+                        # Stacked / pyramid order: verify assets increased or trade row count increased
+                        if acc.assets_used >= (initial_assets + 1.0) or current_trades > initial_trades:
+                            confirmed = True
+                            break
 
                 latency_ms = (time.perf_counter() - t0) * 1000.0
                 clicked_btn = res.get("text", "ORDER_CLICKED")
@@ -597,10 +622,10 @@ class LiteFinanceGateway:
                 if not confirmed:
                     # Final check for error popups that appeared late
                     late_err = await self._page.evaluate("""() => {
-                        const p = document.querySelector('.popup, .modal, .toast, .notification');
+                        const p = document.querySelector('.popup, .modal, .toast, .notification, .alert');
                         return p ? (p.innerText || '').replace(/\\n+/g, ' ') : null;
                     }""")
-                    err_msg = late_err or "Broker did not report active position (assets_used remained 0)"
+                    err_msg = late_err or "Broker did not report active position (assets_used remained 0 or did not increment)"
                     logger.warning("⚠️ ORDER CONFIRMATION TIMEOUT: %s", err_msg)
                     return {"success": False, "error": err_msg}
 
@@ -693,27 +718,22 @@ class LiteFinanceGateway:
         """
         Emergency / Profit spike flatten: atomic execution across all open tickets.
         Directly targets .js_trade_action_close and auto-opens portfolio drawer if needed.
-        Includes table scroll-fold support to ensure tickets 6-10 are not missed.
+        Iteratively closes stacked orders and confirms all modals until 0 assets used.
         """
         async with self._lock:
             if not self._page:
                 return {"success": False, "error": "Gateway not initialized"}
 
             t0 = time.perf_counter()
+            total_closed = 0
             try:
-                # 1. Close any positions whose close button is already visible
-                closed_count = await self._page.evaluate("""() => {
-                    const closeBtns = Array.from(document.querySelectorAll('.js_trade_action_close, a.btn_red.js_trade_action_close, .btn_close, [class*="close_trade"]')).filter(b => b.getBoundingClientRect().width > 0);
-                    let count = 0;
-                    closeBtns.forEach(b => {
-                        b.click();
-                        count++;
-                    });
-                    return count;
-                }""")
+                for iteration in range(8):
+                    # 1. Check account snapshot: if 0 assets used, all orders are closed!
+                    acc = await self.get_account_snapshot(force_fresh=True)
+                    if acc.assets_used <= 0.0:
+                        break
 
-                # 2. If no buttons were immediately visible, ensure portfolio drawer is open
-                if closed_count == 0:
+                    # 2. Ensure portfolio drawer is open
                     await self._page.evaluate("""() => {
                         const triggers = Array.from(document.querySelectorAll('a, button, span, div')).filter(el => {
                             const txt = (el.innerText || '').trim();
@@ -721,54 +741,50 @@ class LiteFinanceGateway:
                         });
                         if (triggers.length > 0) triggers[0].click();
                     }""")
-                    await self._page.wait_for_timeout(350)
+                    await self._page.wait_for_timeout(200)
 
-                    # Now click all close buttons in open drawer
-                    closed_count = await self._page.evaluate("""() => {
-                        const closeBtns = Array.from(document.querySelectorAll('.js_trade_action_close, a.btn_red.js_trade_action_close, .btn_close, [class*="close_trade"]')).filter(b => b.getBoundingClientRect().width > 0);
-                        let c = 0;
-                        closeBtns.forEach(b => {
-                            b.click();
-                            c++;
+                    # 3. Check for "Close all" button first!
+                    closed_all = await self._page.evaluate("""() => {
+                        const btns = Array.from(document.querySelectorAll('button, a, div')).filter(b => {
+                            const txt = (b.innerText || '').trim().toLowerCase();
+                            return (txt === 'close all' || txt === 'close all trades' || txt === 'close all positions') && b.getBoundingClientRect().width > 0;
                         });
-                        return c;
+                        if (btns.length > 0) {
+                            btns[0].click();
+                            return true;
+                        }
+                        return false;
                     }""")
 
-                # 3. Confirm modal if any
-                await self._page.evaluate("""() => {
-                    const confirmBtns = Array.from(document.querySelectorAll('button, a.btn')).filter(x => {
-                        const t = (x.innerText || '').trim();
-                        return (t === 'Close' || t === 'Yes' || t === 'Confirm' || t === 'OK') && x.getBoundingClientRect().width > 0;
-                    });
-                    confirmBtns.forEach(cb => cb.click());
-                }""")
-
-                # 4. Multi-Attempt Verification with Scroll-Fold Flattening
-                acc = await self.get_account_snapshot(force_fresh=True)
-                if acc.assets_used > 0.0:
-                    logger.warning("⚠️ Assets still tied up ($%.2f) after initial flatten. Triggering failsafe scroll flatten...", acc.assets_used)
-                    for retry in range(4):
+                    if closed_all:
+                        await self._page.wait_for_timeout(150)
+                        # Confirm modal
                         await self._page.evaluate("""() => {
-                            const portBtn = Array.from(document.querySelectorAll('a, button, div')).find(el => (el.innerText || '').includes('PORTFOLIO'));
-                            if (portBtn) portBtn.click();
-                            // Scroll table container to reveal tickets hidden below fold
-                            const scrollable = document.querySelector('.portfolio_table, .ui-scrollable, .portfolio_trades, .data_table_wrap, [class*="portfolio"]') || document.querySelector('.js_scrollable');
-                            if (scrollable) {
-                                scrollable.scrollTop += 300;
-                            }
-                        }""")
-                        await self._page.wait_for_timeout(250)
-                        extra_closed = await self._page.evaluate("""() => {
-                            const btns = Array.from(document.querySelectorAll('button, a')).filter(b => {
-                                const cls = (b.className || '').toLowerCase();
-                                const txt = (b.innerText || '').trim().toLowerCase();
-                                return (cls.includes('close') || txt === 'close' || txt.includes('close all')) && b.getBoundingClientRect().width > 0;
+                            const confirmBtns = Array.from(document.querySelectorAll('button, a.btn')).filter(x => {
+                                const t = (x.innerText || '').trim();
+                                return (t === 'Close' || t === 'Yes' || t === 'Confirm' || t === 'OK') && x.getBoundingClientRect().width > 0;
                             });
-                            btns.forEach(b => b.click());
-                            return btns.length;
+                            confirmBtns.forEach(cb => cb.click());
                         }""")
-                        closed_count += extra_closed
-                        await self._page.wait_for_timeout(200)
+                        await self._page.wait_for_timeout(300)
+                        acc = await self.get_account_snapshot(force_fresh=True)
+                        if acc.assets_used <= 0.0:
+                            total_closed += 1
+                            break
+
+                    # 4. Click visible individual close button and confirm
+                    clicked = await self._page.evaluate("""() => {
+                        const closeBtns = Array.from(document.querySelectorAll('.js_trade_action_close, a.btn_red.js_trade_action_close, .btn_close, [class*="close_trade"]')).filter(b => b.getBoundingClientRect().width > 0);
+                        if (closeBtns.length > 0) {
+                            closeBtns[0].click();
+                            return 1;
+                        }
+                        return 0;
+                    }""")
+
+                    if clicked > 0:
+                        total_closed += clicked
+                        await self._page.wait_for_timeout(150)
                         # Confirm modals
                         await self._page.evaluate("""() => {
                             const confirmBtns = Array.from(document.querySelectorAll('button, a.btn')).filter(x => {
@@ -777,22 +793,27 @@ class LiteFinanceGateway:
                             });
                             confirmBtns.forEach(cb => cb.click());
                         }""")
-                        acc = await self.get_account_snapshot(force_fresh=True)
-                        if acc.assets_used <= 0.0:
-                            logger.info("✅ Failsafe scroll flatten succeeded: 0 assets in use.")
-                            break
+                        await self._page.wait_for_timeout(200)
+                    else:
+                        # Scroll down to reveal any hidden positions
+                        await self._page.evaluate("""() => {
+                            const scrollable = document.querySelector('.portfolio_table, .ui-scrollable, .portfolio_trades, .data_table_wrap, [class*="portfolio"]') || document.querySelector('.js_scrollable');
+                            if (scrollable) scrollable.scrollTop += 250;
+                        }""")
+                        await self._page.wait_for_timeout(200)
 
+                acc = await self.get_account_snapshot(force_fresh=True)
                 latency_ms = (time.perf_counter() - t0) * 1000.0
                 logger.info("⚡ ULTRA-FAST BROKER FLATTEN: Closed %s tickets | Latency: %.2fms | Balance: $%.2f | Assets Used: $%.2f",
-                            closed_count, latency_ms, acc.balance, acc.assets_used)
-
+                            total_closed, latency_ms, acc.balance, acc.assets_used)
 
                 return {
                     "success": True,
-                    "closed_count": closed_count,
+                    "closed_count": total_closed,
                     "latency_ms": latency_ms,
                     "balance": acc.balance,
                     "equity": acc.equity,
+                    "assets_used": acc.assets_used,
                 }
             except Exception as e:
                 logger.error("Error flattening broker positions: %s", e)

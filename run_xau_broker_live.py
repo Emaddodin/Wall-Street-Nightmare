@@ -99,8 +99,10 @@ def log_live_trade(trade: Dict[str, Any]) -> None:
             except Exception:
                 entries = []
         entries.append(trade)
-        with open(LIVE_JOURNAL_JSON, "w", encoding="utf-8") as f_json:
+        tmp_json = LIVE_JOURNAL_JSON.with_suffix(".tmp")
+        with open(tmp_json, "w", encoding="utf-8") as f_json:
             json.dump(entries, f_json, indent=2)
+        tmp_json.replace(LIVE_JOURNAL_JSON)
     except Exception as ex:
         logger.error("Error writing live trade to JSON: %s", ex)
 
@@ -151,9 +153,18 @@ def save_vault_state(state: Dict[str, Any]) -> None:
     tmp.replace(VAULT_FILE)
 
 
-def push_ntfy(title: str, message: str, tags: str = "zap,chart", priority: str = "high") -> bool:
-    """Dispatches push notification via Bark (primary) with fallback."""
-    return send_alert(title=title, message=message, priority=priority)
+def push_ntfy(title: str, message: str, tags: str = "zap,chart", priority: str = "high") -> None:
+    """Dispatches push notification asynchronously without blocking the event loop."""
+    try:
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, send_alert, title, message, priority)
+    except RuntimeError:
+        try:
+            send_alert(title=title, message=message, priority=priority)
+        except Exception:
+            pass
+    except Exception as e:
+        logger.debug("push_ntfy dispatch failed: %s", e)
 
 
 def sync_dashboard_state(
@@ -336,7 +347,9 @@ class LiveBrokerScalper:
         # Absolute Margin Safety Guard (1:500 leverage):
         # Never allow base lot size to exceed 55% of total balance in required margin!
         margin_per_001 = max(8.0, (current_price * 100.0 * 0.01) / 500.0)
-        max_safe_lots = math.floor((balance * 0.55) / margin_per_001) * 0.01
+        if balance < (margin_per_001 * 1.10):
+            return 0.0  # Balance insufficient to safely open even 0.01 lots
+        max_safe_lots = max(0.01, math.floor((balance * 0.55) / margin_per_001) * 0.01)
         return max(0.01, min(lots, round(max_safe_lots, 2)))
 
     def is_in_killzone(self, hour_utc: Optional[int] = None) -> bool:
@@ -512,8 +525,9 @@ async def run_live_scalper():
                 direction = scalper.active_stack["direction"]
                 atr = scalper.active_stack.get("atr_1m", 1.50)
 
-                # Distance moved in favorable direction in points ($/oz)
-                gain_pts = (current_mid - entry_px) if direction == "BUY" else (entry_px - current_mid)
+                # Distance moved in favorable direction using physical executable prices (Bid for Buy close, Ask for Sell close)
+                exec_px = quote.bid if direction == "BUY" else quote.ask
+                gain_pts = (exec_px - entry_px) if direction == "BUY" else (entry_px - exec_px)
 
                 # 2.2 High-Velocity Scalping Stagnation & Holding Duration
                 time_held_sec = time.time() - scalper.active_stack["open_time"]
@@ -555,15 +569,15 @@ async def run_live_scalper():
                         if (acc.available - (pyr_lot / 0.01 * margin_per_001)) >= 10.0:
                             logger.info("🚀 MOMENTUM PYRAMID TRIGGER: Stacking +%.2f lots on risk-free position (Floating: +$%.2f)", pyr_lot, floating_pnl)
                             pyr_res = await gw.open_market_order(direction, pyr_lot, sl_price=new_sl)
+                            scalper.active_stack["pyramided"] = True  # Flag pyramid attempted regardless to prevent spam
                             if pyr_res.get("success"):
                                 scalper.active_stack["volume"] = round(scalper.active_stack["volume"] + pyr_lot, 2)
-                                scalper.active_stack["pyramided"] = True
                                 push_ntfy(
                                     title=f"🚀 Multi-Order Pyramid Stacked: +{pyr_lot} Lots {direction}",
                                     message=f"Total Stack: {scalper.active_stack['volume']} Lots | Locked BE SL: ${new_sl:.2f}\nFloating PnL: +${floating_pnl:.2f} (Filling the Gap on Runner Expansion)",
                                     tags="rocket,fire",
                                     priority="high",
-                                )
+                                Shakespeare="default")
 
                 # Ratchet 2: Fast Scalp Profit Lock at +1.8 ATR (TP1 Zone) -> Ratchet SL to +1.0 ATR
                 if not scalper.active_stack.get("tp1_ratchet_hit", False) and gain_pts >= 1.8 * atr:
@@ -572,9 +586,9 @@ async def run_live_scalper():
                     scalper.active_stack["sl_price"] = locked_sl
                     logger.info("💰 'TO THE MOON' SCALP PROFIT LOCK: SL ratcheted to +1.0 ATR ($%.2f) at +%.2f pts", locked_sl, gain_pts)
 
-                # Check if price hit current active software Stop Loss
-                sl_hit = (direction == "BUY" and current_mid <= scalper.active_stack["sl_price"]) or \
-                         (direction == "SELL" and current_mid >= scalper.active_stack["sl_price"])
+                # Check if executable price hit current active software Stop Loss
+                sl_hit = (direction == "BUY" and quote.bid <= scalper.active_stack["sl_price"]) or \
+                         (direction == "SELL" and quote.ask >= scalper.active_stack["sl_price"])
 
                 # Hard single-trade loss ceiling (Strict 5% equity floor, maximum $35 on accounts under $1,000)
                 tier_mult = max(1.0, acc.balance / 100.0)
@@ -591,7 +605,12 @@ async def run_live_scalper():
                 # Exit Handling
                 if watermark_exit:
                     logger.info("💰 PEAK WATERMARK BAG PROTECTION: Locked +$%.2f (Peak was +$%.2f, -18%% pullback)", floating_pnl, peak_pnl)
-                    res = await gw.flatten_all_positions()
+                    saved_stack = dict(scalper.active_stack)
+                    try:
+                        res = await gw.flatten_all_positions()
+                    finally:
+                        scalper.active_stack = None
+
                     scalper.consecutive_losses = 0
                     log_live_trade({
                         "timestamp": time.time(),
@@ -599,14 +618,14 @@ async def run_live_scalper():
                         "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
                         "symbol": "XAUUSD",
                         "direction": direction,
-                        "strategy": scalper.active_stack.get("strategy_type", "TO_THE_MOON"),
+                        "strategy": saved_stack.get("strategy_type", "TO_THE_MOON"),
                         "entry_price": entry_px,
                         "exit_price": current_mid,
-                        "volume": scalper.active_stack["volume"],
+                        "volume": saved_stack["volume"],
                         "peak_floating_pnl": peak_pnl,
                         "realized_pnl": floating_pnl,
                         "exit_reason": "BAG_PROTECTION_WATERMARK_LOCK",
-                        "duration_min": max(1, int((time.time() - scalper.active_stack["open_time"]) // 60)),
+                        "duration_min": max(1, int((time.time() - saved_stack["open_time"]) // 60)),
                         "balance_after": res.get("balance", acc.balance),
                         "equity_after": res.get("balance", acc.balance),
                     })
@@ -616,11 +635,15 @@ async def run_live_scalper():
                         tags="moneybag,shield",
                         priority="high",
                     )
-                    scalper.active_stack = None
 
                 elif stagnation_exit:
                     logger.info("⏳ %s: Mid: $%.2f | Floating PnL: $%.2f", stagnation_reason, current_mid, floating_pnl)
-                    res = await gw.flatten_all_positions()
+                    saved_stack = dict(scalper.active_stack)
+                    try:
+                        res = await gw.flatten_all_positions()
+                    finally:
+                        scalper.active_stack = None
+
                     if floating_pnl < 0:
                         scalper.consecutive_losses += 1
                         scalper.daily_realized_loss += abs(floating_pnl)
@@ -634,14 +657,14 @@ async def run_live_scalper():
                         "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
                         "symbol": "XAUUSD",
                         "direction": direction,
-                        "strategy": scalper.active_stack.get("strategy_type", "TO_THE_MOON"),
+                        "strategy": saved_stack.get("strategy_type", "TO_THE_MOON"),
                         "entry_price": entry_px,
                         "exit_price": current_mid,
-                        "volume": scalper.active_stack["volume"],
+                        "volume": saved_stack["volume"],
                         "peak_floating_pnl": peak_pnl,
                         "realized_pnl": floating_pnl,
                         "exit_reason": "STAGNATION_TIME_DECAY_EXIT",
-                        "duration_min": max(1, int((time.time() - scalper.active_stack["open_time"]) // 60)),
+                        "duration_min": max(1, int((time.time() - saved_stack["open_time"]) // 60)),
                         "balance_after": res.get("balance", acc.balance),
                         "equity_after": res.get("balance", acc.balance),
                     })
@@ -651,21 +674,24 @@ async def run_live_scalper():
                         tags="hourglass,shield" if floating_pnl >= 0 else "hourglass,warning",
                         priority="high" if floating_pnl >= 0 else "default",
                     )
-                    scalper.active_stack = None
 
                 elif sl_hit or floating_pnl <= -dynamic_risk_stop or friday_force_flatten:
                     is_trailing = scalper.active_stack.get("be_ratchet_hit", False)
                     reason_label = "Friday Weekend Force-Flatten" if friday_force_flatten else ("Trailing Profit Lock" if (is_trailing and floating_pnl > 0) else ("Trailing BE Hit" if is_trailing else "Risk Stop Hit"))
                     logger.warning("🛑 %s: Mid: $%.2f, SL: $%.2f, Floating PnL: $%.2f", reason_label, current_mid, scalper.active_stack["sl_price"], floating_pnl)
-                    res = await gw.flatten_all_positions()
-                    
+                    saved_stack = dict(scalper.active_stack)
+                    try:
+                        res = await gw.flatten_all_positions()
+                    finally:
+                        scalper.active_stack = None
+
                     if floating_pnl < 0:
                         scalper.consecutive_losses += 1
                         scalper.daily_realized_loss += abs(floating_pnl)
                         scalper.cooldown_until = time.time() + 300.0  # 5 min cooldown
                         if scalper.consecutive_losses >= 2:
                             scalper.lockout_until = time.time() + 3600.0  # 60 min lockout
-                        
+
                         max_day_loss = min(50.0, max(20.0, scalper.daily_start_balance * 0.08))
                         if scalper.daily_realized_loss >= max_day_loss:
                             scalper.circuit_breaker_active = True
@@ -679,56 +705,58 @@ async def run_live_scalper():
                         "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
                         "symbol": "XAUUSD",
                         "direction": direction,
-                        "strategy": scalper.active_stack.get("strategy_type", "TO_THE_MOON"),
+                        "strategy": saved_stack.get("strategy_type", "TO_THE_MOON"),
                         "entry_price": entry_px,
                         "exit_price": current_mid,
-                        "volume": scalper.active_stack["volume"],
+                        "volume": saved_stack["volume"],
                         "peak_floating_pnl": peak_pnl,
                         "realized_pnl": floating_pnl,
                         "exit_reason": reason_label,
-                        "duration_min": max(1, int((time.time() - scalper.active_stack["open_time"]) // 60)),
+                        "duration_min": max(1, int((time.time() - saved_stack["open_time"]) // 60)),
                         "balance_after": res.get("balance", acc.balance),
                         "equity_after": res.get("balance", acc.balance),
                     })
 
                     push_ntfy(
                         title=f"🛑 {reason_label} (${floating_pnl:+.2f})",
-                        message=f"Strategy: {scalper.active_stack.get('strategy_type')}\nClosed @ ${current_mid:.2f}. New Balance: ${res.get('balance', acc.balance):.2f}",
+                        message=f"Strategy: {saved_stack.get('strategy_type')}\nClosed @ ${current_mid:.2f}. New Balance: ${res.get('balance', acc.balance):.2f}",
                         tags="warning,octagonal_sign" if floating_pnl < 0 else "moneybag,shield",
                         priority="urgent" if floating_pnl < 0 else "default",
                     )
-                    scalper.active_stack = None
 
                 elif hit_macro_spike:
                     logger.info("🌕 'TO THE MOON' MACRO SPIKE HARVEST: Mid: $%.2f | Gain: +%.2f pts | Floating PnL: +$%.2f", current_mid, gain_pts, floating_pnl)
-                    res = await gw.flatten_all_positions()
-                    scalper.consecutive_losses = 0
+                    saved_stack = dict(scalper.active_stack)
+                    try:
+                        res = await gw.flatten_all_positions()
+                    finally:
+                        scalper.active_stack = None
 
+                    scalper.consecutive_losses = 0
                     log_live_trade({
                         "timestamp": time.time(),
                         "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
                         "time_utc": datetime.now(timezone.utc).strftime("%H:%M:%S"),
                         "symbol": "XAUUSD",
                         "direction": direction,
-                        "strategy": scalper.active_stack.get("strategy_type", "TO_THE_MOON"),
+                        "strategy": saved_stack.get("strategy_type", "TO_THE_MOON"),
                         "entry_price": entry_px,
                         "exit_price": current_mid,
-                        "volume": scalper.active_stack["volume"],
+                        "volume": saved_stack["volume"],
                         "peak_floating_pnl": peak_pnl,
                         "realized_pnl": floating_pnl,
                         "exit_reason": "MACRO_SPIKE_HARVEST",
-                        "duration_min": max(1, int((time.time() - scalper.active_stack["open_time"]) // 60)),
+                        "duration_min": max(1, int((time.time() - saved_stack["open_time"]) // 60)),
                         "balance_after": res.get("balance", acc.balance),
                         "equity_after": res.get("balance", acc.balance),
                     })
 
                     push_ntfy(
                         title=f"🌕 Macro Spike Harvest (+${floating_pnl:+.2f})",
-                        message=f"Strategy: {scalper.active_stack.get('strategy_type')}\nGain: +{gain_pts:.2f} pts (${floating_pnl:+.2f})\nNew Balance: ${res.get('balance', acc.balance):.2f}",
+                        message=f"Strategy: {saved_stack.get('strategy_type')}\nGain: +{gain_pts:.2f} pts (${floating_pnl:+.2f})\nNew Balance: ${res.get('balance', acc.balance):.2f}",
                         tags="rocket,moneybag,trophy",
                         priority="high",
                     )
-                    scalper.active_stack = None
 
             # 3. Check for Strategy Entry if Flat (evaluated every ~250ms)
             elif (
@@ -811,26 +839,48 @@ async def run_live_scalper():
                                 expansion_dist = sig.atr_1m * (laya_decision.tp_expansion_multiplier - 1.0) * 2.5
                                 effective_spike_target = (sig.spike_target + expansion_dist) if sig.direction == "BUY" else (sig.spike_target - expansion_dist)
 
-                        logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f | TP1: $%.2f | Spike: $%.2f | Lots: %.2f%s | Confluence: %.1f/10 | TJR: %s (%s)",
-                                    sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, sig.tp1_price, effective_spike_target, lot_size, boost_tag, laya_decision.confluence_score, getattr(laya_decision, "tjr_dealing_range", "EQ"), getattr(laya_decision, "tjr_notes", ""))
+                        # Margin Pre-Check: Never attempt order if available funds cannot cover 1.15x margin
+                        margin_per_001 = max(8.0, (sig.entry_price * 100.0 * 0.01) / 500.0)
+                        if acc.available < (margin_per_001 * 1.15):
+                            logger.warning("⚠️ Insufficient available margin ($%.2f vs required $%.2f). Skipping trade.", acc.available, margin_per_001 * 1.15)
+                            continue
+
+                        # Safe broker-side disaster stop (at least $1.50 away to avoid broker DOM minimum stop-level rejects)
+                        min_sl_dist = max(1.50, sig.atr_1m * 1.0)
+                        if sig.direction == "BUY":
+                            broker_sl = round(min(sig.sl_price, sig.entry_price - min_sl_dist), 2)
+                        else:
+                            broker_sl = round(max(sig.sl_price, sig.entry_price + min_sl_dist), 2)
+
+                        logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f (Broker SL: $%.2f) | TP1: $%.2f | Spike: $%.2f | Lots: %.2f%s | Confluence: %.1f/10 | TJR: %s (%s)",
+                                    sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, broker_sl, sig.tp1_price, effective_spike_target, lot_size, boost_tag, laya_decision.confluence_score, getattr(laya_decision, "tjr_dealing_range", "EQ"), getattr(laya_decision, "tjr_notes", ""))
 
                         # Multi-Order Stacking: If lot_size >= 0.04, split into 2 rapid tickets to fill the volume gap
                         if lot_size >= 0.04:
                             tranche1 = round(lot_size * 0.60, 2)
                             tranche2 = round(lot_size - tranche1, 2)
                             logger.info("⚡ MULTI-ORDER DISPATCH: Order 1 = %.2f lots | Order 2 = %.2f lots (Target: %.2f lots)", tranche1, tranche2, lot_size)
-                            order_res1 = await gw.open_market_order(sig.direction, tranche1, sl_price=sig.sl_price)
+                            order_res1 = await gw.open_market_order(sig.direction, tranche1, sl_price=broker_sl)
                             if order_res1.get("success"):
                                 await asyncio.sleep(0.15)
-                                order_res2 = await gw.open_market_order(sig.direction, tranche2, sl_price=sig.sl_price)
-                                total_vol = tranche1 + (tranche2 if order_res2.get("success") else 0.0)
-                                order_res = order_res1
-                                order_res["volume"] = total_vol
-                                order_res["stack_count"] = 2 if order_res2.get("success") else 1
+                                # Check available margin before dispatching tranche 2
+                                acc_post1 = await gw.get_account_snapshot(force_fresh=True)
+                                margin_t2 = (tranche2 / 0.01) * margin_per_001
+                                if acc_post1.available >= (margin_t2 * 1.10):
+                                    order_res2 = await gw.open_market_order(sig.direction, tranche2, sl_price=broker_sl)
+                                    total_vol = round(tranche1 + (tranche2 if order_res2.get("success") else 0.0), 2)
+                                    order_res = order_res1
+                                    order_res["volume"] = total_vol
+                                    order_res["stack_count"] = 2 if order_res2.get("success") else 1
+                                else:
+                                    logger.info("Tranche 1 filled (%.2f lots). Tranche 2 skipped to preserve margin ($%.2f available).", tranche1, acc_post1.available)
+                                    order_res = order_res1
+                                    order_res["volume"] = tranche1
+                                    order_res["stack_count"] = 1
                             else:
                                 order_res = order_res1
                         else:
-                            order_res = await gw.open_market_order(sig.direction, lot_size, sl_price=sig.sl_price)
+                            order_res = await gw.open_market_order(sig.direction, lot_size, sl_price=broker_sl)
 
                         if order_res.get("success"):
                             actual_volume = order_res.get("volume", lot_size)

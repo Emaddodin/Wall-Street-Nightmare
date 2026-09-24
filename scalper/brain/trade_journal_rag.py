@@ -241,15 +241,15 @@ class TradeJournalRAG:
         stopped_out = sum(1 for t in losses if ("STOP" in str(t.get("exit_reason", "")).upper() or float(t.get("realized_pnl", 0)) < 0))
         trap_risk_pct = stopped_out / total_count if total_count > 0 else 0.0
 
-        # Duration analysis on winning twins
+        # Duration analysis on winning twins (Calibrated for high-velocity scalping)
         win_durations = [int(t.get("duration_min", 10)) for t in wins if int(t.get("duration_min", 10)) > 0]
         if win_durations:
             median_duration = int(np.median(win_durations))
-            max_safe_holding = int(np.percentile(win_durations, 85))
-            max_safe_holding = max(15, min(35, max_safe_holding))
+            max_safe_holding = int(np.percentile(win_durations, 70))
+            max_safe_holding = max(6, min(15, max_safe_holding))
         else:
-            median_duration = 12
-            max_safe_holding = 20
+            median_duration = 7
+            max_safe_holding = 10
 
         # Dominant exit reason
         exit_reasons = [str(t.get("exit_reason", "")) for t in matched_trades]
@@ -259,22 +259,23 @@ class TradeJournalRAG:
         closest = matched_trades[0] if matched_trades else None
 
         # Determine Recommendation & Veto Rules
-        # VETO 1: High Trap / Fakeout rate (>= 40% failed)
-        # VETO 2: Empirical win rate on twins < 55%
+        # SMART & BOLD PHILOSOPHY:
+        # VETO only on BLATANT, catastrophic toxic traps (>= 80% trap rate or <= 20% win rate)
+        # Moderate / mixed setups are allowed to execute boldly on base lot size!
         is_allowed = True
         recommendation = "APPROVE_STANDARD"
         regime_notes = f"Historical Twins WR: {wr:.1f}% across {total_count} trades (Dominant: {dominant_exit})"
 
-        if trap_risk_pct >= 0.40 or wr < 55.0:
+        if trap_risk_pct >= 0.80 or wr <= 20.0:
             is_allowed = False
-            recommendation = "VETO_LIQUIDITY_TRAP"
-            regime_notes = f"VETO: Historical Twins suffered {trap_risk_pct*100:.1f}% Trap Rate (Win Rate only {wr:.1f}%)"
-        elif wr >= 85.0 and trap_risk_pct <= 0.15:
+            recommendation = "VETO_BLATANT_TRAP"
+            regime_notes = f"VETO: Blatant Toxic Trap (Historical Twins {trap_risk_pct*100:.1f}% Trap Rate, Win Rate only {wr:.1f}%)"
+        elif wr >= 75.0 and trap_risk_pct <= 0.25:
             recommendation = "SOVEREIGN_CONFLUENCE"
             regime_notes = f"A+ Sovereign Confluence: Twins boast {wr:.1f}% Win Rate, PF {pf:.1f}, Avg PnL +${avg_pnl:.2f}"
-        elif wr < 70.0:
-            recommendation = "REDUCE_SIZE"
-            regime_notes = f"Caution: Marginal Win Rate on twins ({wr:.1f}%). Sizing reduction recommended."
+        elif trap_risk_pct >= 0.35:
+            recommendation = "BOLD_STANDARD_LOT"
+            regime_notes = f"Smart & Bold: Moderate risk ({trap_risk_pct*100:.1f}% trap, {wr:.1f}% WR). Executing with standard lot."
 
         latency_ms = (time.perf_counter() - t0) * 1000.0
 

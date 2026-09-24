@@ -249,8 +249,10 @@ class LLMDoctor:
 
             elif action == "DISMISS_OVERLAYS":
                 try:
-                    with open(COMMAND_FILE, "w") as f:
+                    tmp_cmd = COMMAND_FILE.with_suffix(".tmp")
+                    with open(tmp_cmd, "w") as f:
                         json.dump({"action": "CLEAR_OVERLAYS", "timestamp": time.time()}, f)
+                    tmp_cmd.replace(COMMAND_FILE)
                     success = True
                 except Exception as ce:
                     logger.warning("Could not write command file: %s", ce)
@@ -326,8 +328,10 @@ class LLMDoctor:
             "updated_at": now,
         }
         try:
-            with open(DOCTOR_STATE_FILE, "w") as f:
+            tmp = DOCTOR_STATE_FILE.with_suffix(".tmp")
+            with open(tmp, "w") as f:
                 json.dump(telemetry, f, indent=2)
+            tmp.replace(DOCTOR_STATE_FILE)
         except Exception:
             pass
 

@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <defs>
+    <!-- Platinum Silver Gradient -->
+    <linearGradient id="crestPlat" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="25%" stop-color="#D4D7E1"/>
+      <stop offset="50%" stop-color="#8E92A0"/>
+      <stop offset="75%" stop-color="#C2C6D4"/>
+      <stop offset="100%" stop-color="#E8EAF0"/>
+    </linearGradient>
+
+    <!-- Bevel Dark Edge -->
+    <linearGradient id="bevelDark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3A3D48"/>
+      <stop offset="100%" stop-color="#14161C"/>
+    </linearGradient>
+
+    <!-- Champagne Gold Hairline -->
+    <linearGradient id="goldAccent" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#C5A059"/>
+      <stop offset="40%" stop-color="#F2DEB0"/>
+      <stop offset="70%" stop-color="#9E7A36"/>
+      <stop offset="100%" stop-color="#E6C887"/>
+    </linearGradient>
+
+    <!-- Facet Light -->
+    <linearGradient id="facetLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="60%" stop-color="#C2C8D8"/>
+      <stop offset="100%" stop-color="#808696"/>
+    </linearGradient>
+
+    <!-- Facet Shadow -->
+    <linearGradient id="facetShadow" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#242730"/>
+      <stop offset="50%" stop-color="#4B5060"/>
+      <stop offset="100%" stop-color="#1C1E26"/>
+    </linearGradient>
+
+    <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(212, 175, 55, 0.15)"/>
+      <stop offset="100%" stop-color="rgba(0, 0, 0, 0)"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Ambient Glow -->
+  <circle cx="100" cy="100" r="90" fill="url(#centerGlow)"/>
+
+  <!-- Outer Octagon Beveled Frame -->
+  <polygon points="62,12 138,12 188,62 188,138 138,188 62,188 12,138 12,62" 
+           fill="url(#bevelDark)" stroke="url(#crestPlat)" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- Inner Step Octagon -->
+  <polygon points="66,20 134,20 180,66 180,134 134,180 66,180 20,134 20,66" 
+           fill="#0B0C10" stroke="url(#goldAccent)" stroke-width="1.2" stroke-dasharray="4,2"/>
+
+  <!-- Fine Radial Quant / Fibonacci Grid Lines -->
+  <g stroke="rgba(242, 222, 176, 0.16)" stroke-width="0.8">
+    <line x1="100" y1="20" x2="100" y2="180"/>
+    <line x1="20" y1="100" x2="180" y2="100"/>
+    <line x1="43" y1="43" x2="157" y2="157"/>
+    <line x1="43" y1="157" x2="157" y2="43"/>
+    <circle cx="100" cy="100" r="54" fill="none" stroke-width="0.6"/>
+    <circle cx="100" cy="100" r="72" fill="none" stroke-width="0.6" stroke-dasharray="2,2"/>
+  </g>
+
+  <!-- Monogram "S" - Beveled Geometric Architecture -->
+  <g transform="translate(0, 0)">
+    <!-- Top Horizontal & Right Down-Turn -->
+    <!-- Facet 1: Top Bar Face -->
+    <path d="M72,50 L128,50 L146,68 L126,88 L114,76 L86,76 Z" 
+          fill="url(#facetLight)" stroke="url(#crestPlat)" stroke-width="0.8"/>
+    <!-- Facet 2: Top Bar Shadow Flange -->
+    <path d="M128,50 L146,68 L146,84 L126,88 Z" 
+          fill="url(#facetShadow)" stroke="#111" stroke-width="0.5"/>
+
+    <!-- Diagonal Bridge: Center Cross -->
+    <!-- Facet 3: Diagonal Light Face -->
+    <path d="M146,68 L126,88 L74,124 L54,106 L72,88 L86,102 Z" 
+          fill="url(#facetLight)" stroke="url(#goldAccent)" stroke-width="0.8"/>
+    <!-- Facet 4: Diagonal Under-Side -->
+    <path d="M72,88 L126,88 L74,124 L54,124 Z" 
+          fill="url(#facetShadow)" stroke="#111" stroke-width="0.5"/>
+
+    <!-- Bottom Horizontal & Left Up-Turn -->
+    <!-- Facet 5: Bottom Return Face -->
+    <path d="M54,106 L74,124 L86,124 L114,124 L128,112 L146,132 L128,150 L72,150 L54,132 Z" 
+          fill="url(#facetLight)" stroke="url(#crestPlat)" stroke-width="0.8"/>
+    <!-- Facet 6: Bottom Shadow Flange -->
+    <path d="M54,106 L54,132 L72,150 L72,136 Z" 
+          fill="url(#facetShadow)" stroke="#111" stroke-width="0.5"/>
+  </g>
+
+  <!-- Center Specular Core Highlight -->
+  <polygon points="100,94 106,100 100,106 94,100" fill="#FFFFFF" opacity="0.9"/>
+  <circle cx="100" cy="100" r="1.5" fill="#D4AF37"/>
+</svg>
