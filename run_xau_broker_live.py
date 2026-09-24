@@ -369,31 +369,35 @@ class LiveBrokerScalper:
           - $5000+ Tier:      min(10.00, round(balance / 4000.0, 2))
         """
         if balance < 50.0:
-            lots = 0.01  # Safe micro lot ($8.54 margin = 27.8% of $30.64 balance) -> ACTIVE TIER!
+            lots = 0.01  # Safe micro lot strictly locked below $50
         elif balance < 100.0:
             lots = 0.02  # $17.14 margin
         elif balance < 180.0:
-            lots = 0.03  # $25.71 margin
-        elif balance < 300.0:
             lots = 0.05
-        elif balance < 600.0:
+        elif balance < 350.0:
             lots = 0.10
-        elif balance < 1200.0:
+        elif balance < 600.0:
             lots = 0.20
-        elif balance < 2500.0:
+        elif balance < 1000.0:
             lots = 0.40
-        elif balance < 5000.0:
+        elif balance < 1800.0:
             lots = 0.80
+        elif balance < 3000.0:
+            lots = 1.50
+        elif balance < 6000.0:
+            lots = 3.00
         else:
-            lots = min(10.00, round(balance / 4000.0, 2))
+            lots = min(10.00, round(balance / 1200.0, 2))
 
         # Absolute Margin Safety Guard (1:500 leverage):
-        # Never allow base lot size to exceed 45% of total balance in required margin!
+        # On micro accounts (<$100), clamp to max 45% margin. On sovereign accounts, allow full compounding.
         margin_per_001 = max(8.0, (current_price * 100.0 * 0.01) / 500.0)
         if balance < (margin_per_001 * 1.10):
             return 0.0  # Balance insufficient to safely open even 0.01 lots
-        max_safe_lots = max(0.01, math.floor((balance * 0.45) / margin_per_001) * 0.01)
-        return max(0.01, min(lots, round(max_safe_lots, 2)))
+        if balance < 100.0:
+            max_safe_lots = max(0.01, math.floor((balance * 0.45) / margin_per_001) * 0.01)
+            return max(0.01, min(lots, round(max_safe_lots, 2)))
+        return lots
 
     def is_in_killzone(self, hour_utc: Optional[int] = None) -> bool:
         allowed, _ = self.is_in_allowed_session(hour_utc)

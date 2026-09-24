@@ -154,14 +154,14 @@ def test_micro_account_30usd_protection():
     Verifies that on a $30.64 account:
     - 0.01 lot position
     - Hard risk stop is strictly clamped at ~$2.45 (never -$15.00)
-    - Fast BE triggers at +0.35 pts
-    - Sweet spot stall locks profit at +0.85 pts
+    - Fast BE triggers at +1.20 pts
+    - Sweet spot stall locks profit at +3.50 pts
     """
     from scalper.strategies.micro_exit_controller import get_micro_account_config
     cfg = get_micro_account_config(balance=30.64)
     assert cfg.hard_risk_stop_usd == pytest.approx(2.45, abs=0.05)
-    assert cfg.fast_be_trigger == 0.35
-    assert cfg.micro_harvest_target == 0.85
+    assert cfg.fast_be_trigger == 1.20
+    assert cfg.micro_harvest_target == 3.50
 
     controller = MicroExitController(cfg)
     t0 = 6000.0
@@ -169,7 +169,7 @@ def test_micro_account_30usd_protection():
         entry_price=3010.00,
         direction="BUY",
         total_volume=0.01,
-        sl_price=3007.50,
+        sl_price=3008.00,
         open_time=t0,
     )
     assert controller.dynamic_hard_stop <= 2.50

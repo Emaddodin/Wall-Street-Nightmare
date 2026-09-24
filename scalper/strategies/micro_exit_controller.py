@@ -74,7 +74,7 @@ def get_default_config(symbol: str) -> MicroExitConfig:
             micro_harvest_extended=12.0,   # 12.0 pips
             watermark_activate_usd=20.0,
             watermark_pullback_pct=0.20,
-            stall_tick_threshold=3,
+            stall_tick_threshold=2,
             velocity_window_sec=2.0,
             min_velocity_pts_sec=1.0,      # pips/sec
             time_decay_seconds=40.0,
@@ -91,7 +91,7 @@ def get_default_config(symbol: str) -> MicroExitConfig:
             micro_harvest_extended=1.60,   # +1.60 pts
             watermark_activate_usd=25.0,
             watermark_pullback_pct=0.18,   # 18% pullback from peak
-            stall_tick_threshold=3,
+            stall_tick_threshold=2,
             velocity_window_sec=1.5,
             min_velocity_pts_sec=0.20,     # pts/sec
             time_decay_seconds=30.0,       # 30 seconds max duration
@@ -126,30 +126,30 @@ def get_to_the_moon_config(symbol: str = "XAUUSD") -> MicroExitConfig:
 def get_micro_account_config(balance: float = 30.0) -> MicroExitConfig:
     """
     Micro-Account Guardian Configuration ($30 - $100 Accounts):
-    - Fast BE at +0.85 pts (allows breathing room for trend expansion without getting wicked out)
-    - Sweet-spot stall harvest at +1.80 pts (locks +$1.80 on 0.01 lots)
-    - Extended Macro Spike harvest at +3.50 pts (+3.50 pts on Gold)
-    - Dynamic peak watermark bag protection (locks if +$1.50 pulls back >18%)
-    - Time decay aligned with 473-day empirical trade duration (15 min / 900s)
-    - Hard risk stop capped at $2.50 (2.50 pts on 0.01 lots)
+    - Fast BE at +1.20 pts (locks risk-free stop to Entry + 0.10)
+    - TP1 Target: +3.50 pts (+3.5 pts on 0.01 lots = +$3.50)
+    - Extended Macro Spike harvest: +6.50 pts (+$6.50)
+    - Dynamic peak watermark protection: locks once profit >= $2.00 and pulls back > 22%
+    - Time decay aligned with 473-day empirical trade duration (20 min / 1200s)
+    - Hard risk stop capped at $2.20 (2.20 pts on 0.01 lots)
     """
-    safe_risk = max(2.50, min(0.08 * balance, 3.50))
-    watermark_floor = max(1.50, 0.05 * balance)
+    safe_risk = max(1.80, min(0.08 * balance, 2.50))
+    watermark_floor = max(2.00, 0.06 * balance)
     return MicroExitConfig(
         symbol="XAUUSD",
         pip_or_pt_size=0.01,
         point_scale_label="pts",
-        fast_be_trigger=0.85,
-        micro_harvest_min=1.20,
-        micro_harvest_target=1.80,
-        micro_harvest_extended=3.50,
+        fast_be_trigger=1.20,
+        micro_harvest_min=2.50,
+        micro_harvest_target=3.50,
+        micro_harvest_extended=6.50,
         watermark_activate_usd=watermark_floor,
-        watermark_pullback_pct=0.18,
-        stall_tick_threshold=5,
-        velocity_window_sec=3.0,
+        watermark_pullback_pct=0.22,
+        stall_tick_threshold=20,
+        velocity_window_sec=5.0,
         min_velocity_pts_sec=0.10,
-        time_decay_seconds=900.0,
-        time_decay_profit_floor_usd=0.30,
+        time_decay_seconds=1200.0,
+        time_decay_profit_floor_usd=0.50,
         hard_risk_stop_usd=safe_risk,
     )
 
@@ -203,7 +203,7 @@ class MicroExitController:
             structural_dist = abs(self.entry_price - self.sl_price)
             multiplier = 100.0 if self.cfg.symbol == "XAUUSD" else 100000.0
             computed_risk = structural_dist * multiplier * self.total_volume
-            self.dynamic_hard_stop = min(self.cfg.hard_risk_stop_usd, max(1.50, computed_risk * 1.15))
+            self.dynamic_hard_stop = max(self.cfg.hard_risk_stop_usd, round(computed_risk * 1.15, 2))
         else:
             self.dynamic_hard_stop = self.cfg.hard_risk_stop_usd
 
@@ -306,8 +306,8 @@ class MicroExitController:
                     time_in_trade_sec=time_in_trade,
                 )
             
-            # In primary target zone: if momentum stalls for >= 2 ticks, lock profit immediately!
-            if self.consecutive_stalls >= 2:
+            # In primary target zone: if momentum stalls for >= stall_tick_threshold, lock profit!
+            if self.consecutive_stalls >= self.cfg.stall_tick_threshold:
                 return ExitDecision(
                     should_exit=True,
                     reason=f"🎯 Primary Sweet-Spot Harvest on Stall (+{gain_units:.2f} {self.cfg.point_scale_label}, PnL: +${floating_pnl:.2f})",
@@ -339,9 +339,10 @@ class MicroExitController:
                 )
 
         # -------------------------------------------------------------
-        # EXIT RULE 4: MOMENTUM STALL IN MIN-HARVEST ZONE (+0.60 pts)
+        # EXIT RULE 4: MOMENTUM STALL IN MIN-HARVEST ZONE (Requires substantial stall + pullback)
         # -------------------------------------------------------------
-        if gain_units >= self.cfg.micro_harvest_min and self.consecutive_stalls >= self.cfg.stall_tick_threshold:
+        pullback = (self.peak_price - current_price) if self.direction == "BUY" else (current_price - self.peak_price)
+        if gain_units >= self.cfg.micro_harvest_min and self.consecutive_stalls >= (self.cfg.stall_tick_threshold * 2) and pullback >= 0.40:
             return ExitDecision(
                 should_exit=True,
                 reason=f"⚡ Momentum Stalled at Peak (+{gain_units:.2f} {self.cfg.point_scale_label}, PnL: +${floating_pnl:.2f})",

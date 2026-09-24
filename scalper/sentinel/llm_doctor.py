@@ -476,7 +476,7 @@ class Layer2SentinelDoctor:
             incident_type = "CHROME_RESOURCE_LEAK"
             severity = "HIGH"
 
-        elif hft_data and float(hft_data.get("balance", 1.0)) <= 0.0 and hft_data.get("bot_running", False):
+        elif (now - self._last_action_time) > 90.0 and quote_age > 10.0 and hft_data and float(hft_data.get("balance", 1.0)) <= 0.0 and hft_data.get("bot_running", False):
             anomaly_detected = True
             incident_domain = "NOC"
             incident_type = "ZERO_BALANCE_DOM_STALL"

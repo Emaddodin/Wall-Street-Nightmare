@@ -629,10 +629,13 @@ class LiteFinanceGateway:
 
                 # 4. Multi-tick confirmation: Ensure assets_used or trade table incremented
                 confirmed = False
-                for _ in range(10):  # Up to 2.0s buffer for broker settlement
+                for _ in range(15):  # Up to 3.0s buffer for broker settlement
                     await asyncio.sleep(0.20)
                     acc = await self.get_account_snapshot(force_fresh=True)
-                    current_trades = broker_check.get("openTradesCount", 0)
+                    current_trades = await self._page.evaluate("""() => {
+                        const rows = document.querySelectorAll('.js_open_trades tr, [class*="open_trades"] tr, .portfolio_table tr');
+                        return rows.length;
+                    }""")
                     if initial_assets <= 0.0:
                         if acc.assets_used > 0.0 or current_trades > 0:
                             confirmed = True
