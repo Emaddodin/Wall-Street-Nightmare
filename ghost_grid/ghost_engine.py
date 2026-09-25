@@ -139,6 +139,10 @@ class GhostEngine:
         # Update OHLCV
         new_candle = await self._update_candles(quote)
         
+        # Periodic dashboard state sync for terminal and Omni-Auditor
+        if int(time.time()) % 5 == 0:
+            await self._sync_telemetry(quote)
+
         # Check active positions for exit
         if self.active_positions:
             await self._manage_active_grid(quote)
@@ -149,6 +153,48 @@ class GhostEngine:
             signal = self.strategy.evaluate(self.candles_1m)
             if signal:
                 await self._handle_signal(signal, quote)
+
+    async def _sync_telemetry(self, quote):
+        """Sync live ghost grid telemetry to dashboard hft.json."""
+        try:
+            acc = await self.gateway.get_account_snapshot()
+            data_dir = Path("data")
+            state_dir = data_dir / "state"
+            state_dir.mkdir(parents=True, exist_ok=True)
+            
+            clean_pos = self.active_positions[-1] if self.active_positions else None
+            total_active_lots = sum(p.get("volume", 0.0) for p in self.active_positions)
+            
+            payload = {
+                "engine": "👻 XAUUSD Ghost Grid Scalper Engine (DEMO)",
+                "status": "ACTIVE",
+                "bot_running": True,
+                "fsm_state": "IN_POSITION" if self.active_positions else "SCANNING",
+                "mode": "BROKER LIVE (Ghost Grid LiteFinance DEMO Account)",
+                "account_mode": "DEMO",
+                "symbol": "XAUUSD",
+                "balance": round(acc.balance, 2),
+                "equity": round(acc.equity, 2),
+                "realized_pnl": round(acc.balance - self.cycle_start_balance, 2) if self.cycle_start_balance > 0 else 0.0,
+                "current_price": quote.mid,
+                "mid_price": quote.mid,
+                "best_bid": quote.bid,
+                "best_ask": quote.ask,
+                "spread_bps": round(((quote.ask - quote.bid) / quote.mid * 10000.0), 2) if quote.mid > 0 else 0.0,
+                "position": clean_pos,
+                "active_grid_orders": len(self.active_positions),
+                "active_grid_lots": round(total_active_lots, 2),
+                "chameleon_detection_score": self.chameleon.profile.detection_score,
+                "updated_at": time.time(),
+                "updated_iso": datetime.now(timezone.utc).isoformat(),
+            }
+            target = state_dir / "hft.json"
+            tmp = target.with_suffix(".tmp")
+            with open(tmp, "w") as f:
+                json.dump(payload, f, indent=2)
+            tmp.replace(target)
+        except Exception:
+            pass
 
     async def _manage_active_grid(self, quote):
         # Calculate total PNL
