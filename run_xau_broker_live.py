@@ -712,16 +712,36 @@ async def run_live_scalper():
                     
                     # 2.1 Ghost Position Watchdog (if broker closed order or hit SL/TP externally)
                     if acc.assets_used <= 0.0:
-                        scalper.ghost_position_ticks += 1
                         oldest_pos_age = time.time() - min(p["open_time"] for p in scalper.active_positions)
-                        if scalper.ghost_position_ticks >= 20 and oldest_pos_age >= 3.0:
-                            logger.warning("👻 GHOST POSITION DETECTED: Broker reports 0 assets used for 20 ticks (age %.1fs). Reconciling closed trade...", oldest_pos_age)
+                        if oldest_pos_age >= 2.0:
+                            logger.warning("👻 BROKER CLOSED POSITION (TP/SL/External): 0 assets used (age %.1fs). Reconciling...", oldest_pos_age)
                             ghost_positions = list(scalper.active_positions)
                             fresh_acc = await gw.get_account_snapshot(force_fresh=True)
-                            pnl_diff = round(fresh_acc.balance - getattr(scalper, "last_known_balance", fresh_acc.balance), 2)
+                            prev_bal = getattr(scalper, "last_known_balance", fresh_acc.balance)
+                            pnl_diff = round(fresh_acc.balance - prev_bal, 2)
                             scalper.active_positions.clear()
                             scalper.active_stack = None
                             scalper.ghost_position_ticks = 0
+
+                            # Update consecutive losses & daily drawdown if closed with loss
+                            if pnl_diff < 0:
+                                scalper.consecutive_losses += 1
+                                scalper.daily_realized_loss += abs(pnl_diff)
+                                cd_time = 90.0 if abs(pnl_diff) < 1.0 else 240.0
+                                scalper.cooldown_until = time.time() + cd_time
+                                eff_bal_check = scalper.get_effective_balance(fresh_acc.balance)
+                                max_day_loss = 5.00 if eff_bal_check < 75.0 else min(50.0, max(10.0, scalper.daily_start_balance * 0.15))
+                                if scalper.consecutive_losses >= 2 or scalper.daily_realized_loss >= max_day_loss:
+                                    scalper.circuit_breaker_active = True
+                                    scalper.trading_paused = True
+                                    push_ntfy(
+                                        title="🚨 Circuit Breaker Engaged",
+                                        message=f"Halted: -${scalper.daily_realized_loss:.2f} daily loss or 2 consecutive losses. Trading stopped.",
+                                        tags="rotating_light,octagonal_sign",
+                                        priority="urgent",
+                                    )
+                            else:
+                                scalper.consecutive_losses = 0
 
                             for gp in ghost_positions:
                                 log_live_trade({
@@ -760,7 +780,12 @@ async def run_live_scalper():
                                             tags="trophy,gear",
                                             priority="high",
                                         )
-                                        sw_res = await gw.switch_account_mode("REAL")
+                                        sync_dashboard_state(account_mode="SWITCHING")
+                                        try:
+                                            sw_res = await asyncio.wait_for(gw.switch_account_mode("REAL"), timeout=45.0)
+                                        except asyncio.TimeoutError:
+                                            logger.error("❌ Mode switch to REAL timed out after 45s!")
+                                            sw_res = {"success": False, "error": "Switch timeout 45s"}
                                         last_quote_time = time.time()
                                         if sw_res.get("success"):
                                             scalper.account_mode = "REAL"
@@ -812,6 +837,10 @@ async def run_live_scalper():
                                     priority="urgent",
                                 )
                             scalper.last_known_balance = fresh_acc.balance
+                            continue
+                        else:
+                            # Fresh position (< 2.0s), wait for broker DOM assets_used to update
+                            await asyncio.sleep(0.05)
                             continue
                     else:
                         scalper.ghost_position_ticks = 0
@@ -944,21 +973,27 @@ async def run_live_scalper():
     
                         fresh_acc = await gw.get_account_snapshot(force_fresh=True)
                         bal_after = fresh_acc.balance
-                        realized_fill_pnl = round(bal_after - acc.balance, 2)
-                        tot_pnl = realized_fill_pnl if abs(realized_fill_pnl) > 0.001 else round(acc.floating_pnl, 2)
+                        prev_bal = getattr(scalper, "last_known_balance", bal_after)
+                        realized_fill_pnl = round(bal_after - prev_bal, 2)
+                        tot_pnl = realized_fill_pnl if abs(realized_fill_pnl) > 0.001 else round(saved_positions[0].get("floating_pnl", 0.0), 2)
                         scalper.last_known_balance = bal_after
                         if tot_pnl < 0:
                             scalper.consecutive_losses += 1
                             scalper.daily_realized_loss += abs(tot_pnl)
                             cd_time = 90.0 if abs(tot_pnl) < 1.0 else 240.0
                             scalper.cooldown_until = time.time() + cd_time
-                            if scalper.consecutive_losses >= 2:
-                                scalper.lockout_until = time.time() + 1800.0  # 30 min lockout
-    
-                            max_day_loss = min(50.0, max(10.0, scalper.daily_start_balance * 0.15))
-                            if scalper.daily_realized_loss >= max_day_loss:
+
+                            eff_bal_check = scalper.get_effective_balance(bal_after)
+                            max_day_loss = 5.00 if eff_bal_check < 75.0 else min(50.0, max(10.0, scalper.daily_start_balance * 0.15))
+                            if scalper.consecutive_losses >= 2 or scalper.daily_realized_loss >= max_day_loss:
                                 scalper.circuit_breaker_active = True
                                 scalper.trading_paused = True
+                                push_ntfy(
+                                    title="🚨 Circuit Breaker Engaged",
+                                    message=f"Halted: -${scalper.daily_realized_loss:.2f} daily loss or 2 consecutive losses. Trading stopped.",
+                                    tags="rotating_light,octagonal_sign",
+                                    priority="urgent",
+                                )
                         else:
                             scalper.consecutive_losses = 0
     
@@ -976,7 +1011,7 @@ async def run_live_scalper():
                                 "exit_price": exec_px,
                                 "volume": sp["volume"],
                                 "peak_floating_pnl": sp.get("peak_pnl", 0.0),
-                                "realized_pnl": sp.get("floating_pnl", tot_pnl),
+                                "realized_pnl": tot_pnl,
                                 "exit_reason": f"{exit_label}: {exit_reason}",
                                 "duration_min": sp_time_held,
                                 "balance_after": bal_after,
@@ -1001,7 +1036,12 @@ async def run_live_scalper():
                                         tags="trophy,gear",
                                         priority="high",
                                     )
-                                    sw_res = await gw.switch_account_mode("REAL")
+                                    sync_dashboard_state(account_mode="SWITCHING")
+                                    try:
+                                        sw_res = await asyncio.wait_for(gw.switch_account_mode("REAL"), timeout=45.0)
+                                    except asyncio.TimeoutError:
+                                        logger.error("❌ Mode switch to REAL timed out after 45s!")
+                                        sw_res = {"success": False, "error": "Switch timeout 45s"}
                                     last_quote_time = time.time()
                                     if sw_res.get("success"):
                                         scalper.account_mode = "REAL"
@@ -1242,7 +1282,7 @@ async def run_live_scalper():
                                         entry_price=sig.entry_price,
                                         direction=sig.direction,
                                         total_volume=actual_volume,
-                                        sl_price=sig.sl_price,
+                                        sl_price=broker_sl,
                                         open_time=time.time(),
                                     )
     
@@ -1251,7 +1291,7 @@ async def run_live_scalper():
                                         "direction": sig.direction,
                                         "volume": actual_volume,
                                         "entry_price": sig.entry_price,
-                                        "sl_price": sig.sl_price,
+                                        "sl_price": broker_sl,
                                         "tp1_price": sig.tp1_price,
                                         "spike_target": effective_spike_target,
                                         "atr_1m": sig.atr_1m,

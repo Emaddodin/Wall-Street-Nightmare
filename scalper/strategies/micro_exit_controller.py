@@ -325,16 +325,19 @@ class MicroExitController:
         if is_be_or_profit_sl:
             self.be_locked = True
         if sl_violated and is_be_or_profit_sl:
-            return ExitDecision(
-                should_exit=True,
-                reason=f"🛡️ Breakeven Cushion Hit (PnL: ${floating_pnl:.2f}, SL: {self.sl_price:.2f})",
-                urgency="NORMAL",
-                metric_label="BREAKEVEN_CUSHION",
-                current_gain=gain_units,
-                floating_pnl=floating_pnl,
-                peak_pnl=self.peak_pnl,
-                time_in_trade_sec=time_in_trade,
-            )
+            if self.peak_pnl >= self.cfg.watermark_activate_usd and floating_pnl > 0:
+                pass  # Defer to peak watermark trailing rule; do not choke trade at thin BE
+            else:
+                return ExitDecision(
+                    should_exit=True,
+                    reason=f"🛡️ Breakeven Cushion Hit (PnL: ${floating_pnl:.2f}, SL: {self.sl_price:.2f})",
+                    urgency="NORMAL",
+                    metric_label="BREAKEVEN_CUSHION",
+                    current_gain=gain_units,
+                    floating_pnl=floating_pnl,
+                    peak_pnl=self.peak_pnl,
+                    time_in_trade_sec=time_in_trade,
+                )
 
         if floating_pnl <= -effective_stop_usd or sl_violated:
             return ExitDecision(

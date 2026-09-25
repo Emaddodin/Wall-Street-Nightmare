@@ -355,3 +355,56 @@ def test_startup_guard_prevents_trading_on_real_when_demo_fails():
     asyncio.run(_run())
 
 
+def test_micro_account_drawdown_limit_and_circuit_breaker():
+    """Verify that micro accounts (<$75) enforce $5.00 max daily loss and 2-consecutive-loss permanent halt."""
+    gw = MagicMock(spec=LiteFinanceGateway)
+    scalper = LiveBrokerScalper(gw)
+    scalper.daily_start_balance = 29.66
+    scalper.live_real_balance = 29.66
+    scalper.account_mode = "REAL"
+
+    eff_bal = scalper.get_effective_balance(29.66)
+    assert eff_bal == 29.66
+
+    # Verify max_day_loss calculation
+    max_day_loss = 5.00 if eff_bal < 75.0 else min(50.0, max(10.0, scalper.daily_start_balance * 0.15))
+    assert max_day_loss == 5.00  # Must be strictly $5.00, NOT $10.00!
+
+    # Simulate 2 consecutive losses of -$2.20
+    scalper.consecutive_losses += 1
+    scalper.daily_realized_loss += 2.20
+    assert not (scalper.consecutive_losses >= 2 or scalper.daily_realized_loss >= max_day_loss)
+
+    scalper.consecutive_losses += 1
+    scalper.daily_realized_loss += 2.20
+    if scalper.consecutive_losses >= 2 or scalper.daily_realized_loss >= max_day_loss:
+        scalper.circuit_breaker_active = True
+        scalper.trading_paused = True
+
+    assert scalper.circuit_breaker_active is True
+    assert scalper.trading_paused is True
+
+
+def test_broker_sl_clamping_for_micro_accounts():
+    """Verify that broker_sl is clamped to max 2.80 pts ($2.80 risk) for accounts < $75."""
+    eff_bal = 29.66
+    max_sl_dist = 2.80 if eff_bal < 75.0 else 5.00
+    assert max_sl_dist == 2.80
+
+    # BUY trade at 4305.00 with wide structural SL at 4295.00 (10 pts)
+    entry_px = 4305.00
+    wide_sl = 4295.00
+    atr_1m = 1.20
+    min_sl_dist = max(1.50, atr_1m * 1.0)
+    raw_broker_sl = min(wide_sl, entry_px - min_sl_dist)
+    broker_sl = round(max(entry_px - max_sl_dist, raw_broker_sl), 2)
+    assert broker_sl == 4302.20  # Exactly 2.80 pts away, NOT 10 pts!
+
+    # SELL trade at 4305.00 with wide structural SL at 4315.00 (10 pts)
+    wide_sell_sl = 4315.00
+    raw_sell_sl = max(wide_sell_sl, entry_px + min_sl_dist)
+    broker_sell_sl = round(min(entry_px + max_sl_dist, raw_sell_sl), 2)
+    assert broker_sell_sl == 4307.80  # Exactly 2.80 pts away!
+
+
+

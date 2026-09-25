@@ -76,6 +76,7 @@ class LiteFinanceGateway:
         self._reconnecting: bool = False
         self._consecutive_errors: int = 0
         self._reconnect_attempts: int = 0
+        self._switching_mode: bool = False
         self._background_tasks: set = set()
 
     def _spawn_bg_task(self, coro):
@@ -514,29 +515,42 @@ class LiteFinanceGateway:
             if not self._page or (hasattr(self._page, "is_closed") and self._page.is_closed()):
                 return {"success": False, "error": "Gateway not initialized"}
 
-            current_mode = await self.get_account_mode()
-            if current_mode == target_mode:
-                logger.info("Account is already in %s mode.", target_mode)
-                return {"success": True, "mode": target_mode, "already_in_mode": True}
-
-            # Safety check: ensure 0 open positions in snapshot
-            acc = await self.get_account_snapshot(force_fresh=True)
-            if acc.assets_used > 0.0:
-                logger.error("Cannot switch account mode: active positions exist ($%.2f assets used)", acc.assets_used)
-                return {"success": False, "error": "ACTIVE_POSITIONS_EXIST", "assets_used": acc.assets_used}
-
-            # Additional DOM safety check: verify open trades table is empty
-            dom_open_trades = await self._page.evaluate("""() => {
-                const rows = Array.from(document.querySelectorAll('.js_open_trades tr, [class*="open_trades"] tr, .portfolio_table tbody tr'));
-                return rows.filter(r => r.offsetParent !== null && !r.classList.contains('empty')).length;
-            }""")
-            if dom_open_trades > 0:
-                logger.error("Cannot switch account mode: %d open position rows in DOM", dom_open_trades)
-                return {"success": False, "error": "DOM_OPEN_TRADES_EXIST", "trades_count": dom_open_trades}
-
-            logger.info("Initiating LiteFinance switch from %s to %s...", current_mode, target_mode)
+            # Invalidate stale account cache immediately to prevent cross-mode pollution
+            self._last_account = None
+            self._last_account_ts = 0.0
+            self._switching_mode = True
 
             try:
+                current_mode = await self.get_account_mode()
+                if current_mode == target_mode:
+                    logger.info("Account is already in %s mode.", target_mode)
+                    fresh_acc = await self.get_account_snapshot(force_fresh=True)
+                    return {
+                        "success": True,
+                        "mode": target_mode,
+                        "already_in_mode": True,
+                        "balance": fresh_acc.balance,
+                        "equity": fresh_acc.equity,
+                        "available": fresh_acc.available,
+                    }
+
+                # Safety check: ensure 0 open positions in snapshot
+                acc = await self.get_account_snapshot(force_fresh=True)
+                if acc.assets_used > 0.0:
+                    logger.error("Cannot switch account mode: active positions exist ($%.2f assets used)", acc.assets_used)
+                    return {"success": False, "error": "ACTIVE_POSITIONS_EXIST", "assets_used": acc.assets_used}
+
+                # Additional DOM safety check: verify open trades table is empty
+                dom_open_trades = await self._page.evaluate("""() => {
+                    const rows = Array.from(document.querySelectorAll('.js_open_trades tr, [class*="open_trades"] tr, .portfolio_table tbody tr'));
+                    return rows.filter(r => r.offsetParent !== null && !r.classList.contains('empty')).length;
+                }""")
+                if dom_open_trades > 0:
+                    logger.error("Cannot switch account mode: %d open position rows in DOM", dom_open_trades)
+                    return {"success": False, "error": "DOM_OPEN_TRADES_EXIST", "trades_count": dom_open_trades}
+
+                logger.info("Initiating LiteFinance switch from %s to %s...", current_mode, target_mode)
+
                 # 1. First, check if direct switch button is already visible in header/sidebar
                 direct_clicked = False
                 if target_mode == "REAL":
@@ -582,17 +596,21 @@ class LiteFinanceGateway:
                     else:
                         logger.error("Could not find switch button for %s mode in dropdown!", target_mode)
 
-                # 4. Wait for potential confirmation modal and click Confirm/Activate/Yes
-                await self._page.wait_for_timeout(1000)
-                try:
-                    confirm_loc = self._page.locator(
-                        ".modal button, .popup button, [role='dialog'] button, .modal a, .popup a, .dialog button, [class*='modal'] button, [class*='popup'] button"
-                    ).filter(has_text=re.compile(r"^(CONFIRM|YES|ACTIVATE|SWITCH|OK|CONTINUE|PROCEED)$|CONFIRM|ACTIVATE", re.I)).first
-                    if await confirm_loc.count() > 0 and await confirm_loc.is_visible():
-                        await confirm_loc.click(timeout=3000)
-                        logger.info("Clicked modal confirmation button.")
-                except Exception as e_modal:
-                    logger.debug("Modal confirmation handled/ignored: %s", e_modal)
+                # 4. Robust polling for potential confirmation modal (up to 3.6s)
+                modal_confirmed = False
+                for _ in range(12):
+                    try:
+                        confirm_loc = self._page.locator(
+                            ".modal button, .popup button, [role='dialog'] button, .modal a, .popup a, .dialog button, [class*='modal'] button, [class*='popup'] button"
+                        ).filter(has_text=re.compile(r"^(CONFIRM|YES|ACTIVATE|SWITCH|OK|CONTINUE|PROCEED)$|CONFIRM|ACTIVATE", re.I)).first
+                        if await confirm_loc.count() > 0 and await confirm_loc.is_visible():
+                            await confirm_loc.click(timeout=2000)
+                            logger.info("Clicked modal confirmation button!")
+                            modal_confirmed = True
+                            break
+                    except Exception:
+                        pass
+                    await asyncio.sleep(0.3)
 
                 # 5. Wait for navigation settlement
                 try:
@@ -641,6 +659,9 @@ class LiteFinanceGateway:
                             os.replace(tmp_session, self.session_file)
                         logger.info("Saved updated session cookies atomically to %s", self.session_file)
 
+                    # Invalidate cache again before reading fresh snapshot
+                    self._last_account = None
+                    self._last_account_ts = 0.0
                     fresh_acc = await self.get_account_snapshot(force_fresh=True)
                     return {
                         "success": True,
@@ -656,6 +677,8 @@ class LiteFinanceGateway:
             except Exception as e:
                 logger.error("Exception switching account mode: %s", e)
                 return {"success": False, "error": str(e)}
+            finally:
+                self._switching_mode = False
 
     async def get_live_quote(self) -> Optional[QuoteSnapshot]:
         """Reads current real-time Bid and Ask prices directly from memory or DOM fallback."""
@@ -749,7 +772,7 @@ class LiteFinanceGateway:
                                self._last_account.balance, self._consecutive_errors)
                 if self._consecutive_errors >= 2:
                     self._spawn_bg_task(self._clear_overlays())
-                if self._consecutive_errors >= 6 and not self._reconnecting:
+                if self._consecutive_errors >= 6 and not self._reconnecting and not self._switching_mode:
                     logger.error("🚨 Persistent DOM balance stall. Scheduling gateway auto-reconnect...")
                     self._spawn_bg_task(self.reconnect())
                 return self._last_account
