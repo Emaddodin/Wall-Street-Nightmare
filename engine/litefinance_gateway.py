@@ -426,34 +426,31 @@ class LiteFinanceGateway:
 
     async def get_account_mode(self) -> str:
         """Returns DEMO or REAL based on LiteFinance DOM badges."""
-        if not self._page:
+        if not self._page or (hasattr(self._page, "is_closed") and self._page.is_closed()):
             return "UNKNOWN"
         try:
             mode = await self._page.evaluate("""() => {
-                // 1. Check targeted header/badge containers first to avoid promo/ad false positives
-                const headerEls = Array.from(document.querySelectorAll(
-                    '.header_user, .user_menu, .top_bar, [class*="header"], [class*="badge"], [class*="profile"], [class*="account"]'
-                )).filter(el => el.offsetParent !== null);
-
-                for (const el of headerEls) {
-                    const t = (el.innerText || '').trim().toUpperCase();
-                    if (t.includes("DEMO ACCOUNT") || (t.includes("DEMO") && !t.includes("ACTIVATE DEMO"))) {
-                        return "DEMO";
-                    }
-                    if (t.includes("REAL ACCOUNT") || (t.includes("REAL") && !t.includes("ACTIVATE REAL"))) {
-                        return "REAL";
-                    }
-                }
-
-                // 2. Check action buttons in header or sidebar
-                const actionBtns = Array.from(document.querySelectorAll('button, a, .btn, span, div')).filter(el => el.offsetParent !== null);
+                // 1. Direct header action buttons (unambiguous state indicators)
+                const actionBtns = Array.from(document.querySelectorAll('button, a, .btn, [class*="badge"]')).filter(el => el.offsetParent !== null);
                 for (const el of actionBtns) {
                     const t = (el.innerText || '').trim().toUpperCase();
                     if (t === "ACTIVATE REAL TRADING" || t.includes("ACTIVATE REAL")) {
-                        return "DEMO"; // If button says "Activate Real", account is currently DEMO
+                        return "DEMO"; // Presence of 'Activate Real' button proves current mode is DEMO
                     }
                     if (t === "ACTIVATE DEMO TRADING" || t.includes("ACTIVATE DEMO")) {
-                        return "REAL"; // If button says "Activate Demo", account is currently REAL
+                        return "REAL"; // Presence of 'Activate Demo' button proves current mode is REAL
+                    }
+                }
+
+                // 2. Exact user badge inspection
+                const badgeEls = Array.from(document.querySelectorAll('.header_user, .user_name, .user_info, [class*="account_type"]')).filter(el => el.offsetParent !== null);
+                for (const el of badgeEls) {
+                    const t = (el.innerText || '').trim().toUpperCase();
+                    if (t.includes("DEMO-ECN") || t.includes("MT5-DEMO") || t.includes("DEMO ACCOUNT")) {
+                        return "DEMO";
+                    }
+                    if (t.includes("REAL-ECN") || t.includes("MT5-REAL") || t.includes("REAL ACCOUNT")) {
+                        return "REAL";
                     }
                 }
 
@@ -461,8 +458,6 @@ class LiteFinanceGateway:
                 const text = document.body ? document.body.innerText.toUpperCase() : "";
                 if (text.includes("ACTIVATE REAL TRADING")) return "DEMO";
                 if (text.includes("ACTIVATE DEMO TRADING")) return "REAL";
-                if (text.includes("DEMO ACCOUNT")) return "DEMO";
-                if (text.includes("REAL ACCOUNT")) return "REAL";
 
                 return "UNKNOWN";
             }""")
@@ -508,26 +503,41 @@ class LiteFinanceGateway:
             logger.info("Initiating LiteFinance switch from %s to %s...", current_mode, target_mode)
 
             try:
-                # 1. Look for direct mode switch button or open user menu
-                clicked = await self._page.evaluate("""(target) => {
+                # 1. Target exact interactive trigger for user menu
+                user_menu_clicked = await self._page.evaluate("""(target) => {
                     const isReal = (target === "REAL");
                     
-                    // Direct header/sidebar button if present
+                    // Direct header/sidebar toggle button if visible
                     const directBtn = Array.from(document.querySelectorAll("button, a, .btn")).find(el => {
                         const t = (el.innerText || "").trim().toUpperCase();
-                        return isReal ? (t === "ACTIVATE REAL TRADING" || t.includes("ACTIVATE REAL")) : (t === "ACTIVATE DEMO TRADING" || t.includes("ACTIVATE DEMO"));
+                        return isReal ? (t === "ACTIVATE REAL TRADING" || t.includes("ACTIVATE REAL")) 
+                                      : (t === "ACTIVATE DEMO TRADING" || t.includes("ACTIVATE DEMO"));
                     });
                     if (directBtn && directBtn.offsetParent !== null) {
                         directBtn.click();
-                        return "DIRECT_BUTTON_CLICKED";
+                        return "DIRECT_CLICKED";
                     }
 
-                    // User menu dropdown fallback using generic selectors
-                    const userMenu = Array.from(document.querySelectorAll(
-                        ".user_menu, .user_name, [class*=\"user\"], .header_user, .header_profile, .header_avatar, [class*=\"avatar\"]"
-                    )).find(el => el.offsetParent !== null);
-                    if (userMenu) {
-                        userMenu.click();
+                    // Strict interactive selector for profile trigger (avoiding high-level wrapper divs)
+                    const profileSelectors = [
+                        '.header_user', '.user_name', '.user_info', '.header_profile',
+                        'button[class*="user"]', 'a[class*="user"]', '.user_menu'
+                    ];
+                    for (const sel of profileSelectors) {
+                        const el = document.querySelector(sel);
+                        if (el && el.offsetParent !== null) {
+                            el.click();
+                            return "USER_MENU_CLICKED";
+                        }
+                    }
+
+                    // Fallback to text matching strictly on buttons, anchors, or spans
+                    const interactiveEl = Array.from(document.querySelectorAll("header button, header a, .top_bar button, .top_bar a, header span, .top_bar span")).find(el => {
+                        const t = (el.innerText || "").trim().toUpperCase();
+                        return el.offsetParent !== null && (t.includes("EMADODIN") || t.includes("ACCOUNT"));
+                    });
+                    if (interactiveEl) {
+                        interactiveEl.click();
                         return "USER_MENU_CLICKED";
                     }
                     return "NO_ELEMENT_FOUND";
@@ -535,51 +545,78 @@ class LiteFinanceGateway:
 
                 await self._page.wait_for_timeout(1000)
 
-                if clicked == "USER_MENU_CLICKED":
-                    # Click the switch option in the dropdown
+                if user_menu_clicked == "USER_MENU_CLICKED":
+                    # Click exact mode activation link in dropdown
                     await self._page.evaluate("""(target) => {
                         const isReal = (target === "REAL");
-                        const sel = isReal ? "#switch_mode_real, [data-url*=\"/switch/real\"], [data-url*=\"real\"]" : "#switch_mode_demo, [data-url*=\"/switch/demo\"], [data-url*=\"demo\"]";
-                        const btn = document.querySelector(sel) ||
-                                    Array.from(document.querySelectorAll("a, button, div, span")).find(el => {
-                                        const t = (el.innerText || "").toUpperCase();
-                                        return isReal ? t.includes("ACTIVATE REAL") : t.includes("ACTIVATE DEMO");
-                                    });
+                        const sel = isReal 
+                            ? "#switch_mode_real, [data-url*='/switch/real'], a:has-text('Activate real trading')" 
+                            : "#switch_mode_demo, [data-url*='/switch/demo'], a:has-text('Activate demo trading')";
+                        const btn = document.querySelector(sel) || Array.from(document.querySelectorAll("a, button, div.item")).find(el => {
+                            const t = (el.innerText || "").trim().toUpperCase();
+                            return isReal ? t.includes("ACTIVATE REAL") : t.includes("ACTIVATE DEMO");
+                        });
                         if (btn) btn.click();
                     }""", target_mode)
 
-                await self._page.wait_for_timeout(1500)
+                # Wait safely for confirmation modal or navigation initiation
+                await self._page.wait_for_timeout(1000)
 
-                # Check and click any confirmation modal / dialog if presented
-                await self._page.evaluate("""() => {
-                    const dialogBtns = Array.from(document.querySelectorAll(
-                        '.modal button, .popup button, [role="dialog"] button, .modal a, .popup a, .dialog button, [class*="modal"] button'
-                    )).filter(el => el.offsetParent !== null);
-                    const confirmBtn = dialogBtns.find(b => {
-                        const t = (b.innerText || '').trim().toUpperCase();
-                        return ["CONFIRM", "YES", "ACTIVATE", "SWITCH", "OK", "CONTINUE", "PROCEED"].includes(t) ||
-                               t.includes("CONFIRM") || t.includes("ACTIVATE");
-                    });
-                    if (confirmBtn) confirmBtn.click();
-                }""")
+                # Safely dismiss confirmation modals without crashing on navigation
+                try:
+                    await self._page.evaluate("""() => {
+                        const dialogBtns = Array.from(document.querySelectorAll(
+                            '.modal button, .popup button, [role="dialog"] button, .modal a, .popup a, .dialog button, [class*="modal"] button'
+                        )).filter(el => el.offsetParent !== null);
+                        const confirmBtn = dialogBtns.find(b => {
+                            const t = (b.innerText || '').trim().toUpperCase();
+                            return ["CONFIRM", "YES", "ACTIVATE", "SWITCH", "OK", "CONTINUE", "PROCEED"].includes(t) ||
+                                   t.includes("CONFIRM") || t.includes("ACTIVATE");
+                        });
+                        if (confirmBtn) confirmBtn.click();
+                    }""")
+                except Exception as e_modal:
+                    # Navigation already started and destroyed context - safe to ignore
+                    logger.debug("Modal check ignored due to navigation: %s", e_modal)
 
-                # Wait for page reload or navigation
-                await self._page.wait_for_timeout(5000)
+                # Wait for navigation settlement
+                try:
+                    await self._page.wait_for_load_state("domcontentloaded", timeout=10000)
+                except Exception:
+                    pass
+
+                await self._page.wait_for_timeout(3000)
                 await self._clear_overlays()
 
-                # Ensure we remain on chart trading URL
+                # Ensure we remain on the chart trading URL
                 if "trading/chart" not in self._page.url:
                     logger.info("Redirecting back to trading chart after mode switch (current: %s)...", self._page.url)
                     await self._page.goto(CHART_URL, wait_until="domcontentloaded", timeout=15000)
                     await self._page.wait_for_timeout(3000)
                     await self._clear_overlays()
 
-                # Re-inject hooks
-                await self._setup_page_hooks()
+                # Re-inject hooks and verify success with retries
+                hooks_ok = False
+                for _ in range(3):
+                    hooks_ok = await self._setup_page_hooks()
+                    if hooks_ok:
+                        break
+                    await self._page.wait_for_timeout(2000)
 
-                # Verify new mode
-                new_mode = await self.get_account_mode()
+                if not hooks_ok:
+                    logger.error("❌ Failed to re-inject fast streaming page hooks after switch!")
+                    return {"success": False, "error": "HOOKS_INJECTION_FAILED"}
+
+                # Multi-probe mode verification
+                new_mode = "UNKNOWN"
+                for _ in range(10):
+                    new_mode = await self.get_account_mode()
+                    if new_mode == target_mode:
+                        break
+                    await asyncio.sleep(0.5)
+
                 if new_mode == target_mode:
+                    self._connected = True
                     logger.info("✅ Successfully switched to %s account mode!", new_mode)
                     # Persist session state atomically
                     if self._context:

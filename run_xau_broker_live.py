@@ -76,6 +76,7 @@ LLAMA_COMPLETION_URL = os.getenv("LLAMA_SERVER_URL", "http://127.0.0.1:8080/comp
 
 MAX_RISK_STOP_USD = 15.00      # Hard -$15.00 loss floor
 RAPID_SPIKE_TARGET_USD = 50.00 # Target rapid profit spike harvest (+50% / $50 per tier)
+MIN_DEMO_WIN_FOR_SWITCH = 1.00 # Minimum profit ($1.00 = 1.0 pt on 0.01 lots) to trigger Demo -> Real switch
 
 
 def log_live_trade(trade: Dict[str, Any]) -> None:
@@ -275,7 +276,34 @@ class LiveBrokerScalper:
         self.trading_paused: bool = False
         self.ghost_position_ticks: int = 0
         self.account_mode: str = "DEMO"
+        self.live_real_balance: float = 29.66
         self.micro_exit: MicroExitController = MicroExitController(get_micro_account_config(balance=30.0))
+
+    def get_effective_balance(self, reported_balance: float) -> float:
+        """
+        Calibrates margin calculations to LIVE REAL account ($29.66).
+        When running in DEMO mode, enforces live real balance so lot sizes,
+        margin requirements, and micro-exit risk controls are 100% identical
+        to the live micro-account.
+        """
+        if str(getattr(self, "account_mode", "REAL")).upper() == "DEMO":
+            return getattr(self, "live_real_balance", 29.66)
+        return reported_balance
+
+    def get_effective_margin_state(self, acc: AccountSnapshot) -> Tuple[float, float, float, float]:
+        """
+        Returns (eff_balance, eff_equity, eff_used, eff_available).
+        In DEMO mode, enforces live real account numbers ($29.66) and calculates
+        synthetic used/available margin based on open active positions.
+        """
+        if str(getattr(self, "account_mode", "REAL")).upper() == "DEMO":
+            eff_bal = getattr(self, "live_real_balance", 29.66)
+            eff_used = sum(calc_required_margin(p["entry_price"], p.get("volume", 0.01)) for p in self.active_positions)
+            eff_floating = sum(p.get("floating_pnl", 0.0) for p in self.active_positions)
+            eff_equity = round(eff_bal + eff_floating, 2)
+            eff_avail = max(0.0, eff_equity - eff_used)
+            return eff_bal, eff_equity, eff_used, eff_avail
+        return acc.balance, acc.equity, acc.assets_used, acc.available
 
     @property
     def active_stack(self) -> Optional[Dict[str, Any]]:
@@ -424,7 +452,8 @@ class LiveBrokerScalper:
 
         # Absolute Margin Safety Guard (1:500 leverage):
         # On micro accounts (<$100), clamp to max 30% margin utilization so drawdowns never risk margin call
-        margin_per_001 = calc_required_margin(current_price, 0.01)
+        safe_price = max(100.0, current_price) if (current_price and not math.isnan(current_price)) else 4295.0
+        margin_per_001 = max(1.0, calc_required_margin(safe_price, 0.01))
         if balance < (margin_per_001 * 1.50):
             return 0.0  # Balance insufficient to safely open 0.01 lots with margin cushion
         if balance < 75.0:
@@ -515,19 +544,32 @@ async def run_live_scalper():
 
     initial_mode = await gw.get_account_mode()
     mode_file = ROOT_DIR / "data" / "account_mode.json"
-    if initial_mode == "UNKNOWN" and mode_file.exists():
+    if mode_file.exists():
         try:
             persisted = json.loads(mode_file.read_text())
-            initial_mode = persisted.get("account_mode", "UNKNOWN")
+            req_mode = persisted.get("account_mode", "UNKNOWN")
+            if persisted.get("real_balance"):
+                scalper.live_real_balance = float(persisted["real_balance"])
+            if req_mode in ("DEMO", "REAL") and initial_mode != req_mode:
+                logger.info("Syncing LiteFinance broker to requested mode: %s (current: %s)...", req_mode, initial_mode)
+                sw_res = await gw.switch_account_mode(req_mode)
+                if sw_res.get("success"):
+                    initial_mode = req_mode
+                    acc_snap = await gw.get_account_snapshot(force_fresh=True)
+            elif initial_mode == "UNKNOWN" and req_mode in ("DEMO", "REAL"):
+                initial_mode = req_mode
             logger.info("Loaded persisted account mode: %s", initial_mode)
-        except Exception:
-            pass
+        except Exception as me:
+            logger.warning("Error syncing account_mode.json: %s", me)
     if initial_mode == "UNKNOWN":
         initial_mode = "DEMO"  # Default safe mode
     scalper.account_mode = initial_mode
+    if initial_mode == "REAL":
+        scalper.live_real_balance = acc_snap.balance
     scalper.daily_start_balance = acc_snap.balance
     scalper.last_known_balance = acc_snap.balance
-    logger.info("🏦 LIVE BROKER CONNECTED (%s MODE): Balance: $%.2f | Assets Used: $%.2f", initial_mode, acc_snap.balance, acc_snap.assets_used)
+    logger.info("🏦 LIVE BROKER CONNECTED (%s MODE): Balance: $%.2f | Assets Used: $%.2f | Live Real Ref: $%.2f",
+                initial_mode, acc_snap.balance, acc_snap.assets_used, scalper.live_real_balance)
 
     push_ntfy(
         title="🟢 Stratton Live Engine Armed",
@@ -581,6 +623,46 @@ async def run_live_scalper():
                         elif action == "CLEAR_OVERLAYS":
                             logger.info("🧹 Clear overlays command received from Sentinel.")
                             await gw._clear_overlays()
+                        elif action == "SWITCH_MODE":
+                            target_mode = cmd.get("mode", "DEMO").upper()
+                            logger.info("🔄 COMMAND RECEIVED: Switch account mode to %s", target_mode)
+                            if len(scalper.active_positions) > 0:
+                                logger.warning("Cannot switch account mode: active positions exist!")
+                            else:
+                                sw_res = await gw.switch_account_mode(target_mode)
+                                if sw_res.get("success"):
+                                    scalper.account_mode = target_mode
+                                    fresh = await gw.get_account_snapshot(force_fresh=True)
+                                    scalper.daily_start_balance = fresh.balance
+                                    scalper.last_known_balance = fresh.balance
+                                    scalper.daily_realized_loss = 0.0
+                                    scalper.consecutive_losses = 0
+                                    scalper.cooldown_until = 0.0
+                                    scalper.milestone_notified.clear()
+                                    last_quote_time = time.time()
+                                    if target_mode == "REAL":
+                                        scalper.live_real_balance = fresh.balance
+                                    try:
+                                        mf = ROOT_DIR / "data" / "account_mode.json"
+                                        mf.parent.mkdir(parents=True, exist_ok=True)
+                                        tmp_mf = mf.with_suffix(".tmp")
+                                        tmp_mf.write_text(json.dumps({
+                                            "account_mode": target_mode,
+                                            "switched_at": time.time(),
+                                            "switched_at_iso": datetime.now(timezone.utc).isoformat(),
+                                            "balance": fresh.balance,
+                                            "real_balance": scalper.live_real_balance,
+                                        }, indent=2))
+                                        tmp_mf.replace(mf)
+                                    except Exception as me:
+                                        logger.warning("Could not persist account_mode.json: %s", me)
+                                    logger.info("✅ Mode switched to %s! Balance: $%.2f", target_mode, fresh.balance)
+                                    push_ntfy(
+                                        title=f"🔄 Account Switched to {target_mode}",
+                                        message=f"LiteFinance {target_mode} Active · Balance: ${fresh.balance:.2f}",
+                                        tags="arrows_counterclockwise,gear",
+                                        priority="high",
+                                    )
                     except Exception as ce:
                         logger.warning("Error processing dashboard command: %s", ce)
                     finally:
@@ -656,34 +738,60 @@ async def run_live_scalper():
                                     priority="high",
                                 )
                                 # Check Demo-to-Real Auto-Switch Trigger on broker-side win!
-                                if getattr(scalper, "account_mode", "REAL") == "DEMO" and pnl_diff > 0.0:
-                                    logger.info("🎯 FIRST DEMO WIN DETECTED (+${pnl_diff:.2f})! Initiating automatic transition to LIVE REAL account...")
-                                    sw_res = await gw.switch_account_mode("REAL")
-                                    if sw_res.get("success"):
-                                        scalper.account_mode = "REAL"
-                                        fresh_real = await gw.get_account_snapshot(force_fresh=True)
-                                        scalper.daily_start_balance = fresh_real.balance
-                                        scalper.last_known_balance = fresh_real.balance
-                                        scalper.daily_realized_loss = 0.0
-                                        scalper.consecutive_losses = 0
-                                        try:
-                                            mf = ROOT_DIR / "data" / "account_mode.json"
-                                            mf.parent.mkdir(parents=True, exist_ok=True)
-                                            mf.write_text(json.dumps({
-                                                "account_mode": "REAL",
-                                                "switched_at": time.time(),
-                                                "switched_at_iso": datetime.now(timezone.utc).isoformat(),
-                                                "real_balance": fresh_real.balance,
-                                                "trigger_win_usd": pnl_diff,
-                                            }, indent=2))
-                                        except Exception as me:
-                                            logger.warning("Could not persist account_mode.json: %s", me)
+                                if getattr(scalper, "account_mode", "REAL") == "DEMO":
+                                    if pnl_diff >= MIN_DEMO_WIN_FOR_SWITCH:
+                                        logger.info("🎯 CONFIRMED DEMO WIN (+${pnl_diff:.2f} >= $%.2f)! Initiating transition to LIVE REAL account...",
+                                                    pnl_diff, MIN_DEMO_WIN_FOR_SWITCH)
                                         push_ntfy(
-                                            title="🟢 Real Account Active!",
-                                            message=f"Switched to REAL mode · Balance: ${fresh_real.balance:.2f} · Ready to compound.",
-                                            tags="white_check_mark,moneybag",
-                                            priority="urgent",
+                                            title=f"🎯 Demo Win Locked (+${pnl_diff:.2f})!",
+                                            message="Initiating auto-switch to LiteFinance REAL account...",
+                                            tags="trophy,gear",
+                                            priority="high",
                                         )
+                                        sw_res = await gw.switch_account_mode("REAL")
+                                        last_quote_time = time.time()
+                                        if sw_res.get("success"):
+                                            scalper.account_mode = "REAL"
+                                            fresh_real = await gw.get_account_snapshot(force_fresh=True)
+                                            scalper.daily_start_balance = fresh_real.balance
+                                            scalper.last_known_balance = fresh_real.balance
+                                            scalper.live_real_balance = fresh_real.balance
+                                            scalper.daily_realized_loss = 0.0
+                                            scalper.consecutive_losses = 0
+                                            scalper.cooldown_until = 0.0
+                                            scalper.milestone_notified.clear()
+                                            try:
+                                                mf = ROOT_DIR / "data" / "account_mode.json"
+                                                mf.parent.mkdir(parents=True, exist_ok=True)
+                                                tmp_mf = mf.with_suffix(".tmp")
+                                                tmp_mf.write_text(json.dumps({
+                                                    "account_mode": "REAL",
+                                                    "switched_at": time.time(),
+                                                    "switched_at_iso": datetime.now(timezone.utc).isoformat(),
+                                                    "real_balance": fresh_real.balance,
+                                                    "trigger_win_usd": pnl_diff,
+                                                }, indent=2))
+                                                tmp_mf.replace(mf)
+                                            except Exception as me:
+                                                logger.warning("Could not persist account_mode.json: %s", me)
+                                            logger.info("✅ Live engine transitioned to REAL account! Real Balance: $%.2f", fresh_real.balance)
+                                            push_ntfy(
+                                                title="🟢 Real Account Active!",
+                                                message=f"Live Trading Engaged · Balance: ${fresh_real.balance:.2f} · Ready to compound.",
+                                                tags="white_check_mark,moneybag",
+                                                priority="urgent",
+                                            )
+                                        else:
+                                            logger.error("❌ Failed to switch to REAL account: %s. Retaining DEMO mode.", sw_res.get("error"))
+                                            push_ntfy(
+                                                title="⚠️ Mode Switch Failed",
+                                                message=f"Switch to REAL failed: {sw_res.get('error')}. Remaining in DEMO.",
+                                                tags="warning,cross_mark",
+                                                priority="urgent",
+                                            )
+                                    elif pnl_diff > 0.0:
+                                        logger.info("ℹ️ Demo trade closed with minor profit (+${pnl_diff:.2f} < $%.2f). Waiting for clean target harvest before switching to REAL.",
+                                                    pnl_diff, MIN_DEMO_WIN_FOR_SWITCH)
                             else:
                                 push_ntfy(
                                     title=f"🛑 Broker Cut: ${pnl_diff:.2f}",
@@ -822,7 +930,11 @@ async def run_live_scalper():
                             await asyncio.sleep(0.5)
                             continue
     
-                        tot_pnl = acc.floating_pnl
+                        fresh_acc = await gw.get_account_snapshot(force_fresh=True)
+                        bal_after = fresh_acc.balance
+                        realized_fill_pnl = round(bal_after - acc.balance, 2)
+                        tot_pnl = realized_fill_pnl if abs(realized_fill_pnl) > 0.001 else round(acc.floating_pnl, 2)
+                        scalper.last_known_balance = bal_after
                         if tot_pnl < 0:
                             scalper.consecutive_losses += 1
                             scalper.daily_realized_loss += abs(tot_pnl)
@@ -838,7 +950,7 @@ async def run_live_scalper():
                         else:
                             scalper.consecutive_losses = 0
     
-                        bal_after = res.get("balance", acc.balance)
+                        bal_after = fresh_acc.balance
                         for sp in saved_positions:
                             sp_time_held = max(1, int((time.time() - sp["open_time"]) // 60))
                             log_live_trade({
@@ -867,43 +979,60 @@ async def run_live_scalper():
                                 priority="high",
                             )
                             # Check Demo-to-Real Auto-Switch Trigger on First Win
-                            if getattr(scalper, "account_mode", "REAL") == "DEMO" and tot_pnl > 0.0:
-                                logger.info("🎯 FIRST DEMO WIN DETECTED (+${tot_pnl:.2f})! Initiating automatic transition to LIVE REAL account...")
-                                push_ntfy(
-                                    title=f"🎯 Demo Win Locked (+${tot_pnl:.2f})!",
-                                    message="Initiating auto-switch to LiteFinance REAL account...",
-                                    tags="trophy,gear",
-                                    priority="high",
-                                )
-                                sw_res = await gw.switch_account_mode("REAL")
-                                if sw_res.get("success"):
-                                    scalper.account_mode = "REAL"
-                                    fresh_real = await gw.get_account_snapshot(force_fresh=True)
-                                    scalper.daily_start_balance = fresh_real.balance
-                                    scalper.last_known_balance = fresh_real.balance
-                                    scalper.daily_realized_loss = 0.0
-                                    scalper.consecutive_losses = 0
-                                    try:
-                                        mf = ROOT_DIR / "data" / "account_mode.json"
-                                        mf.parent.mkdir(parents=True, exist_ok=True)
-                                        mf.write_text(json.dumps({
-                                            "account_mode": "REAL",
-                                            "switched_at": time.time(),
-                                            "switched_at_iso": datetime.now(timezone.utc).isoformat(),
-                                            "real_balance": fresh_real.balance,
-                                            "trigger_win_usd": tot_pnl,
-                                        }, indent=2))
-                                    except Exception as me:
-                                        logger.warning("Could not persist account_mode.json: %s", me)
-                                    logger.info("✅ Live engine transitioned to REAL account! Real Balance: $%.2f", fresh_real.balance)
+                            if getattr(scalper, "account_mode", "REAL") == "DEMO":
+                                if tot_pnl >= MIN_DEMO_WIN_FOR_SWITCH:
+                                    logger.info("🎯 CONFIRMED DEMO WIN DETECTED (+${tot_pnl:.2f} >= $%.2f)! Initiating transition to LIVE REAL account...",
+                                                tot_pnl, MIN_DEMO_WIN_FOR_SWITCH)
                                     push_ntfy(
-                                        title="🟢 Real Account Active!",
-                                        message=f"Switched to REAL mode · Balance: ${fresh_real.balance:.2f} · Ready to compound.",
-                                        tags="white_check_mark,moneybag",
-                                        priority="urgent",
+                                        title=f"🎯 Demo Win Locked (+${tot_pnl:.2f})!",
+                                        message="Initiating auto-switch to LiteFinance REAL account...",
+                                        tags="trophy,gear",
+                                        priority="high",
                                     )
-                                else:
-                                    logger.error("❌ Failed to switch to REAL account: %s. Retaining DEMO mode.", sw_res.get("error"))
+                                    sw_res = await gw.switch_account_mode("REAL")
+                                    last_quote_time = time.time()
+                                    if sw_res.get("success"):
+                                        scalper.account_mode = "REAL"
+                                        fresh_real = await gw.get_account_snapshot(force_fresh=True)
+                                        scalper.daily_start_balance = fresh_real.balance
+                                        scalper.last_known_balance = fresh_real.balance
+                                        scalper.live_real_balance = fresh_real.balance
+                                        scalper.daily_realized_loss = 0.0
+                                        scalper.consecutive_losses = 0
+                                        scalper.cooldown_until = 0.0
+                                        scalper.milestone_notified.clear()
+                                        try:
+                                            mf = ROOT_DIR / "data" / "account_mode.json"
+                                            mf.parent.mkdir(parents=True, exist_ok=True)
+                                            tmp_mf = mf.with_suffix(".tmp")
+                                            tmp_mf.write_text(json.dumps({
+                                                "account_mode": "REAL",
+                                                "switched_at": time.time(),
+                                                "switched_at_iso": datetime.now(timezone.utc).isoformat(),
+                                                "real_balance": fresh_real.balance,
+                                                "trigger_win_usd": tot_pnl,
+                                            }, indent=2))
+                                            tmp_mf.replace(mf)
+                                        except Exception as me:
+                                            logger.warning("Could not persist account_mode.json: %s", me)
+                                        logger.info("✅ Live engine transitioned to REAL account! Real Balance: $%.2f", fresh_real.balance)
+                                        push_ntfy(
+                                            title="🟢 Real Account Active!",
+                                            message=f"Live Trading Engaged · Balance: ${fresh_real.balance:.2f} · Micro-Account Guardian Armed",
+                                            tags="white_check_mark,moneybag",
+                                            priority="urgent",
+                                        )
+                                    else:
+                                        logger.error("❌ Failed to switch to REAL account: %s. Retaining DEMO mode.", sw_res.get("error"))
+                                        push_ntfy(
+                                            title="⚠️ Mode Switch Failed",
+                                            message=f"Switch to REAL failed: {sw_res.get('error')}. Remaining in DEMO.",
+                                            tags="warning,cross_mark",
+                                            priority="urgent",
+                                        )
+                                elif tot_pnl > 0.0:
+                                    logger.info("ℹ️ Demo trade closed with minor profit (+${tot_pnl:.2f} < $%.2f). Waiting for clean target harvest before switching to REAL.",
+                                                tot_pnl, MIN_DEMO_WIN_FOR_SWITCH)
                         else:
                             push_ntfy(
                                 title=f"🛑 Cut: ${tot_pnl:.2f}",
@@ -916,7 +1045,8 @@ async def run_live_scalper():
                 # Strict Live Margin Rules (1:500 Leverage):
                 # Dynamically evaluate fresh balance for parallel capacity
                 acc_current = await gw.get_account_snapshot(force_fresh=False)
-                max_parallel = 1 if acc_current.balance < 75.0 else (2 if acc_current.balance < 150.0 else 3)
+                eff_bal_current = scalper.get_effective_balance(acc_current.balance)
+                max_parallel = 1 if eff_bal_current < 75.0 else (2 if eff_bal_current < 150.0 else 3)
                 current_pos_count = len(scalper.active_positions)
                 can_enter_parallel = False
 
@@ -926,7 +1056,7 @@ async def run_live_scalper():
                     else:
                         # Parallel entry guard: ALL prior positions must be strictly de-risked to BE!
                         all_prior_safe = all(p.get("be_ratchet_hit", False) for p in scalper.active_positions)
-                        next_lot_size = scalper.compute_lot_size(acc_current.balance, current_price=quote.mid)
+                        next_lot_size = scalper.compute_lot_size(eff_bal_current, current_price=quote.mid)
                         next_req_margin = calc_required_margin(quote.mid, next_lot_size)
                         
                         acc_fresh = await gw.get_account_snapshot(force_fresh=True)
@@ -956,7 +1086,8 @@ async def run_live_scalper():
                             sig: Optional[ApexSignal] = scalper.evaluate_strategy()
                             if sig:
                                 acc = await gw.get_account_snapshot(force_fresh=True)
-                                base_lot_size = scalper.compute_lot_size(acc.balance, current_price=quote.mid)
+                                eff_bal = scalper.get_effective_balance(acc.balance)
+                                base_lot_size = scalper.compute_lot_size(eff_bal, current_price=quote.mid)
     
                                 # --- REAL WICK & REAL TREND CALCULATION ---
                                 recent_high = max(c["high"] for c in scalper.candles_1m[-30:]) if len(scalper.candles_1m) >= 5 else sig.entry_price + (sig.atr_1m * 3.0)
@@ -995,7 +1126,7 @@ async def run_live_scalper():
                                 laya_decision = laya_oracle.evaluate_setup_sync(market_state)
     
                                 # Micro-Account Capital Preservation Shield (<$100):
-                                if acc.balance < 100.0:
+                                if eff_bal < 100.0:
                                     if not laya_decision.is_valid or laya_decision.trap_probability >= 0.50 or laya_decision.confluence_score < 6.5:
                                         logger.warning("🛡️ MICRO CAPITAL GUARD VETO: Trap Prob: %.1f%%, Confluence: %.1f/10, Valid: %s (%s) - Setup rejected",
                                                        laya_decision.trap_probability * 100, laya_decision.confluence_score, laya_decision.is_valid, laya_decision.reasoning)
@@ -1046,27 +1177,38 @@ async def run_live_scalper():
                                     expansion_dist = sig.atr_1m * (laya_decision.tp_expansion_multiplier - 1.0) * 2.5
                                     effective_spike_target = (sig.spike_target + expansion_dist) if sig.direction == "BUY" else (sig.spike_target - expansion_dist)
     
+                                # Inviolable safety clamp: Micro account or DEMO mirror MUST NEVER exceed 0.01 lots
+                                if eff_bal < 75.0 or str(getattr(scalper, "account_mode", "REAL")).upper() == "DEMO":
+                                    lot_size = 0.01
+
                                 # Real Live Margin Pre-Check: Calculate margin for the ACTUAL requested lot size
                                 req_margin = calc_required_margin(sig.entry_price, lot_size)
-                                if acc.available < (req_margin * 1.50):
+                                eff_bal_m, eff_equity_m, eff_used_m, eff_avail_m = scalper.get_effective_margin_state(acc)
+
+                                if eff_avail_m < (req_margin * 1.50):
                                     logger.warning("⚠️ Insufficient available margin ($%.2f vs required $%.2f). Skipping trade.",
-                                                   acc.available, req_margin * 1.50)
+                                                   eff_avail_m, req_margin * 1.50)
                                     continue
 
-                                # Margin Level Guard: Prevent entering if projected margin level is below 400% on micro accounts (<$150) or 300% on larger accounts
-                                projected_used = acc.assets_used + req_margin
-                                min_margin_level = 400.0 if acc.balance < 150.0 else 300.0
-                                if projected_used > 0 and (acc.equity / projected_used * 100.0) < min_margin_level:
-                                    logger.warning("⚠️ Projected margin level too low (<%.0f%%: $%.2f eq / $%.2f used). Skipping trade.",
-                                                   min_margin_level, acc.equity, projected_used)
+                                # Margin Level Guard: Prevent entering if projected margin level is below threshold
+                                # Calibrated: 320% for micro accounts (<$75) allowing entry on $29.66 (~345% margin level)
+                                projected_used = eff_used_m + req_margin
+                                min_margin_level = 320.0 if eff_bal_m < 75.0 else (350.0 if eff_bal_m < 150.0 else 300.0)
+                                projected_margin_level = (eff_equity_m / projected_used * 100.0) if projected_used > 0 else 999.0
+                                if projected_margin_level < min_margin_level:
+                                    logger.warning("⚠️ Projected margin level too low (<%.0f%%: $%.2f eq / $%.2f used = %.1f%%). Skipping trade.",
+                                                   min_margin_level, eff_equity_m, projected_used, projected_margin_level)
                                     continue
     
-                                # Safe broker-side disaster stop
+                                # Safe broker-side disaster stop (capped at 2.80 pts / $2.80 risk on micro accounts)
                                 min_sl_dist = max(1.50, sig.atr_1m * 1.0)
+                                max_sl_dist = 2.80 if eff_bal_m < 75.0 else 5.00
                                 if sig.direction == "BUY":
-                                    broker_sl = round(min(sig.sl_price, sig.entry_price - min_sl_dist), 2)
+                                    raw_broker_sl = min(sig.sl_price, sig.entry_price - min_sl_dist)
+                                    broker_sl = round(max(sig.entry_price - max_sl_dist, raw_broker_sl), 2)
                                 else:
-                                    broker_sl = round(max(sig.sl_price, sig.entry_price + min_sl_dist), 2)
+                                    raw_broker_sl = max(sig.sl_price, sig.entry_price + min_sl_dist)
+                                    broker_sl = round(min(sig.entry_price + max_sl_dist, raw_broker_sl), 2)
     
                                 logger.info("🎯 'TO THE MOON' SIGNAL [%s]: %s @ $%.2f | SL: $%.2f (Broker SL: $%.2f) | TP1: $%.2f | Spike: $%.2f | Lots: %.2f%s | Confluence: %.1f/10",
                                             sig.strategy_type, sig.direction, sig.entry_price, sig.sl_price, broker_sl, sig.tp1_price, effective_spike_target, lot_size, boost_tag, laya_decision.confluence_score)
@@ -1082,7 +1224,7 @@ async def run_live_scalper():
                                     scalper.last_latency_ms = order_res.get("latency_ms", 0.0)
     
                                     # Create dedicated direction-aware MicroExitController for this position
-                                    pos_cfg = get_micro_account_config(balance=acc.balance, direction=sig.direction) if acc.balance < 100.0 else get_to_the_moon_config("XAUUSD", direction=sig.direction)
+                                    pos_cfg = get_micro_account_config(balance=eff_bal, direction=sig.direction) if eff_bal < 100.0 else get_to_the_moon_config("XAUUSD", direction=sig.direction)
                                     pos_ctrl = MicroExitController(pos_cfg)
                                     pos_ctrl.arm_position(
                                         entry_price=sig.entry_price,

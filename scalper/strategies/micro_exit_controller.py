@@ -318,10 +318,12 @@ class MicroExitController:
                 sl_violated = True
 
         effective_stop_usd = getattr(self, "dynamic_hard_stop", self.cfg.hard_risk_stop_usd)
-        is_be_or_profit_sl = self.be_locked and (
+        is_be_or_profit_sl = (
             (self.direction == "BUY" and self.sl_price >= self.entry_price) or
             (self.direction == "SELL" and self.sl_price <= self.entry_price)
-        )
+        ) or self.be_locked
+        if is_be_or_profit_sl:
+            self.be_locked = True
         if sl_violated and is_be_or_profit_sl:
             return ExitDecision(
                 should_exit=True,
