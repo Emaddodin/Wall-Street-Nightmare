@@ -1,6 +1,11 @@
 """
-Ghost Grid Trading Engine for LiteFinance Demo.
-Builds candles, evaluates ApexTrinity, deploys obfuscated grids.
+Ghost Grid Trading Engine (Forensic MR P FX Scalper Edition).
+Directly mirrors MR P FX's XAUUSD strategy from the video:
+1. Entry: Pure M5 Key Support/Resistance Break + M1 Surgical Retest with Rejection Wick.
+2. Deployment: Staggered Micro-Grid (0.10s-0.25s human taps) with Disaster SL protection.
+3. Exit: Lightning-fast profit lock (+$0.35-$0.60 pts, $1.20-$3.50 immediate basket take-profit).
+4. Time decay: Strictly 45-90 seconds max holding time. Never hold through chops.
+5. AI Veto: Fast Laya/Politician sanity check before entry.
 """
 
 import asyncio
@@ -13,12 +18,10 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any
 
 from ghost_grid.noise_engine import NoiseEngine, NoiseConfig
-from ghost_grid.grid_accumulator import GridAccumulator, GridConfig, GridBatch, Direction
 from ghost_grid.compounding_ladder import CompoundingLadder
 from ghost_grid.exit_controller import GridExitController, GridExitConfig, GridExitDecision
 from ghost_grid.broker_chameleon import BrokerChameleon, ChameleonConfig
-
-from scalper.strategies.apex_trinity import ApexTrinityStrategy
+from ghost_grid.mrp_break_retest import MRPBreakRetestStrategy, MRPSignal
 
 # Optional AI modules
 try:
@@ -37,7 +40,6 @@ except ImportError:
     send_alert = None
 
 def push_ntfy(title: str, message: str, tags: str = "ghost,zap", priority: str = "high") -> None:
-    """Dispatches push notification via project NTFY channel."""
     try:
         clean_msg = " · ".join([line.strip() for line in message.strip().splitlines() if line.strip()])
         clean_title = title.strip()
@@ -52,21 +54,24 @@ class GhostEngine:
     def __init__(self, gateway):
         self.gateway = gateway
         
-        self.noise_engine = NoiseEngine(NoiseConfig())
-        self.grid_accumulator = GridAccumulator(GridConfig(
-            num_orders=3, 
-            base_lot_size=0.01, 
-            tp1_points=15.0, 
-            scale_out_pct=0.5, 
-            hard_stop_loss_usd=15.0
-        ))
-        self.compounding = CompoundingLadder(withdrawal_threshold=50.0, max_loss_floor=15.0)
+        # Noise Engine with fast human taps (150ms - 450ms) matching MR P FX video
+        noise_cfg = NoiseConfig(
+            delay_mu_ms=250.0,
+            delay_sigma_ms=75.0,
+            delay_min_ms=120.0,
+            delay_max_ms=450.0,
+            hesitation_prob=0.05,
+            skip_marginal_setup_prob=0.0
+        )
+        self.noise_engine = NoiseEngine(noise_cfg)
+        self.compounding = CompoundingLadder(withdrawal_threshold=2500.0, max_loss_floor=4.0)
         self.exit_controller = GridExitController(GridExitConfig())
         self.chameleon = BrokerChameleon(ChameleonConfig())
         
-        self.strategy = ApexTrinityStrategy(min_candles_warmup=30)
+        # Core Strategy: Forensic MR P FX Break & Retest
+        self.strategy = MRPBreakRetestStrategy(lookback_5m=12)
         
-        # AI modules
+        # AI Safety Layer
         self.laya_oracle = get_laya_oracle() if get_laya_oracle else None
         self.politician_brain = get_politician_brain() if get_politician_brain else None
         
@@ -78,15 +83,14 @@ class GhostEngine:
         self.active_positions: List[Dict] = []
         self.grid_start_time: Optional[float] = None
         self.cycle_start_balance: float = 0.0
-        self.live_real_balance: float = 29.66  # Mirrors live real account balance
-        self.target_mode: str = "REAL"
+        self.live_real_balance: float = 14.36
+        self.target_mode: str = "DEMO"  # Default safe on startup
         
         self.state_file = Path("ghost_grid_state.json")
         self.load_state()
 
     def get_effective_balance(self, reported_balance: float) -> float:
-        """Enforces live real balance ($29.66) on DEMO for 100% identical risk/sizing."""
-        return getattr(self, "live_real_balance", 29.66)
+        return getattr(self, "live_real_balance", reported_balance)
 
     def load_state(self):
         if self.state_file.exists():
@@ -97,7 +101,7 @@ class GhostEngine:
                     self.live_real_balance = float(data["live_real_balance"])
                 if "target_mode" in data and data["target_mode"] in ("DEMO", "REAL"):
                     self.target_mode = data["target_mode"]
-                logger.info(f"Loaded state from {self.state_file} (Mode: {self.target_mode})")
+                logger.info(f"Loaded state from {self.state_file} (Mode: {self.target_mode}, Balance: ${self.live_real_balance:.2f})")
             except Exception as e:
                 logger.error(f"Failed to load state: {e}")
 
@@ -110,7 +114,6 @@ class GhostEngine:
         self.state_file.write_text(json.dumps(data, indent=4))
 
     async def _update_candles(self, quote) -> bool:
-        """Returns True if a new candle just formed. Automatically formats for ApexTrinity."""
         mid = quote.mid
         t = getattr(quote, "timestamp", time.time())
         current_minute_ts = int(t // 60) * 60
@@ -126,7 +129,7 @@ class GhostEngine:
                 if len(self.candles_1m) > 500:
                     self.candles_1m = self.candles_1m[-300:]
             
-            # Initial fast warmup: Pre-seed history from current price so we don't wait 30 minutes idle
+            # Initial fast warmup
             if len(self.candles_1m) < 30:
                 for idx in range(30 - len(self.candles_1m)):
                     past_ts = (current_minute_ts - (30 - idx) * 60) * 1000
@@ -138,10 +141,10 @@ class GhostEngine:
                         "high": mid + 0.10,
                         "low": mid - 0.10,
                         "close": mid,
-                        "volume": 1
+                        "volume": 50.0
                     })
-                logger.info(f"⚡ Fast Warmup: Seeded {len(self.candles_1m)} candles at ${mid:.2f}. Immediate execution armed!")
-
+                logger.info(f"⚡ Fast Warmup: Seeded 30 candles at ${mid:.2f}. Immediate execution armed!")
+                
             self.current_1m_bar = {
                 "minute_ts": current_minute_ts,
                 "open_time": open_time_ms,
@@ -150,23 +153,24 @@ class GhostEngine:
                 "high": mid,
                 "low": mid,
                 "close": mid,
-                "volume": 1
+                "volume": 1.0
             }
         else:
-            bar = self.current_1m_bar
-            bar["high"] = max(bar["high"], mid)
-            bar["low"] = min(bar["low"], mid)
-            bar["close"] = mid
-            bar["volume"] += 1
+            self.current_1m_bar["high"] = max(self.current_1m_bar["high"], mid)
+            self.current_1m_bar["low"] = min(self.current_1m_bar["low"], mid)
+            self.current_1m_bar["close"] = mid
+            self.current_1m_bar["volume"] = self.current_1m_bar.get("volume", 0.0) + 1.0
             
         return new_candle_formed
 
     async def tick(self, quote):
-        # Production Sentinel Invariants:
-        # Inviolable Weekend Flatten: Set to 21:45 UTC so we can test right up to the final minutes
+        if quote is None:
+            return
+
         now_utc = datetime.now(timezone.utc)
-        is_weekend_lockout = (now_utc.weekday() == 4 and (now_utc.hour > 21 or (now_utc.hour == 21 and now_utc.minute >= 45))) or now_utc.weekday() == 5
-        if is_weekend_lockout:
+
+        # Inviolable Friday Curfew: 21:45 UTC (01:15 AM Tehran Saturday)
+        if now_utc.weekday() == 4 and (now_utc.hour > 21 or (now_utc.hour == 21 and now_utc.minute >= 45)):
             if self.active_positions:
                 logger.warning("🚨 INVIOLABLE FRIDAY WEEKEND FORCE-FLATTEN TRIGGERED! Auto-flattening open grid...")
                 await self._flatten_grid(is_win=False, reason="Friday Weekend Force-Flatten (Market Close)")
@@ -181,23 +185,22 @@ class GhostEngine:
         # Update OHLCV
         new_candle = await self._update_candles(quote)
         
-        # Periodic dashboard state sync for terminal and Omni-Auditor
+        # Periodic dashboard state sync
         if int(time.time()) % 5 == 0:
             await self._sync_telemetry(quote)
 
-        # Check active positions for exit
+        # 1. Manage Active Positions (Priority #1: Rapid Scalp Exits)
         if self.active_positions:
             await self._manage_active_grid(quote)
             return
 
-        # Only evaluate entry on a new candle close
+        # 2. Evaluate Entry on new candle or tick
         if new_candle and len(self.candles_1m) >= 30:
             signal = self.strategy.evaluate(self.candles_1m)
             if signal:
                 await self._handle_signal(signal, quote)
 
     async def _sync_telemetry(self, quote):
-        """Sync live ghost grid telemetry to dashboard hft.json."""
         try:
             acc = await self.gateway.get_account_snapshot()
             data_dir = Path("data")
@@ -208,12 +211,12 @@ class GhostEngine:
             total_active_lots = sum(p.get("volume", 0.0) for p in self.active_positions)
             
             payload = {
-                "engine": "👻 XAUUSD Ghost Grid Scalper Engine (DEMO)",
+                "engine": "👻 MR P FX Break & Retest Scalper (Ghost Grid)",
                 "status": "ACTIVE",
                 "bot_running": True,
                 "fsm_state": "IN_POSITION" if self.active_positions else "SCANNING",
-                "mode": "BROKER LIVE (Ghost Grid LiteFinance DEMO Account)",
-                "account_mode": "DEMO",
+                "mode": f"BROKER LIVE (LiteFinance {self.target_mode} Account)",
+                "account_mode": self.target_mode,
                 "symbol": "XAUUSD",
                 "balance": round(acc.balance, 2),
                 "equity": round(acc.equity, 2),
@@ -239,7 +242,6 @@ class GhostEngine:
             pass
 
     async def _manage_active_grid(self, quote):
-        # Calculate total PNL
         total_pnl = 0.0
         total_volume = 0.0
         avg_entry = 0.0
@@ -258,13 +260,12 @@ class GhostEngine:
         if total_volume > 0:
             avg_entry /= total_volume
             
-        # Hard total grid loss floor (-$5.00 for micro capital protection)
-        if total_pnl <= -5.00:
-            logger.warning("Hard grid loss floor reached (-$5.00). Flattening!")
-            await self._flatten_grid(is_win=False, reason="Hard Stop Loss Ceiling Hit (-$5.00)")
+        # Hard total basket stop loss ceiling (-$4.00)
+        if total_pnl <= -4.00:
+            logger.warning(f"🛑 Hard grid risk floor reached (${total_pnl:.2f}). Flattening!")
+            await self._flatten_grid(is_win=False, reason="Hard Stop Loss Ceiling Hit (-$4.00)")
             return
             
-        # Call GridExitController
         now = time.time()
         decision = self.exit_controller.evaluate_grid_tick(
             current_price=quote.mid,
@@ -272,11 +273,11 @@ class GhostEngine:
             current_time=now
         )
         
-        if decision.action in ("CLOSE_ALL", "SCALE_OUT_60", "SCALE_OUT_80"):
-            logger.info(f"Exit controller triggered {decision.action}. Reason: {decision.reason}")
+        if decision.action == "CLOSE_ALL":
+            logger.info(f"⚡ Exit controller triggered CLOSE_ALL. Reason: {decision.reason}")
             is_win = total_pnl > 0
-            await self._flatten_grid(is_win=is_win)
-            
+            await self._flatten_grid(is_win=is_win, reason=decision.reason)
+
     async def _flatten_grid(self, is_win: bool, reason: str = "Exit Triggered"):
         logger.info(f"Flattening all grid positions ({reason}).")
         try:
@@ -292,19 +293,18 @@ class GhostEngine:
         self.grid_start_time = None
         self.exit_controller.reset()
         
-        # Check compounding / withdrawal & push rich alert
         try:
             account = await self.gateway.get_account_snapshot()
+            self.live_real_balance = account.balance
             win_tag = "💰 Profit Locked" if is_win else "🛑 Risk Stopped"
             push_ntfy(
-                title=f"👻 Ghost Grid: {win_tag}",
-                message=f"{reason} · Balance: ${account.balance:.2f} · Active Orders Closed",
+                title=f"👻 MR P FX: {win_tag}",
+                message=f"{reason} · Balance: ${account.balance:.2f} · Scalp Closed",
                 tags="moneybag,ghost" if is_win else "octagonal_sign,shield",
                 priority="high"
             )
             if self.compounding.check_withdrawal(account.balance):
-                logger.info(f"Withdrawal threshold met! Current balance: {account.balance}")
-                self.cycle_start_balance = account.balance
+                logger.info(f"Withdrawal threshold met! Balance: ${account.balance:.2f}")
                 push_ntfy(
                     title="🎯 Withdrawal Threshold Met",
                     message=f"Balance ${account.balance:.2f} exceeds withdrawal threshold.",
@@ -313,14 +313,11 @@ class GhostEngine:
                 )
             self.save_state()
         except Exception as e:
-            logger.error(f"Error checking withdrawal: {e}")
+            logger.error(f"Error updating state after flatten: {e}")
 
-    async def _handle_signal(self, signal, quote):
-        # Map signal direction to broker direction
-        raw_dir = str(getattr(signal, "direction", "BUY")).upper()
-        broker_dir = "BUY" if "BUY" in raw_dir or "LONG" in raw_dir else "SELL"
-        
-        logger.info(f"Signal received: {raw_dir} -> {broker_dir} at {quote.mid}")
+    async def _handle_signal(self, signal: MRPSignal, quote):
+        broker_dir = signal.direction
+        logger.info(f"MR P FX Signal: {broker_dir} at {quote.mid:.2f} (Break: {signal.breakout_level:.2f})")
         
         # 1. Anti-detection skip
         if self.noise_engine.should_skip_setup():
@@ -342,13 +339,13 @@ class GhostEngine:
             except Exception as e:
                 logger.error(f"PoliticianBrain error: {e}")
                 
-        # 4. AI Veto
+        # 4. AI Veto (Laya System 1 check)
         if self.laya_oracle:
             try:
                 decision = self.laya_oracle.evaluate_setup_sync({
                     "direction": broker_dir,
-                    "confidence": getattr(signal, "confidence", 0.8),
-                    "wick_ratio": getattr(signal, "wick_ratio", 0.5)
+                    "confidence": 0.85,
+                    "wick_ratio": 0.50
                 })
                 if decision and not getattr(decision, "approve", True):
                     logger.info(f"LayaOracle vetoed: {getattr(decision, 'reasoning', 'No approval')}")
@@ -356,7 +353,7 @@ class GhostEngine:
             except Exception as e:
                 logger.error(f"LayaOracle error: {e}")
                 
-        # 5. Resolve compounding tier using effective balance ($29.66)
+        # 5. Resolve Compounding Tier
         account = await self.gateway.get_account_snapshot()
         eff_bal = self.get_effective_balance(account.balance)
         if self.cycle_start_balance == 0:
@@ -364,34 +361,26 @@ class GhostEngine:
             self.save_state()
             
         tier = self.compounding.resolve_tier(eff_bal)
-        base_lot = min(tier.lot_size, 0.05) # Safety limit for demo testing
-        n_orders = min(tier.grid_count, 5) # Safety cap on demo
+        base_lot = tier.lot_size
+        n_orders = tier.grid_count
         
-        logger.info(f"Deploying grid. Eff Balance: ${eff_bal:.2f} (Demo: ${account.balance:.2f}), Tier Lot: {base_lot}, Count: {n_orders}, Grade: {tier.risk_grade}")
-        
-        # Generate noise plan
-        noise_plan = self.noise_engine.generate_grid_noise_plan(base_lot=base_lot, num_orders=n_orders)
-        if noise_plan.skip_setup:
-            logger.info("Noise plan chose to skip this setup.")
-            return
-
-        delays = [d / 1000.0 for d in noise_plan.delays_ms]
-        lots = noise_plan.lot_adjustments
+        logger.info(f"Deploying MR P FX Grid: Eff Bal: ${eff_bal:.2f}, Lot: {base_lot} x {n_orders}, Tier: {tier.risk_grade}")
         
         self.grid_start_time = time.time()
         
-        for i in range(len(lots)):
-            delay = delays[i] if i < len(delays) else 0.5
-            if delay > 0:
-                await asyncio.sleep(delay)
+        # Rapid Taps (150-350ms delays)
+        for i in range(n_orders):
+            if i > 0:
+                tap_delay = random.uniform(0.15, 0.35)
+                await asyncio.sleep(tap_delay)
                 
-            lot = min(lots[i], 0.05)
+            lot = base_lot
             
-            # Physical Disaster SL to prevent account blowup (Zero blowup tolerance)
-            disaster_dist = 3.50 + random.uniform(-0.25, 0.25)
+            # Physical Disaster SL to protect broker account from sudden spikes
+            disaster_dist = 2.50
             sl_price = round(quote.bid - disaster_dist if broker_dir == "BUY" else quote.ask + disaster_dist, 2)
             
-            logger.info(f"Executing grid order {i+1}/{len(lots)}: {broker_dir} {lot:.2f} lots (Disaster SL: {sl_price})")
+            logger.info(f"Executing scalp order {i+1}/{n_orders}: {broker_dir} {lot:.2f} lots (Disaster SL: {sl_price})")
             try:
                 res = await self.gateway.open_market_order(
                     direction=broker_dir,
@@ -418,7 +407,7 @@ class GhostEngine:
         if self.active_positions:
             total_active_lots = sum(p.get("volume", 0.0) for p in self.active_positions)
             push_ntfy(
-                title=f"⚡ Ghost Grid Deployed: {broker_dir}",
+                title=f"⚡ MR P FX Scalp Deployed: {broker_dir}",
                 message=f"Dispatched {len(self.active_positions)} orders · Total: {total_active_lots:.2f} lots @ ${quote.mid:.2f} · Tier: {tier.risk_grade}",
                 tags="zap,ghost",
                 priority="high"
