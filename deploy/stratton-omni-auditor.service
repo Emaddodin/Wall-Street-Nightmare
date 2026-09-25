@@ -1,0 +1,19 @@
+[Unit]
+Description=Stratton Oakmont Omni-Angle Autonomous Auditor (30-Min Continuous Audit Loop)
+After=network.target stratton-xau-live.service
+Wants=stratton-xau-live.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/ict_sniper
+EnvironmentFile=/root/ict_sniper/.env
+ExecStart=/root/ict_sniper/venv/bin/python -u scalper/sentinel/omni_angle_auditor.py --interval 1800
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stratton-omni-auditor
+
+[Install]
+WantedBy=multi-user.target
