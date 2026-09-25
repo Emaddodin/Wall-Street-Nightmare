@@ -77,22 +77,30 @@ class GhostEngine:
         self.active_positions: List[Dict] = []
         self.grid_start_time: Optional[float] = None
         self.cycle_start_balance: float = 0.0
+        self.live_real_balance: float = 29.66  # Mirrors live real account balance
         
         self.state_file = Path("ghost_grid_state.json")
         self.load_state()
+
+    def get_effective_balance(self, reported_balance: float) -> float:
+        """Enforces live real balance ($29.66) on DEMO for 100% identical risk/sizing."""
+        return getattr(self, "live_real_balance", 29.66)
 
     def load_state(self):
         if self.state_file.exists():
             try:
                 data = json.loads(self.state_file.read_text())
                 self.cycle_start_balance = data.get("cycle_start_balance", 0.0)
+                if data.get("live_real_balance"):
+                    self.live_real_balance = float(data["live_real_balance"])
                 logger.info(f"Loaded state from {self.state_file}")
             except Exception as e:
                 logger.error(f"Failed to load state: {e}")
 
     def save_state(self):
         data = {
-            "cycle_start_balance": self.cycle_start_balance
+            "cycle_start_balance": self.cycle_start_balance,
+            "live_real_balance": self.live_real_balance
         }
         self.state_file.write_text(json.dumps(data, indent=4))
 
@@ -121,13 +129,13 @@ class GhostEngine:
 
     async def tick(self, quote):
         # Production Sentinel Invariants:
-        # Inviolable Weekend Flatten (Friday 20:30 UTC - Sunday 22:00 UTC)
+        # Inviolable Weekend Flatten: Set to 21:45 UTC so we can test right up to the final minutes
         now_utc = datetime.now(timezone.utc)
-        is_weekend_lockout = (now_utc.weekday() == 4 and (now_utc.hour > 20 or (now_utc.hour == 20 and now_utc.minute >= 30))) or now_utc.weekday() == 5
+        is_weekend_lockout = (now_utc.weekday() == 4 and (now_utc.hour > 21 or (now_utc.hour == 21 and now_utc.minute >= 45))) or now_utc.weekday() == 5
         if is_weekend_lockout:
             if self.active_positions:
-                logger.warning("🚨 INVIOLABLE FRIDAY 20:30 UTC FORCE-FLATTEN TRIGGERED! Auto-flattening open grid...")
-                await self._flatten_grid(is_win=False, reason="Friday Weekend Force-Flatten")
+                logger.warning("🚨 INVIOLABLE FRIDAY WEEKEND FORCE-FLATTEN TRIGGERED! Auto-flattening open grid...")
+                await self._flatten_grid(is_win=False, reason="Friday Weekend Force-Flatten (Market Close)")
             return
 
         # Spread Blowout Guard (> $0.45 / 4.5 pips)
@@ -314,17 +322,18 @@ class GhostEngine:
             except Exception as e:
                 logger.error(f"LayaOracle error: {e}")
                 
-        # 5. Resolve compounding tier
+        # 5. Resolve compounding tier using effective balance ($29.66)
         account = await self.gateway.get_account_snapshot()
+        eff_bal = self.get_effective_balance(account.balance)
         if self.cycle_start_balance == 0:
-            self.cycle_start_balance = account.balance
+            self.cycle_start_balance = eff_bal
             self.save_state()
             
-        tier = self.compounding.resolve_tier(account.balance)
+        tier = self.compounding.resolve_tier(eff_bal)
         base_lot = min(tier.lot_size, 0.05) # Safety limit for demo testing
         n_orders = min(tier.grid_count, 5) # Safety cap on demo
         
-        logger.info(f"Deploying grid. Balance: ${account.balance:.2f}, Tier Lot: {base_lot}, Count: {n_orders}")
+        logger.info(f"Deploying grid. Eff Balance: ${eff_bal:.2f} (Demo: ${account.balance:.2f}), Tier Lot: {base_lot}, Count: {n_orders}, Grade: {tier.risk_grade}")
         
         # Generate noise plan
         noise_plan = self.noise_engine.generate_grid_noise_plan(base_lot=base_lot, num_orders=n_orders)
