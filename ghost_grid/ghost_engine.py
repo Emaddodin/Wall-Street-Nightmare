@@ -6,6 +6,7 @@ Builds candles, evaluates ApexTrinity, deploys obfuscated grids.
 import asyncio
 import json
 import logging
+import random
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -386,12 +387,16 @@ class GhostEngine:
                 
             lot = min(lots[i], 0.05)
             
-            logger.info(f"Executing grid order {i+1}/{len(lots)}: {broker_dir} {lot:.2f} lots")
+            # Physical Disaster SL to prevent account blowup (Zero blowup tolerance)
+            disaster_dist = 3.50 + random.uniform(-0.25, 0.25)
+            sl_price = round(quote.bid - disaster_dist if broker_dir == "BUY" else quote.ask + disaster_dist, 2)
+            
+            logger.info(f"Executing grid order {i+1}/{len(lots)}: {broker_dir} {lot:.2f} lots (Disaster SL: {sl_price})")
             try:
                 res = await self.gateway.open_market_order(
                     direction=broker_dir,
                     volume=lot,
-                    sl_price=None,
+                    sl_price=sl_price,
                     tp_price=None,
                     expected_mode=self.target_mode
                 )

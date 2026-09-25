@@ -98,13 +98,5 @@ class GridExitController:
         if stall_range <= self.config.stall_range_pts and stall_elapsed >= self.config.stall_secs:
             return GridExitDecision(action="SCALE_OUT_60", reason="Momentum stall detected")
             
-        # 3. Partial Scale-Out (TP1)
-        total_lots = sum(p.get("lot_size", 0.0) for p in grid_positions)
-        if total_lots > 0:
-            avg_entry = sum(p.get("entry_price", 0.0) * p.get("lot_size", 0.0) for p in grid_positions) / total_lots
-            is_long = grid_positions[0].get("direction", "long") == "long"
-            pts_profit = (current_price - avg_entry) if is_long else (avg_entry - current_price)
-            if pts_profit >= self.config.tp1_pts:
-                return GridExitDecision(action="SCALE_OUT_60", reason="TP1 reached")
-                
+        # Target has NO upper limit - profits run unconstrained and are trailed by dynamic watermark
         return GridExitDecision(action="HOLD", reason="No exit criteria met")
