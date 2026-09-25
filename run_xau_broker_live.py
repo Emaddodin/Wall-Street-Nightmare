@@ -544,25 +544,37 @@ async def run_live_scalper():
 
     initial_mode = await gw.get_account_mode()
     mode_file = ROOT_DIR / "data" / "account_mode.json"
+    req_mode = "DEMO"
     if mode_file.exists():
         try:
             persisted = json.loads(mode_file.read_text())
-            req_mode = persisted.get("account_mode", "UNKNOWN")
+            req_mode = persisted.get("account_mode", "DEMO")
             if persisted.get("real_balance"):
                 scalper.live_real_balance = float(persisted["real_balance"])
-            if req_mode in ("DEMO", "REAL") and initial_mode != req_mode:
-                logger.info("Syncing LiteFinance broker to requested mode: %s (current: %s)...", req_mode, initial_mode)
-                sw_res = await gw.switch_account_mode(req_mode)
-                if sw_res.get("success"):
-                    initial_mode = req_mode
-                    acc_snap = await gw.get_account_snapshot(force_fresh=True)
-            elif initial_mode == "UNKNOWN" and req_mode in ("DEMO", "REAL"):
-                initial_mode = req_mode
-            logger.info("Loaded persisted account mode: %s", initial_mode)
         except Exception as me:
-            logger.warning("Error syncing account_mode.json: %s", me)
+            logger.warning("Error reading account_mode.json: %s", me)
+
+    logger.info("Detected broker physical account mode: %s (target desired: %s)", initial_mode, req_mode)
+
+    if req_mode in ("DEMO", "REAL") and initial_mode != req_mode:
+        logger.info("Syncing LiteFinance broker to requested mode: %s (current: %s)...", req_mode, initial_mode)
+        sw_res = await gw.switch_account_mode(req_mode)
+        if sw_res.get("success"):
+            initial_mode = req_mode
+            acc_snap = await gw.get_account_snapshot(force_fresh=True)
+        else:
+            logger.error("❌ Failed to switch broker to %s mode: %s", req_mode, sw_res.get("error"))
+            actual_mode = await gw.get_account_mode()
+            if actual_mode in ("DEMO", "REAL"):
+                initial_mode = actual_mode
+            if req_mode == "DEMO" and initial_mode == "REAL":
+                logger.critical("🚨 HALT: Broker is physically in REAL mode but DEMO warmup was requested! Pausing trading for safety.")
+                scalper.trading_paused = True
+
     if initial_mode == "UNKNOWN":
-        initial_mode = "DEMO"  # Default safe mode
+        actual = await gw.get_account_mode()
+        initial_mode = actual if actual in ("DEMO", "REAL") else req_mode
+
     scalper.account_mode = initial_mode
     if initial_mode == "REAL":
         scalper.live_real_balance = acc_snap.balance

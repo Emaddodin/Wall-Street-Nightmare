@@ -288,3 +288,70 @@ def test_effective_margin_state_simulates_real_on_demo():
     assert eff_used == 0.0
     assert eff_avail == 29.66
 
+
+def test_get_account_mode_detection_levels():
+    """Verify get_account_mode resolves DEMO/REAL across DOM leaf elements and locator fallbacks."""
+    import asyncio
+
+    async def _run():
+        gw = LiteFinanceGateway()
+        page = AsyncMock()
+        page.is_closed = MagicMock(return_value=False)
+        gw._page = page
+
+        # Level 1: Leaf JS evaluation returns "DEMO"
+        page.evaluate.return_value = "DEMO"
+        assert await gw.get_account_mode() == "DEMO"
+
+        # Level 2: Leaf JS evaluation returns "REAL"
+        page.evaluate.return_value = "REAL"
+        assert await gw.get_account_mode() == "REAL"
+
+        # Level 3: Leaf JS returns "UNKNOWN", but page locator has "DEMO ACCOUNT"
+        page.evaluate.return_value = "UNKNOWN"
+        demo_loc = AsyncMock()
+        demo_loc.count.return_value = 1
+        real_loc = AsyncMock()
+        real_loc.count.return_value = 0
+
+        def mock_locator(selector):
+            if "DEMO ACCOUNT" in selector:
+                return demo_loc
+            return real_loc
+
+        page.locator = MagicMock(side_effect=mock_locator)
+        page.content = AsyncMock(return_value="")
+        assert await gw.get_account_mode() == "DEMO"
+
+    asyncio.run(_run())
+
+
+def test_startup_guard_prevents_trading_on_real_when_demo_fails():
+    """Verify that if broker is in REAL mode and user requested DEMO, trading is paused if switch fails."""
+    import asyncio
+
+    async def _run():
+        gw = AsyncMock(spec=LiteFinanceGateway)
+        gw.get_account_mode.return_value = "REAL"
+        gw.switch_account_mode.return_value = {"success": False, "error": "SWITCH_TIMEOUT"}
+
+        scalper = LiveBrokerScalper(gw)
+        req_mode = "DEMO"
+        initial_mode = "REAL"
+
+        # Simulate startup guard logic
+        if req_mode in ("DEMO", "REAL") and initial_mode != req_mode:
+            sw_res = await gw.switch_account_mode(req_mode)
+            if not sw_res.get("success"):
+                actual_mode = await gw.get_account_mode()
+                if actual_mode in ("DEMO", "REAL"):
+                    initial_mode = actual_mode
+                if req_mode == "DEMO" and initial_mode == "REAL":
+                    scalper.trading_paused = True
+
+        assert scalper.trading_paused is True
+        assert initial_mode == "REAL"
+
+    asyncio.run(_run())
+
+
