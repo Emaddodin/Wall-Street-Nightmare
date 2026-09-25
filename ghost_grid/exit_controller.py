@@ -7,19 +7,19 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class GridExitConfig:
-    tp1_pts: float = 1.50
+    tp1_pts: float = 2.80              # Allow expansion to develop (MR P FX captures 2.50 - 5.00 pts)
     tp1_scale_out_pct: float = 0.60
     trail_pct: float = 0.40
-    watermark_pullback_pct: float = 0.30
-    watermark_min_peak: float = 2.00   # Peak profit in USD before watermark ratchet locks in
-    time_decay_min_secs: float = 300.0
-    time_decay_min_pl: float = 0.50    # Minimum USD profit expected after 5 minutes
-    hard_stop_loss: float = -5.00      # Micro-account hard stop ceiling ($5 max risk)
+    watermark_pullback_pct: float = 0.45 # Allow 45% retracement so normal candle wicks don't cut winning runs
+    watermark_min_peak: float = 3.50   # Peak profit in USD before watermark ratchet locks in
+    time_decay_min_secs: float = 360.0 # 6 minutes minimum holding time before considering decay
+    time_decay_min_pl: float = 0.75    # Minimum USD profit expected after 6 minutes
+    hard_stop_loss: float = -3.50      # Micro-account hard stop ceiling ($3.50 max basket risk)
     spike_harvest_usd: float = 8.00    # Rapid macro spike harvest in USD ($8-24 gain)
-    spike_harvest_secs: float = 120.0
+    spike_harvest_secs: float = 180.0  # 3 minutes for rapid spike
     spike_harvest_pct: float = 0.80
     stall_range_pts: float = 0.35
-    stall_secs: float = 90.0
+    stall_secs: float = 180.0          # 3 minutes consolidation tolerance (no premature cuts during healthy pauses)
 
 @dataclass
 class GridExitDecision:

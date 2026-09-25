@@ -253,10 +253,11 @@ class GhostEngine:
         if total_volume > 0:
             avg_entry /= total_volume
             
-        # Hard total grid loss floor (-$5.00 for micro capital protection)
-        if total_pnl <= -5.00:
-            logger.warning("Hard grid loss floor reached (-$5.00). Flattening!")
-            await self._flatten_grid(is_win=False, reason="Hard Stop Loss Ceiling Hit (-$5.00)")
+        # Virtual Structural Basket Stop Loss ceiling (-$3.50 for micro capital protection)
+        max_risk = self.exit_controller.config.hard_stop_loss
+        if total_pnl <= max_risk:
+            logger.warning(f"Virtual Basket Hard Stop reached (${total_pnl:.2f} <= ${max_risk:.2f}). Flattening!")
+            await self._flatten_grid(is_win=False, reason=f"Basket Hard Stop ({max_risk:.2f}$)")
             return
             
         # Call GridExitController
@@ -270,7 +271,7 @@ class GhostEngine:
         if decision.action in ("CLOSE_ALL", "SCALE_OUT_60", "SCALE_OUT_80"):
             logger.info(f"Exit controller triggered {decision.action}. Reason: {decision.reason}")
             is_win = total_pnl > 0
-            await self._flatten_grid(is_win=is_win)
+            await self._flatten_grid(is_win=is_win, reason=decision.reason)
             
     async def _flatten_grid(self, is_win: bool, reason: str = "Exit Triggered"):
         logger.info(f"Flattening all grid positions ({reason}).")
