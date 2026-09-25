@@ -1178,6 +1178,11 @@ async def run_live_scalper():
                                 laya_decision = laya_oracle.evaluate_setup_sync(market_state)
     
                                 # Micro-Account Capital Preservation Shield (<$100):
+                                is_a_plus_titan = (
+                                    laya_decision.confluence_score >= 9.0 and
+                                    laya_decision.trap_probability <= 0.15 and
+                                    eff_bal >= 28.0
+                                )
                                 if eff_bal < 100.0:
                                     if not laya_decision.is_valid or laya_decision.trap_probability >= 0.50 or laya_decision.confluence_score < 6.5:
                                         logger.warning("🛡️ MICRO CAPITAL GUARD VETO: Trap Prob: %.1f%%, Confluence: %.1f/10, Valid: %s (%s) - Setup rejected",
@@ -1189,9 +1194,13 @@ async def run_live_scalper():
                                             priority="default",
                                         )
                                         continue
-    
-                                    lot_size = 0.01
-                                    boost_tag = " (Micro Protection: Strictly 0.01L Locked)"
+
+                                    if is_a_plus_titan:
+                                        lot_size = 0.02
+                                        boost_tag = " (Escape Velocity: Grade A+ Sovereign Titan 0.02L Boosted)"
+                                    else:
+                                        lot_size = 0.01
+                                        boost_tag = " (Micro Protection: Strictly 0.01L Locked)"
                                 else:
                                     # Standard account sizing (>=$100)
                                     if not laya_decision.is_valid:
@@ -1210,7 +1219,7 @@ async def run_live_scalper():
                                                 priority="default",
                                             )
                                             continue
-    
+
                                         logger.info("⚡ SMART & BOLD OVERRIDE: %s (Trap Prob: %.1f%%) -> Executing trade on base lot size (%.2f lots)", 
                                                     laya_decision.reasoning, laya_decision.trap_probability * 100, base_lot_size)
                                         lot_size = base_lot_size
@@ -1228,33 +1237,37 @@ async def run_live_scalper():
                                 if laya_decision.tp_expansion_multiplier > 1.0 and sig.atr_1m > 0:
                                     expansion_dist = sig.atr_1m * (laya_decision.tp_expansion_multiplier - 1.0) * 2.5
                                     effective_spike_target = (sig.spike_target + expansion_dist) if sig.direction == "BUY" else (sig.spike_target - expansion_dist)
-    
-                                # Inviolable safety clamp: Micro account or DEMO mirror MUST NEVER exceed 0.01 lots
+
+                                # Inviolable safety clamp: Micro account (<$75) or DEMO mirror capped to 0.02 lots (A+ Titan) or 0.01 lots
                                 if eff_bal < 75.0 or str(getattr(scalper, "account_mode", "REAL")).upper() == "DEMO":
-                                    lot_size = 0.01
+                                    lot_size = 0.02 if is_a_plus_titan else 0.01
 
                                 # Real Live Margin Pre-Check: Calculate margin for the ACTUAL requested lot size
                                 req_margin = calc_required_margin(sig.entry_price, lot_size)
                                 eff_bal_m, eff_equity_m, eff_used_m, eff_avail_m = scalper.get_effective_margin_state(acc)
 
-                                if eff_avail_m < (req_margin * 1.50):
+                                margin_buffer = 1.20 if lot_size >= 0.02 else 1.50
+                                if eff_avail_m < (req_margin * margin_buffer):
                                     logger.warning("⚠️ Insufficient available margin ($%.2f vs required $%.2f). Skipping trade.",
-                                                   eff_avail_m, req_margin * 1.50)
+                                                   eff_avail_m, req_margin * margin_buffer)
                                     continue
 
                                 # Margin Level Guard: Prevent entering if projected margin level is below threshold
-                                # Calibrated: 320% for micro accounts (<$75) allowing entry on $29.66 (~345% margin level)
+                                # Calibrated: 320% for 0.01L micro accounts (<$75), 160% for 0.02L A+ Titan allowing entry on $28+ (~172% margin level)
                                 projected_used = eff_used_m + req_margin
-                                min_margin_level = 320.0 if eff_bal_m < 75.0 else (350.0 if eff_bal_m < 150.0 else 300.0)
+                                if eff_bal_m < 75.0:
+                                    min_margin_level = 160.0 if lot_size >= 0.02 else 320.0
+                                else:
+                                    min_margin_level = 350.0 if eff_bal_m < 150.0 else 300.0
                                 projected_margin_level = (eff_equity_m / projected_used * 100.0) if projected_used > 0 else 999.0
                                 if projected_margin_level < min_margin_level:
                                     logger.warning("⚠️ Projected margin level too low (<%.0f%%: $%.2f eq / $%.2f used = %.1f%%). Skipping trade.",
                                                    min_margin_level, eff_equity_m, projected_used, projected_margin_level)
                                     continue
-    
-                                # Safe broker-side disaster stop (capped at 2.80 pts / $2.80 risk on micro accounts)
-                                min_sl_dist = max(1.50, sig.atr_1m * 1.0)
-                                max_sl_dist = 2.80 if eff_bal_m < 75.0 else 5.00
+
+                                # Safe broker-side disaster stop (capped at 1.50 pts / $3.00 max risk on 0.02L, 2.80 pts / $2.80 risk on 0.01L)
+                                min_sl_dist = 1.00 if lot_size >= 0.02 else max(1.50, sig.atr_1m * 1.0)
+                                max_sl_dist = (1.50 if lot_size >= 0.02 else 2.80) if eff_bal_m < 75.0 else 5.00
                                 if sig.direction == "BUY":
                                     raw_broker_sl = min(sig.sl_price, sig.entry_price - min_sl_dist)
                                     broker_sl = round(max(sig.entry_price - max_sl_dist, raw_broker_sl), 2)

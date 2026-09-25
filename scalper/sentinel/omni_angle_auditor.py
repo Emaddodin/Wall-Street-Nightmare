@@ -376,17 +376,20 @@ class OmniAngleAuditor:
         if pos:
             pos_vol = pos.get("volume", 0.01)
             details["open_position_volume"] = pos_vol
-            if eff_bal < 75.0 and pos_vol > 0.01:
-                errors.append(f"INVIOLABLE CLAMP BREACH: Volume {pos_vol}L exceeds 0.01L on ${eff_bal:.2f} capital!")
+            if eff_bal < 75.0 and pos_vol > 0.02:
+                errors.append(f"INVIOLABLE CLAMP BREACH: Volume {pos_vol}L exceeds micro cap (0.02L) on ${eff_bal:.2f} capital!")
 
-            # Broker SL Clamp Verification (<= 2.80 pts)
+            # Broker SL Clamp Verification (<= 1.80 pts for 0.02L, <= 2.80 pts for 0.01L)
             entry_px = pos.get("entry_price", 0.0)
             sl_px = pos.get("sl_price", 0.0)
             if entry_px > 0 and sl_px > 0:
                 sl_dist = abs(entry_px - sl_px)
                 details["sl_distance_pts"] = round(sl_dist, 2)
-                if eff_bal < 75.0 and sl_dist > 3.0:
-                    errors.append(f"Broker SL distance ({sl_dist:.2f} pts) exceeds micro cap (2.80 pts)!")
+                if eff_bal < 75.0:
+                    if pos_vol >= 0.02 and sl_dist > 1.80:
+                        errors.append(f"Broker SL distance ({sl_dist:.2f} pts) for {pos_vol}L exceeds A+ micro cap (1.50 pts)!")
+                    elif sl_dist > 3.0:
+                        errors.append(f"Broker SL distance ({sl_dist:.2f} pts) exceeds micro cap (2.80 pts)!")
 
         # 4. Daily Loss & Circuit Breaker Status
         realized_loss = abs(data.get("realized_pnl", 0.0)) if (data and data.get("realized_pnl", 0.0) < 0) else 0.0

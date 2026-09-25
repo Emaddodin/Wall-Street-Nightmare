@@ -273,6 +273,23 @@ def test_real_account_29_66_margin_level():
     assert margin_level >= min_margin_level
 
 
+def test_real_account_a_plus_titan_002_margin_level():
+    """Verify Option B: $29.66 balance with 0.02 lot ($17.18 used) satisfies 160% margin level."""
+    from run_xau_broker_live import calc_required_margin
+    price = 4295.0
+    req_margin = calc_required_margin(price, 0.02)
+    assert round(req_margin, 2) == 17.18
+    equity = 29.66
+    margin_level = (equity / req_margin) * 100.0  # 172.64%
+    min_margin_level = 160.0
+    assert margin_level >= min_margin_level
+
+    # Even down to $28.00 balance:
+    equity_28 = 28.00
+    margin_level_28 = (equity_28 / req_margin) * 100.0  # 162.98%
+    assert margin_level_28 >= min_margin_level
+
+
 def test_effective_margin_state_simulates_real_on_demo():
     """Verify that get_effective_margin_state returns $29.66 reference in DEMO mode."""
     gw = MagicMock(spec=LiteFinanceGateway)

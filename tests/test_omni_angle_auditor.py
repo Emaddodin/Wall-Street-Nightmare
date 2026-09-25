@@ -98,12 +98,36 @@ def test_angle_3_quant_risk_margin_001_clamp(auditor, mock_telemetry):
     assert res.details["projected_margin_level_pct"] >= 320.0
 
 
-def test_angle_3_quant_risk_detects_volume_clamp_breach(auditor, mock_telemetry):
-    # Open position with 0.05 lots on $29.66 balance -> must trigger critical error
+def test_angle_3_quant_risk_allows_002_titan_with_tight_sl(auditor, mock_telemetry):
+    # Option B: Grade A+ Titan 0.02 lots with tight 1.40 pt stop ($2.80 risk) is valid on micro balance
     mock_telemetry["position"] = {
-        "volume": 0.05,
+        "volume": 0.02,
         "entry_price": 4305.0,
-        "sl_price": 4302.20,
+        "sl_price": 4303.60,  # 1.40 pts (< 1.80 limit)
+    }
+    res = auditor.audit_angle_3_quant_risk_margin(mock_telemetry)
+    assert res.passed is True
+    assert res.score == 100.0
+
+
+def test_angle_3_quant_risk_rejects_002_with_wide_sl(auditor, mock_telemetry):
+    # Option B: 0.02 lots with wide stop (2.20 pts > 1.80 pt cap) must be flagged
+    mock_telemetry["position"] = {
+        "volume": 0.02,
+        "entry_price": 4305.0,
+        "sl_price": 4302.80,  # 2.20 pts
+    }
+    res = auditor.audit_angle_3_quant_risk_margin(mock_telemetry)
+    assert res.passed is False
+    assert any("exceeds A+ micro cap" in e for e in res.errors)
+
+
+def test_angle_3_quant_risk_detects_volume_clamp_breach(auditor, mock_telemetry):
+    # Open position with 0.03+ lots on $29.66 balance -> must trigger critical error
+    mock_telemetry["position"] = {
+        "volume": 0.03,
+        "entry_price": 4305.0,
+        "sl_price": 4303.60,
     }
     res = auditor.audit_angle_3_quant_risk_margin(mock_telemetry)
     assert res.passed is False
