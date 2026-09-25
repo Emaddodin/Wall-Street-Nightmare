@@ -180,3 +180,34 @@ def test_micro_account_30usd_protection():
     assert dec.urgency == "EMERGENCY"
     assert dec.metric_label == "HARD_STOP"
 
+
+def test_micro_account_002_watermark_scaling():
+    """
+    Verifies Option B: On a 0.02 lot position ($30 account):
+    - watermark_activate_usd scales to $4.00 (requiring +2.00 pts, NOT +1.00 pt)
+    - At +1.00 pt ($2.00 profit), a minor 22% pullback does NOT trigger premature watermark exit
+    - At +2.20 pts ($4.40 profit), watermark activates and trails properly
+    """
+    from scalper.strategies.micro_exit_controller import get_micro_account_config
+    cfg = get_micro_account_config(balance=30.0, direction="BUY", volume=0.02)
+    assert cfg.watermark_activate_usd == 4.00
+    assert cfg.hard_risk_stop_usd <= 5.00
+
+    controller = MicroExitController(cfg)
+    t0 = 7000.0
+    controller.arm_position(
+        entry_price=4300.00,
+        direction="BUY",
+        total_volume=0.02,
+        sl_price=4298.50,
+        open_time=t0,
+    )
+
+    # Move to +1.00 pt ($2.00 profit)
+    dec = controller.evaluate_tick(4301.00, floating_pnl=2.00, current_time=t0 + 5.0)
+    assert not dec.should_exit
+
+    # Pullback to +0.78 pt ($1.56 profit): MUST NOT trigger watermark exit!
+    dec_pullback = controller.evaluate_tick(4300.78, floating_pnl=1.56, current_time=t0 + 7.0)
+    assert not dec_pullback.should_exit
+

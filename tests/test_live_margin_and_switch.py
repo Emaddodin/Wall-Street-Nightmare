@@ -424,4 +424,41 @@ def test_broker_sl_clamping_for_micro_accounts():
     assert broker_sell_sl == 4307.80  # Exactly 2.80 pts away!
 
 
+def test_sync_dashboard_state_switching_mode_no_typeerror(tmp_path):
+    """Verify that sync_dashboard_state(account_mode='SWITCHING') does NOT raise TypeError."""
+    import run_xau_broker_live
+    orig_app = run_xau_broker_live.STATE_FILE_APP
+    test_app = tmp_path / "hft_switch.json"
+    run_xau_broker_live.STATE_FILE_APP = test_app
+    try:
+        # Must not raise TypeError
+        sync_dashboard_state(account_mode="SWITCHING")
+        import json
+        data = json.loads(test_app.read_text())
+        assert data["account_mode"] == "SWITCHING"
+    finally:
+        run_xau_broker_live.STATE_FILE_APP = orig_app
+
+
+def test_laya_nan_wick_ratio_safety():
+    """Verify that NaN wick_ratio does not raise exceptions or grant corrupt boosts."""
+    from scalper.brain.laya_oracle import get_laya_oracle
+    from scalper.brain.regime_prior_engine import get_regime_prior_engine
+
+    engine = get_regime_prior_engine()
+    res = engine.evaluate_regime_fit(strategy="BREAKOUT_RETEST", hour_utc=15, wick_ratio=float("nan"))
+    # NaN wick ratio must be sanitized to 0.0 and vetoed
+    assert res.is_allowed is False
+    assert res.regime_grade == "toxic_trap"
+
+    oracle = get_laya_oracle()
+    dec = oracle.evaluate_setup_sync({
+        "direction": "BUY",
+        "entry_price": 4300.0,
+        "sl_price": 4298.0,
+        "wick_ratio": float("nan"),
+    })
+    assert dec is not None
+
+
 

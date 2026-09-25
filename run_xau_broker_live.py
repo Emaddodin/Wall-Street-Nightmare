@@ -183,8 +183,8 @@ def calc_required_margin(price: float, lots: float, leverage: float = 500.0) -> 
 
 
 def sync_dashboard_state(
-    balance: float,
-    equity: float,
+    balance: float = 0.0,
+    equity: float = 0.0,
     active_pos: Optional[Dict[str, Any]] = None,
     message: str = "",
     mid_px: float = 0.0,
@@ -679,7 +679,28 @@ async def run_live_scalper():
                         logger.warning("Error processing dashboard command: %s", ce)
                     finally:
                         proc_cmd.unlink(missing_ok=True)
-    
+
+                # 0. Inviolable Weekend Flatten Sentinel (Evaluated even if quote stream stalls)
+                now_utc = datetime.now(timezone.utc)
+                is_friday_lockout = (now_utc.weekday() == 4 and (now_utc.hour > 20 or (now_utc.hour == 20 and now_utc.minute >= 30))) or now_utc.weekday() == 5
+                if is_friday_lockout:
+                    acc_snap_friday = await gw.get_account_snapshot(force_fresh=True)
+                    if scalper.active_positions or (acc_snap_friday and acc_snap_friday.assets_used > 0.0):
+                        logger.warning("🚨 INVIOLABLE FRIDAY 20:30 UTC FORCE-FLATTEN TRIGGERED (Pre-Tick Sentinel)! Assets Used: $%.2f | Active: %d",
+                                       acc_snap_friday.assets_used if acc_snap_friday else 0.0, len(scalper.active_positions))
+                        push_ntfy(
+                            title="🚨 Friday Weekend Force-Flatten",
+                            message="Auto-flattening all open trades ahead of weekend market close.",
+                            tags="lock,warning",
+                            priority="high",
+                        )
+                        res_f = await gw.flatten_all_positions()
+                        if res_f.get("success") and res_f.get("assets_used", 1.0) <= 0.0:
+                            scalper.active_positions.clear()
+                            scalper.active_stack = None
+                        await asyncio.sleep(2.0)
+                        continue
+
                 # 1. Fetch live quote via reactive event stream or RAM lookup
                 quote = await gw.wait_for_quote(timeout=0.10)
                 now_time = time.time()
@@ -693,9 +714,9 @@ async def run_live_scalper():
                     if quote and (now_time - quote.timestamp) > 2.0:
                         is_stale = True
                         quote = None
-    
+
                 if not quote or is_stale:
-                    if (now_time - last_quote_time) > 20.0 and not getattr(gw, "_reconnecting", False):
+                    if (now_time - last_quote_time) > 20.0 and not getattr(gw, "_reconnecting", False) and not getattr(gw, "_switching_mode", False):
                         logger.warning("⚠️ Market quote stream stalled (>20s). Triggering self-healing gateway reconnect...")
                         gw._spawn_bg_task(gw.reconnect())
                         last_quote_time = now_time
@@ -971,9 +992,15 @@ async def run_live_scalper():
                             await asyncio.sleep(0.5)
                             continue
     
-                        fresh_acc = await gw.get_account_snapshot(force_fresh=True)
-                        bal_after = fresh_acc.balance
-                        prev_bal = getattr(scalper, "last_known_balance", bal_after)
+                        prev_bal = getattr(scalper, "last_known_balance", acc.balance)
+                        # Poll up to 1.5s for LiteFinance DOM balance settlement
+                        bal_after = prev_bal
+                        for _ in range(6):
+                            await asyncio.sleep(0.25)
+                            fresh_acc = await gw.get_account_snapshot(force_fresh=True)
+                            bal_after = fresh_acc.balance
+                            if abs(bal_after - prev_bal) > 0.01:
+                                break
                         realized_fill_pnl = round(bal_after - prev_bal, 2)
                         tot_pnl = realized_fill_pnl if abs(realized_fill_pnl) > 0.001 else round(saved_positions[0].get("floating_pnl", 0.0), 2)
                         scalper.last_known_balance = bal_after
@@ -1289,7 +1316,7 @@ async def run_live_scalper():
                                     scalper.last_latency_ms = order_res.get("latency_ms", 0.0)
     
                                     # Create dedicated direction-aware MicroExitController for this position
-                                    pos_cfg = get_micro_account_config(balance=eff_bal, direction=sig.direction) if eff_bal < 100.0 else get_to_the_moon_config("XAUUSD", direction=sig.direction)
+                                    pos_cfg = get_micro_account_config(balance=eff_bal, direction=sig.direction, volume=actual_volume) if eff_bal < 100.0 else get_to_the_moon_config("XAUUSD", direction=sig.direction)
                                     pos_ctrl = MicroExitController(pos_cfg)
                                     pos_ctrl.arm_position(
                                         entry_price=sig.entry_price,

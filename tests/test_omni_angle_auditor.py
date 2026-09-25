@@ -98,6 +98,13 @@ def test_angle_3_quant_risk_margin_001_clamp(auditor, mock_telemetry):
     assert res.details["projected_margin_level_pct"] >= 320.0
 
 
+def test_angle_3_quant_risk_fails_on_daily_loss_breach(auditor, mock_telemetry):
+    mock_telemetry["realized_pnl"] = -5.25
+    res = auditor.audit_angle_3_quant_risk_margin(mock_telemetry)
+    assert res.passed is False
+    assert any("Daily loss limit" in e for e in res.errors)
+
+
 def test_angle_3_quant_risk_allows_002_titan_with_tight_sl(auditor, mock_telemetry):
     # Option B: Grade A+ Titan 0.02 lots with tight 1.40 pt stop ($2.80 risk) is valid on micro balance
     mock_telemetry["position"] = {

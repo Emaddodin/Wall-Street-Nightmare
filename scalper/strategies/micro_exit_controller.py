@@ -125,23 +125,26 @@ def get_to_the_moon_config(symbol: str = "XAUUSD", direction: str = "BUY") -> Mi
     )
 
 
-def get_micro_account_config(balance: float = 30.0, direction: str = "BUY") -> MicroExitConfig:
+def get_micro_account_config(balance: float = 30.0, direction: str = "BUY", volume: float = 0.01) -> MicroExitConfig:
     """
     Micro-Account Guardian Configuration ($30 - $100 Accounts):
     Asymmetric Posture:
     - BUY ("Hold Long"):
       * Fast BE at +1.20 pts
-      * TP1 Target: +3.50 pts (+$3.50 on 0.01 lots)
-      * Extended Macro Spike harvest: +6.50 pts (+$6.50)
+      * TP1 Target: +3.50 pts (+$3.50 on 0.01 lots, +$7.00 on 0.02 lots)
+      * Extended Macro Spike harvest: +6.50 pts (+$6.50 / +$13.00)
       * 20m lifespan (1200s), stall threshold 20
     - SELL ("Scalp Sell"):
       * Rapid BE at +0.80 pts
-      * Scalp Target: +1.80 pts (+$1.80 on 0.01 lots)
+      * Scalp Target: +1.80 pts (+$1.80 on 0.01 lots, +$3.60 on 0.02 lots)
       * Extended limit: +2.50 pts
       * 10m lifespan (600s), stall threshold 8
     """
-    safe_risk = max(1.80, min(0.08 * balance, 2.50))
-    watermark_floor = max(2.00, 0.06 * balance)
+    vol_multiplier = max(1.0, round(volume / 0.01, 2))
+    safe_risk = max(1.80, min(0.08 * balance, 2.50)) * vol_multiplier
+    watermark_floor_buy = max(2.00, 0.06 * balance) * vol_multiplier
+    # SELL scalp target is +1.80 pts; watermark must activate at +1.20 pts ($1.20 on 0.01L, $2.40 on 0.02L)
+    watermark_floor_sell = max(1.20, 0.04 * balance) * vol_multiplier
     is_buy = direction.upper() == "BUY"
 
     if is_buy:
@@ -153,13 +156,13 @@ def get_micro_account_config(balance: float = 30.0, direction: str = "BUY") -> M
             micro_harvest_min=2.50,
             micro_harvest_target=3.50,
             micro_harvest_extended=6.50,
-            watermark_activate_usd=watermark_floor,
+            watermark_activate_usd=watermark_floor_buy,
             watermark_pullback_pct=0.22,
             stall_tick_threshold=20,
             velocity_window_sec=5.0,
             min_velocity_pts_sec=0.10,
             time_decay_seconds=1200.0,
-            time_decay_profit_floor_usd=0.50,
+            time_decay_profit_floor_usd=0.50 * vol_multiplier,
             hard_risk_stop_usd=safe_risk,
         )
     else:
@@ -172,13 +175,13 @@ def get_micro_account_config(balance: float = 30.0, direction: str = "BUY") -> M
             micro_harvest_min=1.20,
             micro_harvest_target=1.80,
             micro_harvest_extended=2.50,
-            watermark_activate_usd=watermark_floor,
+            watermark_activate_usd=watermark_floor_sell,
             watermark_pullback_pct=0.20,
             stall_tick_threshold=8,
             velocity_window_sec=4.0,
             min_velocity_pts_sec=0.15,
             time_decay_seconds=600.0,
-            time_decay_profit_floor_usd=0.30,
+            time_decay_profit_floor_usd=0.30 * vol_multiplier,
             hard_risk_stop_usd=safe_risk,
         )
 

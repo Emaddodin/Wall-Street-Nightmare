@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -73,6 +74,13 @@ class RegimePriorEngine:
         trend_aligned: bool = True,
     ) -> RegimePriorEvaluation:
         strategy_upper = strategy.upper()
+
+        # NaN / Inf Guard for Wick Ratio
+        try:
+            w = float(wick_ratio)
+            wick_ratio = 0.0 if (math.isnan(w) or math.isinf(w)) else w
+        except (TypeError, ValueError):
+            wick_ratio = 0.0
 
         # -------------------------------------------------------------
         # 1. TOXIC VETOES (Discovered in 170-Day Regime Audit)

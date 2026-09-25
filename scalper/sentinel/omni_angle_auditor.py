@@ -28,6 +28,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -121,6 +122,7 @@ class OmniAngleAuditor:
 
     def __init__(self, cycle_interval_sec: int = 1800):
         self.interval = cycle_interval_sec
+        self.cycle_interval_sec = cycle_interval_sec
         self.cycle_count = 0
         self._stop_event = False
 
@@ -295,8 +297,8 @@ class OmniAngleAuditor:
         details["best_bid"] = bid
         details["best_ask"] = ask
 
-        if not (4000.0 <= mid <= 4600.0):
-            errors.append(f"Spot Gold price (${mid}) out of plausible boundary ($4,000 - $4,600)")
+        if not (1800.0 <= mid <= 5000.0):
+            errors.append(f"Spot Gold price (${mid}) out of plausible boundary ($1,800 - $5,000)")
         if bid <= 0.0 or ask <= 0.0:
             errors.append(f"Invalid Bid/Ask quotes received: bid={bid}, ask={ask}")
 
@@ -395,7 +397,9 @@ class OmniAngleAuditor:
         realized_loss = abs(data.get("realized_pnl", 0.0)) if (data and data.get("realized_pnl", 0.0) < 0) else 0.0
         details["daily_realized_loss"] = round(realized_loss, 2)
         if realized_loss >= 5.00:
-            warnings.append(f"Daily loss limit ($5.00) reached or exceeded: -${realized_loss:.2f}")
+            errors.append(f"Daily loss limit ($5.00) breached: -${realized_loss:.2f}")
+        elif realized_loss >= 3.50:
+            warnings.append(f"Daily loss approaching limit: -${realized_loss:.2f} / $5.00")
 
         deduction = len(errors) * 45.0 + len(warnings) * 15.0
         res.score = max(0.0, 100.0 - deduction)
@@ -429,8 +433,8 @@ class OmniAngleAuditor:
             res.errors = ["No AI data"]
             return res
 
-        laya = data.get("laya", {})
-        politician = laya.get("politician", {})
+        laya = data.get("laya") or {}
+        politician = laya.get("politician") or {}
 
         # 1. Laya RLCD Inference Latency (< 5.0ms)
         laya_lat = laya.get("latency_ms", 0.0)
@@ -553,8 +557,10 @@ class OmniAngleAuditor:
         details: Dict[str, Any] = {}
 
         try:
+            since_window = f"{int(self.cycle_interval_sec * 1.5)}s ago"
+            cmd = ["journalctl", "-u", LIVE_SERVICE_NAME, "-n", "150", "--since", since_window, "--no-pager"] if shutil.which("journalctl") else ["echo", "no journalctl"]
             p = subprocess.run(
-                ["journalctl", "-u", LIVE_SERVICE_NAME, "-n", "100", "--no-pager"],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=5.0,

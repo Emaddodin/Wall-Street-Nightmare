@@ -15,6 +15,7 @@ import asyncio
 import concurrent.futures
 import json
 import logging
+import math
 import os
 import threading
 import time
@@ -56,6 +57,16 @@ class LayaDecision:
     rag_twin_win_rate: float = 80.0
     rag_trap_risk: float = 0.15
     rag_dominant_exit: str = "MACRO_SPIKE_HARVEST"
+
+
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    if val is None:
+        return default
+    try:
+        f = float(val)
+        return default if (math.isnan(f) or math.isinf(f)) else f
+    except (TypeError, ValueError):
+        return default
 
 
 class LayaOracle:
@@ -120,11 +131,11 @@ class LayaOracle:
         Uses Laya if resident in memory, else calibrated institutional rule fallback.
         """
         t0 = time.perf_counter()
-        direction = str(market_state.get("direction", "BUY")).upper()
-        entry_px = float(market_state.get("entry_price", 0.0))
-        sl_px = float(market_state.get("sl_price", 0.0))
-        wick_ratio = float(market_state.get("wick_ratio", 0.50))
-        session = str(market_state.get("session", "London/NY")).strip()
+        direction = str(market_state.get("direction", "BUY") or "BUY").upper()
+        entry_px = _safe_float(market_state.get("entry_price"), 0.0)
+        sl_px = _safe_float(market_state.get("sl_price"), 0.0)
+        wick_ratio = _safe_float(market_state.get("wick_ratio"), 0.50)
+        session = str(market_state.get("session", "London/NY") or "London/NY").strip()
         trend_aligned = bool(market_state.get("trend_aligned", True))
 
         # 1. Consult Live Politician Calendar Sentinel & Macro Watchdog
@@ -472,9 +483,9 @@ class LayaOracle:
             "regime_notes": last_dec.regime_notes if last_dec else "473-Day Continuous Macro Priors Active",
             "reasoning": last_dec.reasoning if last_dec else "Laya System 1 Surveillance Active",
             "politician": self.politician.get_telemetry(),
-            "geopolitical_heat": f"{self.politician._geopolitical_heat_index:.1f}/100",
-            "political_regime": self.politician._current_regime.value,
-            "macro_bias": self.politician._current_bias.value,
+            "geopolitical_heat": f"{self.politician.get_current_macro_state()[2]:.1f}/100",
+            "political_regime": self.politician.get_current_macro_state()[0].value,
+            "macro_bias": self.politician.get_current_macro_state()[1].value,
             "tp_expansion": f"{last_dec.tp_expansion_multiplier:.2f}x" if last_dec else "1.00x",
             "rag_twins": {
                 "twin_win_rate": f"{last_dec.rag_twin_win_rate:.1f}%" if last_dec else "80.0%",

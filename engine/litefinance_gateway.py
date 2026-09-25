@@ -165,6 +165,9 @@ class LiteFinanceGateway:
             self._context = await self._browser.new_context(**context_kwargs)
             self._page = await self._context.new_page()
 
+            # Auto-accept native browser dialogs (confirm/alert/prompt) to prevent Playwright lockup
+            self._page.on("dialog", lambda dialog: asyncio.create_task(dialog.accept()))
+
             # Expose Python callback into Chrome V8 window for zero-polling quote stream
             await self._page.expose_function("__onJsQuoteUpdate", self._on_js_quote_tick)
 
@@ -192,19 +195,22 @@ class LiteFinanceGateway:
             return False
 
     async def _clear_overlays(self) -> None:
-        """Removes modal dialogs or blocking overlays."""
+        """Removes modal dialogs, banners, or blocking overlays."""
         if not self._page:
             return
         try:
             await self._page.evaluate("""() => {
-                const overlay = document.querySelector('.website_overlay');
-                if (overlay) overlay.remove();
-                const popups = document.querySelectorAll('.popup, .modal, [class*="popup"], [class*="modal"]');
+                const popups = document.querySelectorAll('.popup, .modal, .toast, .notification, .alert, [class*="popup"], [class*="modal"]');
                 popups.forEach(p => {
-                    if (p.innerText && (p.innerText.includes('two-factor') || p.innerText.includes('2FA') || p.innerText.includes('Google Authenticator'))) {
+                    const closeBtn = p.querySelector('.close, [class*="close"], button, a');
+                    if (closeBtn && closeBtn.getBoundingClientRect().width > 0) {
+                        try { closeBtn.click(); } catch(e) { p.remove(); }
+                    } else {
                         p.remove();
                     }
                 });
+                const overlays = document.querySelectorAll('.website_overlay, .overlay, .modal-backdrop');
+                overlays.forEach(o => o.remove());
             }""")
         except Exception:
             pass

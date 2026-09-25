@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import threading
 import time
@@ -792,14 +793,24 @@ class PoliticianBrain:
 
     def register_scheduled_event(self, name: str, scheduled_time: datetime, impact: str = "HIGH", currency: str = "USD") -> None:
         epoch = scheduled_time.replace(tzinfo=timezone.utc).timestamp()
+        now = time.time()
         with self._lock:
-            self._cached_calendar_events.append({
-                "title": name,
-                "impact": impact.upper(),
-                "country": currency.upper(),
-                "date": scheduled_time.isoformat(),
-                "epoch": epoch,
-            })
+            # Evict past events older than 24 hours
+            self._cached_calendar_events = [e for e in self._cached_calendar_events if e.get("epoch", 0) >= now - 86400]
+            # Deduplicate by title and timestamp within 60s
+            if not any(e.get("title") == name and abs(e.get("epoch", 0) - epoch) < 60 for e in self._cached_calendar_events):
+                self._cached_calendar_events.append({
+                    "title": name,
+                    "impact": impact.upper(),
+                    "country": currency.upper(),
+                    "date": scheduled_time.isoformat(),
+                    "epoch": epoch,
+                })
+
+    def get_current_macro_state(self) -> Tuple[PoliticalRegime, MacroBias, float, str]:
+        """Thread-safe snapshot of active macroeconomic regime state."""
+        with self._lock:
+            return self._current_regime, self._current_bias, self._geopolitical_heat_index, self._active_headline
 
     def get_upcoming_event(self, window_minutes: int = 30) -> Optional[Tuple[Dict[str, Any], float]]:
         now = time.time()
