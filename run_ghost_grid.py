@@ -88,29 +88,20 @@ async def main():
         logger.error("Failed to initialize gateway.")
         return
         
-    mode = await gateway.get_account_mode()
-    if mode != "DEMO":
-        logger.warning(f"Account is in {mode} mode. Requesting switch to DEMO mode...")
-        sw_res = await gateway.switch_account_mode("DEMO")
-        if not sw_res.get("success"):
-            logger.critical(f"FATAL: Failed to switch to DEMO mode: {sw_res.get('error')}. Aborting for safety.")
-            return
-        mode = await gateway.get_account_mode()
-        if mode != "DEMO":
-            logger.critical(f"FATAL: Account is still in {mode} mode after switch attempt! Aborting.")
-            return
-        
-    logger.info("Gateway verified strictly in DEMO mode.")
+    cur_mode = await gateway.get_account_mode()
+    logger.info(f"Gateway initialized. Current account mode: {cur_mode}")
     
     account = await gateway.get_account_snapshot()
-    logger.info(f"Initial Account Snapshot: Balance={account.balance}, Equity={account.equity}")
+    logger.info(f"Initial Account Snapshot: Mode={cur_mode}, Balance={account.balance}, Equity={account.equity}")
     
     engine = GhostEngine(gateway)
     engine_ref = engine
+    if cur_mode in ("DEMO", "REAL"):
+        engine.target_mode = cur_mode
     
     notify(
-        title="👻 Ghost Grid Armed (DEMO)",
-        message=f"LiteFinance DEMO · Balance: ${account.balance:.2f} · Grid Scalper Active",
+        title=f"👻 Ghost Grid Armed ({engine.target_mode})",
+        message=f"LiteFinance {engine.target_mode} · Balance: ${account.balance:.2f} · Grid Scalper Active",
         priority="high"
     )
     
