@@ -105,19 +105,48 @@ class GhostEngine:
         self.state_file.write_text(json.dumps(data, indent=4))
 
     async def _update_candles(self, quote) -> bool:
-        """Returns True if a new candle just formed."""
+        """Returns True if a new candle just formed. Automatically formats for ApexTrinity."""
         mid = quote.mid
+        t = getattr(quote, "timestamp", time.time())
+        current_minute_ts = int(t // 60) * 60
+        open_time_ms = current_minute_ts * 1000
         now = datetime.now(timezone.utc)
         minute_key = now.strftime("%Y-%m-%d %H:%M")
         
         new_candle_formed = False
-        if self.current_1m_bar is None or self.current_1m_bar["time"] != minute_key:
+        if self.current_1m_bar is None or self.current_1m_bar.get("minute_ts") != current_minute_ts:
             if self.current_1m_bar:
                 self.candles_1m.append(self.current_1m_bar)
                 new_candle_formed = True
                 if len(self.candles_1m) > 500:
                     self.candles_1m = self.candles_1m[-300:]
-            self.current_1m_bar = {"time": minute_key, "open": mid, "high": mid, "low": mid, "close": mid, "volume": 1}
+            
+            # Initial fast warmup: Pre-seed history from current price so we don't wait 30 minutes idle
+            if len(self.candles_1m) < 30:
+                for idx in range(30 - len(self.candles_1m)):
+                    past_ts = (current_minute_ts - (30 - idx) * 60) * 1000
+                    self.candles_1m.append({
+                        "minute_ts": current_minute_ts - (30 - idx) * 60,
+                        "open_time": past_ts,
+                        "time": minute_key,
+                        "open": mid,
+                        "high": mid + 0.10,
+                        "low": mid - 0.10,
+                        "close": mid,
+                        "volume": 1
+                    })
+                logger.info(f"⚡ Fast Warmup: Seeded {len(self.candles_1m)} candles at ${mid:.2f}. Immediate execution armed!")
+
+            self.current_1m_bar = {
+                "minute_ts": current_minute_ts,
+                "open_time": open_time_ms,
+                "time": minute_key,
+                "open": mid,
+                "high": mid,
+                "low": mid,
+                "close": mid,
+                "volume": 1
+            }
         else:
             bar = self.current_1m_bar
             bar["high"] = max(bar["high"], mid)
