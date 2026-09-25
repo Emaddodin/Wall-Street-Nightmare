@@ -288,7 +288,27 @@ class MicroExitController:
         self.last_price = current_price
 
         # -------------------------------------------------------------
-        # EXIT RULE 0: HARD DISASTER RISK STOP (-$15 or Initial SL Hit)
+        # EXIT RULE 0: PEAK WATERMARK TRAILING (Bag Protection - Top Priority)
+        # Never let a substantial floating profit collapse into breakeven or loss!
+        # -------------------------------------------------------------
+        if self.peak_pnl >= self.cfg.watermark_activate_usd:
+            pullback_amount = self.peak_pnl - floating_pnl
+            pullback_pct = pullback_amount / self.peak_pnl if self.peak_pnl > 0 else 0.0
+            if pullback_pct >= self.cfg.watermark_pullback_pct:
+                pnl_str = f"+${floating_pnl:.2f}" if floating_pnl >= 0 else f"-${abs(floating_pnl):.2f}"
+                return ExitDecision(
+                    should_exit=True,
+                    reason=f"💰 Peak Watermark Harvest: Locked {pnl_str} (Peak was +${self.peak_pnl:.2f}, -{pullback_pct*100:.1f}%)",
+                    urgency="HIGH",
+                    metric_label="PEAK_WATERMARK",
+                    current_gain=gain_units,
+                    floating_pnl=floating_pnl,
+                    peak_pnl=self.peak_pnl,
+                    time_in_trade_sec=time_in_trade,
+                )
+
+        # -------------------------------------------------------------
+        # EXIT RULE 1: HARD DISASTER RISK STOP (-$15 or Initial SL Hit)
         # -------------------------------------------------------------
         sl_violated = False
         if self.sl_price > 0.0:
@@ -327,7 +347,7 @@ class MicroExitController:
             )
 
         # -------------------------------------------------------------
-        # EXIT RULE 1: FAST BREAKEVEN LOCK (At +0.35 pts / +2.0 pips)
+        # EXIT RULE 2: FAST BREAKEVEN LOCK (At +0.35 pts / +2.0 pips)
         # -------------------------------------------------------------
         if not self.be_locked and gain_units >= self.cfg.fast_be_trigger:
             self.be_locked = True
@@ -338,7 +358,7 @@ class MicroExitController:
                 self.sl_price = min(self.sl_price, self.entry_price - spread_buffer) if self.sl_price > 0.0 else (self.entry_price - spread_buffer)
 
         # -------------------------------------------------------------
-        # EXIT RULE 2: TARGET IMPULSE REACHED (Sweet-Spot Spike Harvest)
+        # EXIT RULE 3: TARGET IMPULSE REACHED (Sweet-Spot Spike Harvest)
         # Forensically matches scalp.mp4: +0.90 to +1.20 pts burst
         # -------------------------------------------------------------
         if gain_units >= self.cfg.micro_harvest_target:
@@ -362,25 +382,6 @@ class MicroExitController:
                     reason=f"🎯 Primary Sweet-Spot Harvest on Stall (+{gain_units:.2f} {self.cfg.point_scale_label}, PnL: +${floating_pnl:.2f})",
                     urgency="HIGH",
                     metric_label="SWEET_SPOT_STALL",
-                    current_gain=gain_units,
-                    floating_pnl=floating_pnl,
-                    peak_pnl=self.peak_pnl,
-                    time_in_trade_sec=time_in_trade,
-                )
-
-        # -------------------------------------------------------------
-        # EXIT RULE 3: PEAK WATERMARK TRAILING (Bag Protection)
-        # If profit reached >= $25 and drops by > 18% of peak -> Harvest!
-        # -------------------------------------------------------------
-        if self.peak_pnl >= self.cfg.watermark_activate_usd:
-            pullback_amount = self.peak_pnl - floating_pnl
-            pullback_pct = pullback_amount / self.peak_pnl if self.peak_pnl > 0 else 0.0
-            if pullback_pct >= self.cfg.watermark_pullback_pct:
-                return ExitDecision(
-                    should_exit=True,
-                    reason=f"💰 Peak Watermark Harvest: Locked +${floating_pnl:.2f} (Peak was +${self.peak_pnl:.2f}, -{pullback_pct*100:.1f}%)",
-                    urgency="HIGH",
-                    metric_label="PEAK_WATERMARK",
                     current_gain=gain_units,
                     floating_pnl=floating_pnl,
                     peak_pnl=self.peak_pnl,

@@ -80,11 +80,14 @@ class VolumeProfileEngine:
         lows = lows[:min_len]
         volumes = volumes[:min_len]
 
+        if np.isnan(highs).any() or np.isnan(lows).any() or np.isnan(volumes).any():
+            return VolumeProfileResult(0.0, 0.0, 0.0, 0.0, n_bins, 0.0, is_valid=False)
+
         lo = float(np.min(lows))
         hi = float(np.max(highs))
         span = hi - lo
 
-        if span <= 0.0 or hi <= lo:
+        if math.isnan(span) or span <= 0.0 or hi <= lo:
             return VolumeProfileResult(0.0, 0.0, 0.0, 0.0, n_bins, 0.0, is_valid=False)
 
         if span <= 0.20:  # Minimum 20 cents span on Gold

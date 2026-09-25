@@ -319,9 +319,9 @@ class ApexTrinityStrategy:
         vp: Optional[VolumeProfileResult] = None,
     ) -> Optional[ApexSignal]:
         """
-        ICT Silver Bullet: 3-candle displacement creating an FVG during 14:00-15:00 UTC.
-        Enters on tap of 50% Consequent Encroachment (CE).
+        ICT Silver Bullet: Permanently disabled per institutional risk mandate (sub-50% WR drag).
         """
+        return None
         if len(df_1m) < 5:
             return None
 
@@ -557,6 +557,7 @@ class ApexTrinityStrategy:
 
         # Must be within 20 minutes of 5m breakout (including breakout minute)
         if not (0 <= (curr_t_ms - b_time_ms) <= 20 * 60_000):
+            self.active_5m_breakout = None
             return None
 
         last_1m = df_1m.iloc[-1]

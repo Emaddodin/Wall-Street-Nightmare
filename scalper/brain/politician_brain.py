@@ -463,9 +463,22 @@ class PoliticianBrain:
         """
         Backward-compatible 473-day empirical prior checker + Volume Profile Prior Evaluator.
         """
-        strategy_upper = strategy.upper()
+        strategy_upper = str(strategy or "").upper()
+        h = int(hour_utc) if hour_utc is not None else 12
 
-        if hour_utc in self.TOXIC_HOURS:
+        # 0. NaN Guard for Wick Ratio
+        try:
+            w = float(wick_ratio)
+            if math.isnan(w) or math.isinf(w):
+                w = 0.0
+        except (TypeError, ValueError):
+            w = 0.0
+
+        # -------------------------------------------------------------
+        # 1. TOXIC VETOES (Must strictly precede all strategy approvals)
+        # -------------------------------------------------------------
+        # Veto 1: Daily Rollover Spread Trap (Hour 23 UTC)
+        if h in self.TOXIC_HOURS:
             return RegimePriorEvaluation(
                 is_allowed=False,
                 regime_grade="toxic_trap",
@@ -476,6 +489,45 @@ class PoliticianBrain:
                 regime_notes="VETO: Hour 23 UTC Rollover Spread Trap (Avoided -$2.07M regime loss)",
             )
 
+        # Veto 2: Silver Bullet (48.8% empirical WR drag permanently eliminated)
+        if "SILVER" in strategy_upper or "BULLET" in strategy_upper:
+            return RegimePriorEvaluation(
+                is_allowed=False,
+                regime_grade="toxic_trap",
+                trap_probability=0.75,
+                confluence_boost=0.0,
+                compounding_multiplier=0.0,
+                empirical_win_rate_pct=48.8,
+                regime_notes="VETO: Silver Bullet FVG eliminated per quant audit (48.8% WR drag)",
+            )
+
+        # Veto 3: Blind Asian Turtle Soup in trending 2026 regime
+        if "TURTLE" in strategy_upper:
+            return RegimePriorEvaluation(
+                is_allowed=False,
+                regime_grade="toxic_trap",
+                trap_probability=0.85,
+                confluence_boost=2.0,
+                compounding_multiplier=0.0,
+                empirical_win_rate_pct=25.0,
+                regime_notes="VETO: Blind Asian Turtle Soup fails in trending 2026 geopolitical regime (25% WR)",
+            )
+
+        # Veto 4: Low Wick Ratio (<0.45 or NaN)
+        if w < 0.45:
+            return RegimePriorEvaluation(
+                is_allowed=False,
+                regime_grade="toxic_trap",
+                trap_probability=0.80,
+                confluence_boost=3.0,
+                compounding_multiplier=0.0,
+                empirical_win_rate_pct=40.0,
+                regime_notes="VETO: Insufficient rejection wick (<0.45) vulnerable to false breakout",
+            )
+
+        # -------------------------------------------------------------
+        # 2. SETUP APPROVALS (Only reached after all vetoes pass)
+        # -------------------------------------------------------------
         # Volume Profile Setups
         if "POC" in strategy_upper:
             return RegimePriorEvaluation(
@@ -510,32 +562,10 @@ class PoliticianBrain:
                 regime_notes="TACTICAL SCALP: Asian High + VAH Liquidity Sweep (Strict +1.8 ATR target)",
             )
 
-        if "TURTLE" in strategy_upper:
-            return RegimePriorEvaluation(
-                is_allowed=False,
-                regime_grade="toxic_trap",
-                trap_probability=0.85,
-                confluence_boost=2.0,
-                compounding_multiplier=0.0,
-                empirical_win_rate_pct=25.0,
-                regime_notes="VETO: Blind Asian Turtle Soup fails in trending 2026 geopolitical regime (25% WR)",
-            )
-
-        if wick_ratio < 0.45:
-            return RegimePriorEvaluation(
-                is_allowed=False,
-                regime_grade="toxic_trap",
-                trap_probability=0.80,
-                confluence_boost=3.0,
-                compounding_multiplier=0.0,
-                empirical_win_rate_pct=40.0,
-                regime_notes="VETO: Insufficient rejection wick (<0.45) vulnerable to false breakout",
-            )
-
         is_breakout = "BREAKOUT" in strategy_upper or "RETEST" in strategy_upper
-        is_prime_hour = hour_utc in self.PRIME_HOURS
+        is_prime_hour = h in self.PRIME_HOURS
 
-        if is_breakout and is_prime_hour and trend_aligned and wick_ratio >= 0.55:
+        if is_breakout and is_prime_hour and trend_aligned and w >= 0.55:
             return RegimePriorEvaluation(
                 is_allowed=True,
                 regime_grade="A_plus_prime",
@@ -546,7 +576,7 @@ class PoliticianBrain:
                 regime_notes="A+ PRIME: 5m Breakout + Retest in Prime Killzone (89.4% empirical WR)",
             )
 
-        if is_breakout and trend_aligned and wick_ratio >= 0.45:
+        if is_breakout and trend_aligned and w >= 0.45:
             return RegimePriorEvaluation(
                 is_allowed=True,
                 regime_grade="high_probability",
@@ -555,17 +585,6 @@ class PoliticianBrain:
                 compounding_multiplier=1.25,
                 empirical_win_rate_pct=83.7,
                 regime_notes="HIGH PROBABILITY: Standard Breakout + Retest (83.7% empirical WR)",
-            )
-
-        if "SILVER" in strategy_upper or "BULLET" in strategy_upper:
-            return RegimePriorEvaluation(
-                is_allowed=False,
-                regime_grade="toxic_trap",
-                trap_probability=0.75,
-                confluence_boost=0.0,
-                compounding_multiplier=0.0,
-                empirical_win_rate_pct=48.8,
-                regime_notes="VETO 4: Silver Bullet FVG banned (48.8% WR drags down portfolio expectancy)",
             )
 
         return RegimePriorEvaluation(

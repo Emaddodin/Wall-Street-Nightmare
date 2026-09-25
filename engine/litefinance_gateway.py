@@ -570,7 +570,7 @@ class LiteFinanceGateway:
                 # Ensure we remain on chart trading URL
                 if "trading/chart" not in self._page.url:
                     logger.info("Redirecting back to trading chart after mode switch (current: %s)...", self._page.url)
-                    await self._page.goto(self.CHART_URL, wait_until="domcontentloaded", timeout=15000)
+                    await self._page.goto(CHART_URL, wait_until="domcontentloaded", timeout=15000)
                     await self._page.wait_for_timeout(3000)
                     await self._clear_overlays()
 
@@ -633,12 +633,20 @@ class LiteFinanceGateway:
                 ask = float(quote_data["ask"])
                 mid = float(quote_data.get("mid") or round((bid + ask) / 2.0, 2))
                 now = time.time()
+                # If quote comes from fastQuote, use its timestamp. Otherwise, if DOM quote hasn't changed, retain original timestamp.
+                if "ts" in quote_data and quote_data["ts"]:
+                    quote_ts = float(quote_data["ts"]) / 1000.0
+                elif self._last_quote and self._last_quote.bid == bid and self._last_quote.ask == ask:
+                    quote_ts = self._last_quote.timestamp
+                else:
+                    quote_ts = now
+
                 self._last_quote = QuoteSnapshot(
                     symbol=self.symbol,
                     bid=bid,
                     ask=ask,
                     mid=mid,
-                    timestamp=now,
+                    timestamp=quote_ts,
                 )
                 self._consecutive_errors = 0
                 return self._last_quote
@@ -839,23 +847,20 @@ class LiteFinanceGateway:
                     const btnSelector = isBuy ? 'button.btn_green.js_trade_action_open' : 'button.btn_red.js_trade_action_open';
                     let target = document.querySelector(btnSelector);
                     if (!target || target.getBoundingClientRect().width === 0 || target.getBoundingClientRect().height === 0) {
-                        const btns = Array.from(document.querySelectorAll('button.js_trade_action_open, button[type="submit"].btn_large, button[class*="js_trade_action"]'));
+                        const btns = Array.from(document.querySelectorAll('button.js_trade_action_open, button[type="submit"].btn_large')).filter(b => !b.classList.contains('js_trade_action_close') && !b.disabled);
                         target = btns.find(b => {
                             const rect = b.getBoundingClientRect();
                             if (rect.width <= 0 || rect.height <= 0) return false;
                             const txt = (b.innerText || '').toUpperCase();
                             return isBuy ? (txt.includes('BUY') || b.classList.contains('btn_green')) : (txt.includes('SELL') || b.classList.contains('btn_red'));
                         });
-                        if (!target) {
-                            target = btns.find(b => b.getBoundingClientRect().width > 0 && b.getBoundingClientRect().height > 0);
-                        }
                     }
                     if (target) {
                         target.scrollIntoViewIfNeeded ? target.scrollIntoViewIfNeeded() : target.scrollIntoView();
                         target.click();
                         return { success: true, text: target.innerText.trim(), className: target.className };
                     }
-                    return { success: false, error: 'NO_VISIBLE_ORDER_BUTTON' };
+                    return { success: false, error: 'NO_VALID_DIRECTION_ORDER_BUTTON' };
                 }""", is_buy)
                 if isinstance(res, dict) and res.get("success"):
                     clicked_btn = res.get("text") or direction
@@ -914,7 +919,7 @@ class LiteFinanceGateway:
                         return rows.length;
                     }""")
                     if initial_assets <= 0.0:
-                        if acc.assets_used > 0.0 or current_trades > 0:
+                        if acc.assets_used > 0.0 or current_trades > initial_trades:
                             confirmed = True
                             break
                     else:
@@ -1151,49 +1156,48 @@ class LiteFinanceGateway:
         """Self-healing reconnect: cleanly shuts down dead browser context and re-spawns a fresh session under lock."""
         if self._reconnecting:
             return False
-        async with self._lock:
-            if self._reconnecting:
-                return False
-            self._reconnecting = True
+        self._reconnecting = True
+        try:
             self._reconnect_attempts += 1
             backoff = min(30.0, 2.0 * (1.5 ** min(self._reconnect_attempts, 4)))
             logger.warning("🔄 Self-healing LiteFinanceGateway: Initiating automatic reconnection (attempt #%d, backoff %.1fs)...",
                            self._reconnect_attempts, backoff)
-            if self._context:
-                try:
-                    await asyncio.wait_for(self._context.close(), timeout=4.0)
-                except Exception:
-                    pass
-            if self._browser:
-                try:
-                    await asyncio.wait_for(self._browser.close(), timeout=4.0)
-                except Exception:
-                    pass
-            if self._playwright:
-                try:
-                    await asyncio.wait_for(self._playwright.stop(), timeout=4.0)
-                except Exception:
-                    pass
-            self._browser = None
-            self._context = None
-            self._page = None
-            self._playwright = None
-            self._connected = False
             await asyncio.sleep(backoff)
-            try:
-                success = await self._initialize_locked()
-                if success:
-                    logger.info("✅ LiteFinanceGateway auto-recovery SUCCESSFUL! Terminal re-attached.")
-                    self._consecutive_errors = 0
-                    self._reconnect_attempts = 0
-                else:
-                    logger.error("❌ LiteFinanceGateway auto-recovery failed to initialize.")
-                return success
-            except Exception as ex:
-                logger.error("❌ LiteFinanceGateway auto-recovery encountered error: %s", ex)
-                return False
-            finally:
-                self._reconnecting = False
+            async with self._lock:
+                if self._context:
+                    try:
+                        await asyncio.wait_for(self._context.close(), timeout=4.0)
+                    except Exception:
+                        pass
+                if self._browser:
+                    try:
+                        await asyncio.wait_for(self._browser.close(), timeout=4.0)
+                    except Exception:
+                        pass
+                if self._playwright:
+                    try:
+                        await asyncio.wait_for(self._playwright.stop(), timeout=4.0)
+                    except Exception:
+                        pass
+                self._browser = None
+                self._context = None
+                self._page = None
+                self._playwright = None
+                self._connected = False
+                try:
+                    success = await self._initialize_locked()
+                    if success:
+                        logger.info("✅ LiteFinanceGateway auto-recovery SUCCESSFUL! Terminal re-attached.")
+                        self._consecutive_errors = 0
+                        self._reconnect_attempts = 0
+                    else:
+                        logger.error("❌ LiteFinanceGateway auto-recovery failed to initialize.")
+                    return success
+                except Exception as ex:
+                    logger.error("❌ LiteFinanceGateway auto-recovery encountered error: %s", ex)
+                    return False
+        finally:
+            self._reconnecting = False
 
     async def close(self) -> None:
         """Closes browser and cleans up resources cleanly."""

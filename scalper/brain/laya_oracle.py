@@ -135,9 +135,14 @@ class LayaOracle:
         else:
             macro_allowed, macro_reason = self.watchdog.is_entry_allowed()
 
+        def _record_and_return(d: LayaDecision) -> LayaDecision:
+            with self._decision_lock:
+                self._last_decision = d
+            return d
+
         if not macro_allowed:
             latency = (time.perf_counter() - t0) * 1000.0
-            return LayaDecision(
+            return _record_and_return(LayaDecision(
                 is_valid=False,
                 setup_grade="toxic_trap",
                 trap_probability=0.95,
@@ -153,7 +158,7 @@ class LayaOracle:
                 macro_bias=self.politician._current_bias.value,
                 geopolitical_heat=self.politician._geopolitical_heat_index,
                 tp_expansion_multiplier=1.0,
-            )
+            ))
 
         # 2. Consult 473-Day Empirical Macro Regime Priors
         strategy_name = str(market_state.get("setup_type", market_state.get("strategy", "BREAKOUT_RETEST")))
@@ -166,7 +171,7 @@ class LayaOracle:
         )
         if not regime_eval.is_allowed:
             latency = (time.perf_counter() - t0) * 1000.0
-            return LayaDecision(
+            return _record_and_return(LayaDecision(
                 is_valid=False,
                 setup_grade="toxic_trap",
                 trap_probability=regime_eval.trap_probability,
@@ -182,13 +187,13 @@ class LayaOracle:
                 macro_bias=self.politician._current_bias.value,
                 geopolitical_heat=self.politician._geopolitical_heat_index,
                 tp_expansion_multiplier=1.0,
-            )
+            ))
 
         # 3. Consult Politician & Fundamental Brain (Geopolitical & Tariff Realities)
         pol_eval = self.politician.evaluate_entry_macro_fit(direction=direction, strategy_type=strategy_name)
         if not pol_eval.is_permitted:
             latency = (time.perf_counter() - t0) * 1000.0
-            return LayaDecision(
+            return _record_and_return(LayaDecision(
                 is_valid=False,
                 setup_grade="toxic_trap",
                 trap_probability=0.95,
@@ -204,7 +209,7 @@ class LayaOracle:
                 macro_bias=pol_eval.macro_bias.value,
                 geopolitical_heat=pol_eval.geopolitical_heat_index,
                 tp_expansion_multiplier=1.0,
-            )
+            ))
 
         # 3.5 Consult 473-Day Granular Trade Journal RAG (Historical Twins Empirical Memory)
         rag_eval = self.trade_rag.query_historical_twins({
@@ -218,7 +223,7 @@ class LayaOracle:
 
         if not rag_eval.is_allowed:
             latency = (time.perf_counter() - t0) * 1000.0
-            return LayaDecision(
+            return _record_and_return(LayaDecision(
                 is_valid=False,
                 setup_grade="toxic_trap",
                 trap_probability=rag_eval.trap_risk_pct,
@@ -238,12 +243,22 @@ class LayaOracle:
                 rag_twin_win_rate=rag_eval.win_rate_pct,
                 rag_trap_risk=rag_eval.trap_risk_pct,
                 rag_dominant_exit=rag_eval.dominant_exit_reason,
-            )
+            ))
 
-        # 4. Retrieve Matching ICT Knowledge Concepts
-        rag_context = self.rag.retrieve_context(market_state, top_k=3)
-        matched_titles = rag_context.get("top_concept_titles", ["S&R Breakout", "Candle Rejection"])
-        rules_text = rag_context.get("rules_summary", rag_context.get("summary", ""))
+        # 4. Retrieve Matching ICT Knowledge Concepts (Fast O(1) in Math Mode, Full RAG in Neural Mode)
+        if self.is_ready:
+            rag_context = self.rag.retrieve_context(market_state, top_k=3)
+            matched_titles = rag_context.get("top_concept_titles", ["S&R Breakout", "Candle Rejection"])
+            rules_text = rag_context.get("rules_summary", rag_context.get("summary", ""))
+        else:
+            strat_upper = strategy_name.upper()
+            if "POC" in strat_upper or "VAH" in strat_upper:
+                matched_titles = ["Volume Profile POC", "Value Area Expansion", "Order Flow Absorption"]
+            elif "TURTLE" in strat_upper or "SWEEP" in strat_upper:
+                matched_titles = ["Liquidity Raid", "Turtle Soup Reversal", "Judas Swing"]
+            else:
+                matched_titles = ["S&R Breakout", "Candle Rejection", "Fair Value Retest"]
+            rules_text = ""
 
         # 5. If Laya Model is loaded, evaluate via Non-Autoregressive Forward Pass
         if self.is_ready:

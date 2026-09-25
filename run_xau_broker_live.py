@@ -456,8 +456,8 @@ class LiveBrokerScalper:
         if self.current_1m_bar is None or self.current_1m_bar["minute_ts"] != current_minute_ts:
             if self.current_1m_bar is not None:
                 self.candles_1m.append(self.current_1m_bar)
-                if len(self.candles_1m) > 200:
-                    self.candles_1m = self.candles_1m[-200:]
+                if len(self.candles_1m) > 720:
+                    self.candles_1m = self.candles_1m[-720:]
             self.current_1m_bar = {
                 "minute_ts": current_minute_ts,
                 "open_time": current_minute_ts * 1000,
@@ -619,8 +619,9 @@ async def run_live_scalper():
                     # 2.1 Ghost Position Watchdog (if broker closed order or hit SL/TP externally)
                     if acc.assets_used <= 0.0:
                         scalper.ghost_position_ticks += 1
-                        if scalper.ghost_position_ticks >= 8:
-                            logger.warning("👻 GHOST POSITION DETECTED: Broker reports 0 assets used for 8 ticks. Reconciling closed trade...")
+                        oldest_pos_age = time.time() - min(p["open_time"] for p in scalper.active_positions)
+                        if scalper.ghost_position_ticks >= 20 and oldest_pos_age >= 3.0:
+                            logger.warning("👻 GHOST POSITION DETECTED: Broker reports 0 assets used for 20 ticks (age %.1fs). Reconciling closed trade...", oldest_pos_age)
                             ghost_positions = list(scalper.active_positions)
                             fresh_acc = await gw.get_account_snapshot(force_fresh=True)
                             pnl_diff = round(fresh_acc.balance - getattr(scalper, "last_known_balance", fresh_acc.balance), 2)
