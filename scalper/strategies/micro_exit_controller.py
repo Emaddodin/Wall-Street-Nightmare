@@ -204,6 +204,7 @@ class MicroExitController:
         self.ticks_history: List[Tuple[float, float]] = []  # (timestamp, price)
         self.consecutive_stalls: int = 0
         self.last_price: float = 0.0
+        self.dynamic_hard_stop: float = self.cfg.hard_risk_stop_usd
 
     def arm_position(
         self,
@@ -232,7 +233,12 @@ class MicroExitController:
             structural_dist = abs(self.entry_price - self.sl_price)
             multiplier = 100.0 if self.cfg.symbol == "XAUUSD" else 100000.0
             computed_risk = structural_dist * multiplier * self.total_volume
-            self.dynamic_hard_stop = max(self.cfg.hard_risk_stop_usd, round(computed_risk * 1.15, 2))
+            if self.cfg.hard_risk_stop_usd <= 2.50:  # Micro-account mode clamp (scaled by micro lot ratio)
+                vol_ratio = max(1.0, round(self.total_volume / 0.01, 2))
+                effective_risk_floor = self.cfg.hard_risk_stop_usd * vol_ratio
+                self.dynamic_hard_stop = min(effective_risk_floor * 1.25, max(effective_risk_floor, round(computed_risk * 1.15, 2)))
+            else:
+                self.dynamic_hard_stop = max(self.cfg.hard_risk_stop_usd, round(computed_risk * 1.15, 2))
         else:
             self.dynamic_hard_stop = self.cfg.hard_risk_stop_usd
 
@@ -261,15 +267,13 @@ class MicroExitController:
                 self.peak_price = current_price
         else:
             raw_gain = self.entry_price - current_price
-            favorable_peak = current_price < self.peak_price or self.peak_price == self.entry_price
+            favorable_peak = current_price < self.peak_price
             if favorable_peak:
                 self.peak_price = current_price
 
-        # Gain in points or pips
-        if self.cfg.point_scale_label == "pips":
-            gain_units = raw_gain / self.cfg.pip_or_pt_size
-        else:
-            gain_units = raw_gain  # points for gold
+        # Gain in points or pips with zero-division safeguard
+        divisor = self.cfg.pip_or_pt_size if self.cfg.pip_or_pt_size > 0 else 0.0001
+        gain_units = raw_gain / divisor if self.cfg.point_scale_label == "pips" else raw_gain
 
         # Update peak PnL
         if floating_pnl > self.peak_pnl:
@@ -294,6 +298,22 @@ class MicroExitController:
                 sl_violated = True
 
         effective_stop_usd = getattr(self, "dynamic_hard_stop", self.cfg.hard_risk_stop_usd)
+        is_be_or_profit_sl = self.be_locked and (
+            (self.direction == "BUY" and self.sl_price >= self.entry_price) or
+            (self.direction == "SELL" and self.sl_price <= self.entry_price)
+        )
+        if sl_violated and is_be_or_profit_sl:
+            return ExitDecision(
+                should_exit=True,
+                reason=f"🛡️ Breakeven Cushion Hit (PnL: ${floating_pnl:.2f}, SL: {self.sl_price:.2f})",
+                urgency="NORMAL",
+                metric_label="BREAKEVEN_CUSHION",
+                current_gain=gain_units,
+                floating_pnl=floating_pnl,
+                peak_pnl=self.peak_pnl,
+                time_in_trade_sec=time_in_trade,
+            )
+
         if floating_pnl <= -effective_stop_usd or sl_violated:
             return ExitDecision(
                 should_exit=True,
@@ -311,11 +331,11 @@ class MicroExitController:
         # -------------------------------------------------------------
         if not self.be_locked and gain_units >= self.cfg.fast_be_trigger:
             self.be_locked = True
-            spread_buffer = 0.05 if self.cfg.symbol == "XAUUSD" else (0.5 * self.cfg.pip_or_pt_size)
+            spread_buffer = 0.35 if self.cfg.symbol == "XAUUSD" else (0.5 * self.cfg.pip_or_pt_size)
             if self.direction == "BUY":
                 self.sl_price = max(self.sl_price, self.entry_price + spread_buffer)
             else:
-                self.sl_price = min(self.sl_price, self.entry_price - spread_buffer)
+                self.sl_price = min(self.sl_price, self.entry_price - spread_buffer) if self.sl_price > 0.0 else (self.entry_price - spread_buffer)
 
         # -------------------------------------------------------------
         # EXIT RULE 2: TARGET IMPULSE REACHED (Sweet-Spot Spike Harvest)
@@ -371,7 +391,8 @@ class MicroExitController:
         # EXIT RULE 4: MOMENTUM STALL IN MIN-HARVEST ZONE (Requires substantial stall + pullback)
         # -------------------------------------------------------------
         pullback = (self.peak_price - current_price) if self.direction == "BUY" else (current_price - self.peak_price)
-        if gain_units >= self.cfg.micro_harvest_min and self.consecutive_stalls >= (self.cfg.stall_tick_threshold * 2) and pullback >= 0.40:
+        min_pullback = (4.0 * self.cfg.pip_or_pt_size) if self.cfg.point_scale_label == "pips" else 0.40
+        if gain_units >= self.cfg.micro_harvest_min and self.consecutive_stalls >= (self.cfg.stall_tick_threshold * 2) and pullback >= min_pullback:
             return ExitDecision(
                 should_exit=True,
                 reason=f"⚡ Momentum Stalled at Peak (+{gain_units:.2f} {self.cfg.point_scale_label}, PnL: +${floating_pnl:.2f})",

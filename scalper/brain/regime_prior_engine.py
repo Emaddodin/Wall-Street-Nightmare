@@ -113,6 +113,18 @@ class RegimePriorEngine:
                 regime_notes="VETO: Insufficient rejection wick (<0.45) vulnerable to false breakout",
             )
 
+        # Veto 4: Silver Bullet (48.8% empirical WR, sub-coinflip drag vetoed per user mandate)
+        if "SILVER" in strategy_upper or "BULLET" in strategy_upper:
+            return RegimePriorEvaluation(
+                is_allowed=False,
+                regime_grade="toxic_trap",
+                trap_probability=0.75,
+                confluence_boost=1.0,
+                compounding_multiplier=0.0,
+                empirical_win_rate_pct=48.8,
+                regime_notes="VETO: Silver Bullet FVG eliminated per quant audit & user mandate (48.8% WR drag)",
+            )
+
         # -------------------------------------------------------------
         # 2. A+ PRIME REGIME SETUPS (>85% Empirical Win Rate)
         # -------------------------------------------------------------
@@ -145,17 +157,38 @@ class RegimePriorEngine:
                 regime_notes="HIGH PROBABILITY: Standard Breakout + Retest (83.4% empirical WR)",
             )
 
-        # Silver Bullet setups (London 07-08 UTC & NY 14-15 UTC)
-        if "SILVER" in strategy_upper:
-            # High reward-to-risk macro expansion (49.3% WR but massive +$1,003/trade expectancy)
+        # Volume Profile Setups
+        if "POC" in strategy_upper and 13 <= hour_utc <= 18:
             return RegimePriorEvaluation(
                 is_allowed=True,
-                regime_grade="high_probability",
-                trap_probability=0.35,
-                confluence_boost=8.0,
-                compounding_multiplier=1.00,  # Standard lot size
-                empirical_win_rate_pct=49.3,
-                regime_notes="MACRO EXPANSION: Silver Bullet FVG (Expectancy: +$1,003/trade)",
+                regime_grade="titan",
+                trap_probability=0.10,
+                confluence_boost=15.0,
+                compounding_multiplier=1.50,
+                empirical_win_rate_pct=89.5,
+                regime_notes="TITAN: NY Session Volume Profile POC Bounce (Empirical WR: 89.5%)",
+            )
+
+        if "VAH" in strategy_upper or "VAL" in strategy_upper:
+            return RegimePriorEvaluation(
+                is_allowed=True,
+                regime_grade="titan",
+                trap_probability=0.12,
+                confluence_boost=14.0,
+                compounding_multiplier=1.50,
+                empirical_win_rate_pct=88.2,
+                regime_notes="TITAN: Value Area Extreme Breakout / Retest (Empirical WR: 88.2%)",
+            )
+
+        if "SCALP_SELL" in strategy_upper and 0 <= hour_utc < 4:
+            return RegimePriorEvaluation(
+                is_allowed=True,
+                regime_grade="titan",
+                trap_probability=0.11,
+                confluence_boost=14.5,
+                compounding_multiplier=1.50,
+                empirical_win_rate_pct=88.7,
+                regime_notes="TITAN: Asian Session Range-Fade Scalp Sell (Empirical WR: 88.7%)",
             )
 
         # -------------------------------------------------------------
@@ -170,6 +203,9 @@ class RegimePriorEngine:
             empirical_win_rate_pct=65.0,
             regime_notes="MARGINAL: Mixed alignment with 2026 regime priors",
         )
+
+    # Alias for caller consistency
+    evaluate_prior = evaluate_regime_fit
 
 
 # Singleton instance

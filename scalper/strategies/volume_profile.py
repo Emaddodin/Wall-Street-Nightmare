@@ -69,15 +69,23 @@ class VolumeProfileEngine:
         Calculates causal volume profile over given price and volume arrays.
         Spreads volume evenly across the price bins spanned by each candle [low, high].
         """
-        n_bins = bins or self.default_bins
+        n_bins = max(10, bins or self.default_bins)
         target_va_ratio = va_pct or self.default_va_pct
 
-        if len(highs) == 0 or len(lows) == 0 or len(volumes) == 0:
+        min_len = min(len(highs), len(lows), len(volumes))
+        if min_len == 0:
             return VolumeProfileResult(0.0, 0.0, 0.0, 0.0, n_bins, 0.0, is_valid=False)
+
+        highs = highs[:min_len]
+        lows = lows[:min_len]
+        volumes = volumes[:min_len]
 
         lo = float(np.min(lows))
         hi = float(np.max(highs))
         span = hi - lo
+
+        if span <= 0.0 or hi <= lo:
+            return VolumeProfileResult(0.0, 0.0, 0.0, 0.0, n_bins, 0.0, is_valid=False)
 
         if span <= 0.20:  # Minimum 20 cents span on Gold
             mid = (hi + lo) / 2.0
@@ -90,7 +98,7 @@ class VolumeProfileEngine:
         b1_arr = np.clip(((highs - lo) / bin_size).astype(int), 0, n_bins - 1)
         span_bins = np.maximum(1, b1_arr - b0_arr + 1)
 
-        for k in range(len(highs)):
+        for k in range(min_len):
             hist[b0_arr[k] : b1_arr[k] + 1] += volumes[k] / span_bins[k]
 
         total_vol = float(hist.sum())
@@ -111,7 +119,14 @@ class VolumeProfileEngine:
             left_vol = hist[lo_b - 1] if lo_b > 0 else -1.0
             right_vol = hist[hi_b + 1] if hi_b < n_bins - 1 else -1.0
 
-            if left_vol >= right_vol and lo_b > 0:
+            if left_vol == right_vol and left_vol >= 0:
+                if lo_b > 0:
+                    lo_b -= 1
+                    accumulated_vol += hist[lo_b]
+                if hi_b < n_bins - 1:
+                    hi_b += 1
+                    accumulated_vol += hist[hi_b]
+            elif left_vol > right_vol and lo_b > 0:
                 lo_b -= 1
                 accumulated_vol += hist[lo_b]
             elif hi_b < n_bins - 1:
@@ -154,12 +169,15 @@ class VolumeProfileEngine:
         lookback_bars: int = 120,
     ) -> VolumeProfileResult:
         """Convenience method accepting a list of 1-minute candle dictionaries."""
-        if len(candles_1m) == 0:
+        if not candles_1m or lookback_bars <= 0:
             return VolumeProfileResult(0.0, 0.0, 0.0, 0.0, self.default_bins, 0.0, is_valid=False)
 
         recent = candles_1m[-lookback_bars:]
-        h = np.array([float(c["high"]) for c in recent], dtype=np.float64)
-        l = np.array([float(c["low"]) for c in recent], dtype=np.float64)
-        v = np.array([float(c.get("volume", 1.0)) for c in recent], dtype=np.float64)
+        try:
+            h = np.array([float(c.get("high", c.get("High", 0.0))) for c in recent], dtype=np.float64)
+            l = np.array([float(c.get("low", c.get("Low", 0.0))) for c in recent], dtype=np.float64)
+            v = np.array([float(c.get("volume", c.get("Volume", 1.0))) for c in recent], dtype=np.float64)
+        except (ValueError, TypeError):
+            return VolumeProfileResult(0.0, 0.0, 0.0, 0.0, self.default_bins, 0.0, is_valid=False)
 
         return self.compute_profile(h, l, v)

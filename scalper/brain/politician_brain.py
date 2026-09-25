@@ -223,24 +223,37 @@ class PoliticianBrain:
                 time.sleep(1)
 
     def _fetch_calendar_safe(self) -> None:
-        """Fetches FairEconomy calendar events with low timeout."""
+        """Fetches FairEconomy calendar events with low timeout and safe parsing."""
         try:
             req = urllib.request.Request(self.CALENDAR_URL, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
             with urllib.request.urlopen(req, timeout=6) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-                usd_events = [e for e in data if e.get("country") == "USD"]
-                with self._lock:
-                    self._cached_calendar_events = usd_events
-                logger.debug("PoliticianBrain: Synced %d USD economic calendar events.", len(usd_events))
+                if isinstance(data, list):
+                    usd_events = []
+                    for e in data:
+                        if isinstance(e, dict) and e.get("country") == "USD":
+                            if "epoch" not in e and "date" in e:
+                                try:
+                                    dt = datetime.fromisoformat(str(e["date"]))
+                                    if dt.tzinfo is None:
+                                        dt = dt.replace(tzinfo=timezone.utc)
+                                    e["epoch"] = dt.timestamp()
+                                except Exception:
+                                    pass
+                            usd_events.append(e)
+                    with self._lock:
+                        self._cached_calendar_events = usd_events
+                    logger.debug("PoliticianBrain: Synced %d USD economic calendar events.", len(usd_events))
         except Exception as e:
             logger.debug("Could not sync FairEconomy calendar: %s", e)
 
     def _fetch_news_rss_safe(self) -> None:
-        """Fetches breaking geopolitical and Gold headlines from RSS."""
-        parsed_items: List[NewsItem] = []
+        """Fetches breaking geopolitical and Gold headlines from RSS with round-robin feed interleaving."""
+        feed_results: List[List[NewsItem]] = []
         now = time.time()
 
         for url in self.NEWS_RSS_URLS:
+            items_this_feed: List[NewsItem] = []
             try:
                 req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
                 with urllib.request.urlopen(req, timeout=7) as resp:
@@ -253,7 +266,7 @@ class PoliticianBrain:
                             continue
 
                         sent_score, regime_tag, heat = self._classify_headline(title)
-                        parsed_items.append(
+                        items_this_feed.append(
                             NewsItem(
                                 title=title,
                                 pub_date=pub_date,
@@ -266,11 +279,20 @@ class PoliticianBrain:
                         )
             except Exception as e:
                 logger.debug("News RSS fetch failed for %s: %s", url, e)
+            feed_results.append(items_this_feed)
 
-        if parsed_items:
+        # Round-robin interleave across feeds to prevent feed 1 starvation
+        interleaved: List[NewsItem] = []
+        max_len = max((len(f) for f in feed_results), default=0)
+        for idx in range(max_len):
+            for f in feed_results:
+                if idx < len(f):
+                    interleaved.append(f[idx])
+
+        if interleaved:
             with self._lock:
-                self._cached_headlines = parsed_items[:40]
-            logger.info("🏛️ PoliticianBrain: Processed %d live geopolitical/macro headlines.", len(parsed_items))
+                self._cached_headlines = interleaved[:40]
+            logger.info("🏛️ PoliticianBrain: Processed %d live geopolitical/macro headlines across %d feeds.", len(interleaved), len(feed_results))
 
     def _classify_headline(self, title: str) -> Tuple[float, str, float]:
         """Classifies headline into sentiment (-1.0 to 1.0), regime, and heat contribution (0 to 10)."""
@@ -372,7 +394,10 @@ class PoliticianBrain:
                 continue
 
             try:
-                ev_time = datetime.fromisoformat(date_str).astimezone(timezone.utc)
+                dt = datetime.fromisoformat(date_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                ev_time = dt.astimezone(timezone.utc)
                 diff_sec = (ev_time - now).total_seconds()
                 diff_min = diff_sec / 60.0
 
@@ -392,25 +417,36 @@ class PoliticianBrain:
             except Exception:
                 continue
 
-        # Deterministic calendar schedule fallback if calendar events list is empty
-        if not events:
-            # 1. Weekly Jobless Claims (Thursdays 12:30 UTC)
-            if now.weekday() == 3:  # Thursday
-                target_utc = now.replace(hour=12, minute=30, second=0, microsecond=0)
-                diff_min = (target_utc - now).total_seconds() / 60.0
-                if -5.0 <= diff_min <= 10.0:
-                    return True, f"FREEZE: Weekly Unemployment Claims ({diff_min:.1f}m away)", False
-                elif -45.0 <= diff_min < -5.0:
-                    post_expansion_event = "Post-Unemployment Claims Expansion"
+        # Check active events in recent window
+        active_events = [
+            e for e in events 
+            if e.get("epoch") and (e["epoch"] - now.timestamp()) >= -3600.0
+        ]
 
-            # 2. Monthly NFP (1st Friday of month 12:30 UTC)
-            if now.weekday() == 4 and now.day <= 7:  # First Friday
-                target_utc = now.replace(hour=12, minute=30, second=0, microsecond=0)
-                diff_min = (target_utc - now).total_seconds() / 60.0
-                if -5.0 <= diff_min <= 20.0:
-                    return True, f"FREEZE: Non-Farm Payrolls (NFP) ({diff_min:.1f}m away)", False
-                elif -60.0 <= diff_min < -5.0:
-                    post_expansion_event = "Post-NFP Institutional Expansion"
+        # Deterministic calendar schedule fallback if no active calendar events found
+        if not active_events:
+            try:
+                from zoneinfo import ZoneInfo
+                ny_tz = ZoneInfo("America/New_York")
+                now_ny = now.astimezone(ny_tz)
+                target_ny = now_ny.replace(hour=8, minute=30, second=0, microsecond=0)
+                diff_min = (target_ny - now_ny).total_seconds() / 60.0
+
+                # 1. Weekly Jobless Claims (Thursdays 08:30 AM NY)
+                if now_ny.weekday() == 3:  # Thursday
+                    if -5.0 <= diff_min <= 10.0:
+                        return True, f"FREEZE: Weekly Unemployment Claims ({diff_min:.1f}m away)", False
+                    elif -45.0 <= diff_min < -5.0:
+                        post_expansion_event = "Post-Unemployment Claims Expansion"
+
+                # 2. Monthly NFP (1st Friday of month 08:30 AM NY)
+                if now_ny.weekday() == 4 and now_ny.day <= 7:  # First Friday
+                    if -5.0 <= diff_min <= 20.0:
+                        return True, f"FREEZE: Non-Farm Payrolls (NFP) ({diff_min:.1f}m away)", False
+                    elif -60.0 <= diff_min < -5.0:
+                        post_expansion_event = "Post-NFP Institutional Expansion"
+            except Exception as e_ny:
+                logger.debug("NY timezone fallback evaluation failed: %s", e_ny)
 
         if post_expansion_event:
             return False, post_expansion_event, True
@@ -521,15 +557,15 @@ class PoliticianBrain:
                 regime_notes="HIGH PROBABILITY: Standard Breakout + Retest (83.7% empirical WR)",
             )
 
-        if "SILVER" in strategy_upper:
+        if "SILVER" in strategy_upper or "BULLET" in strategy_upper:
             return RegimePriorEvaluation(
-                is_allowed=True,
-                regime_grade="high_probability",
-                trap_probability=0.35,
-                confluence_boost=8.0,
-                compounding_multiplier=1.00,
+                is_allowed=False,
+                regime_grade="toxic_trap",
+                trap_probability=0.75,
+                confluence_boost=0.0,
+                compounding_multiplier=0.0,
                 empirical_win_rate_pct=48.8,
-                regime_notes="MACRO EXPANSION: Silver Bullet FVG (Expectancy: +$1,973/trade)",
+                regime_notes="VETO 4: Silver Bullet FVG banned (48.8% WR drags down portfolio expectancy)",
             )
 
         return RegimePriorEvaluation(
@@ -811,6 +847,10 @@ class PoliticianBrain:
             "target_expansion": "+5.0 to +8.0 ATR",
             "last_intelligence_sync": datetime.fromtimestamp(updated, tz=timezone.utc).strftime("%H:%M:%S UTC") if updated else "Starting...",
         }
+
+    # Aliases for caller consistency
+    evaluate_macro_catalyst = evaluate_entry_macro_fit
+    evaluate_prior = evaluate_regime_fit
 
 
 # Singleton instance

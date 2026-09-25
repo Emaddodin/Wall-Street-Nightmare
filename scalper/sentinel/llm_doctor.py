@@ -30,6 +30,7 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from dataclasses import asdict, dataclass
@@ -108,6 +109,7 @@ class Layer2SentinelDoctor:
         self.last_prescription: Optional[Dict[str, Any]] = None
         self.health_status = "SURVEILLANCE_ACTIVE 🟢"
         self._consecutive_fails = 0
+        self._consecutive_api_fails = 0
         self._last_alert_time = 0.0
         self._trading_paused_by_guard = False
         self._last_action_time = 0.0
@@ -312,10 +314,10 @@ class Layer2SentinelDoctor:
                 success = True
 
             elif action == "EMERGENCY_FLATTEN":
-                # Write emergency liquidation command to engine
+                # Write emergency liquidation command to engine with unique temporary file
                 try:
-                    tmp_cmd = COMMAND_FILE.with_suffix(".tmp")
-                    with open(tmp_cmd, "w") as f:
+                    tmp_cmd = COMMAND_FILE.with_suffix(f".{os.getpid()}_{threading.get_ident()}.tmp")
+                    with open(tmp_cmd, "w", encoding="utf-8") as f:
                         json.dump({"action": "FLATTEN", "reason": prescription.diagnosis, "timestamp": time.time()}, f)
                     tmp_cmd.replace(COMMAND_FILE)
                     success = True
@@ -325,8 +327,8 @@ class Layer2SentinelDoctor:
 
             elif action == "PAUSE_TRADING":
                 try:
-                    tmp_cmd = COMMAND_FILE.with_suffix(".tmp")
-                    with open(tmp_cmd, "w") as f:
+                    tmp_cmd = COMMAND_FILE.with_suffix(f".{os.getpid()}_{threading.get_ident()}.tmp")
+                    with open(tmp_cmd, "w", encoding="utf-8") as f:
                         json.dump({"action": "PAUSE", "reason": prescription.diagnosis, "timestamp": time.time()}, f)
                     tmp_cmd.replace(COMMAND_FILE)
                     self._trading_paused_by_guard = True
@@ -336,8 +338,8 @@ class Layer2SentinelDoctor:
 
             elif action == "RESUME_TRADING":
                 try:
-                    tmp_cmd = COMMAND_FILE.with_suffix(".tmp")
-                    with open(tmp_cmd, "w") as f:
+                    tmp_cmd = COMMAND_FILE.with_suffix(f".{os.getpid()}_{threading.get_ident()}.tmp")
+                    with open(tmp_cmd, "w", encoding="utf-8") as f:
                         json.dump({"action": "RESUME", "timestamp": time.time()}, f)
                     tmp_cmd.replace(COMMAND_FILE)
                     self._trading_paused_by_guard = False
@@ -347,8 +349,8 @@ class Layer2SentinelDoctor:
 
             elif action == "DISMISS_OVERLAYS":
                 try:
-                    tmp_cmd = COMMAND_FILE.with_suffix(".tmp")
-                    with open(tmp_cmd, "w") as f:
+                    tmp_cmd = COMMAND_FILE.with_suffix(f".{os.getpid()}_{threading.get_ident()}.tmp")
+                    with open(tmp_cmd, "w", encoding="utf-8") as f:
                         json.dump({"action": "CLEAR_OVERLAYS", "timestamp": time.time()}, f)
                     tmp_cmd.replace(COMMAND_FILE)
                     success = True
@@ -443,6 +445,7 @@ class Layer2SentinelDoctor:
         fin_metrics: Dict[str, Any] = {}
 
         if hft_data:
+            self._consecutive_api_fails = 0
             updated_at = hft_data.get("updated_at", now)
             quote_age = max(0.0, now - updated_at)
             fin_metrics = {
@@ -451,6 +454,8 @@ class Layer2SentinelDoctor:
                 "spread_bps": float(hft_data.get("spread_bps", 0.50)),
                 "position": hft_data.get("position"),
             }
+        else:
+            self._consecutive_api_fails += 1
 
         anomaly_detected = False
         incident_domain = "NOC"
@@ -463,6 +468,12 @@ class Layer2SentinelDoctor:
             incident_domain = "NOC"
             incident_type = "SERVICE_CRASHED"
             severity = "CRITICAL"
+
+        elif self._consecutive_api_fails >= 3 and (now - self._last_action_time) > 90.0:
+            anomaly_detected = True
+            incident_domain = "NOC"
+            incident_type = "HFT_API_UNRESPONSIVE"
+            severity = "HIGH"
 
         elif quote_age > 60.0 and (now - self._last_action_time) > 90.0:
             anomaly_detected = True

@@ -130,7 +130,7 @@ class TradeJournalRAG:
 
             # Fill missing columns if backup file used
             if "hour" not in df.columns and "time_utc" in df.columns:
-                df["hour"] = df["time_utc"].astype(str).str.split(":").str[0].astype(int)
+                df["hour"] = pd.to_numeric(df["time_utc"].astype(str).str.split(":").str[0], errors="coerce").fillna(12).astype(int)
             elif "hour" not in df.columns:
                 df["hour"] = 12
 
@@ -188,17 +188,17 @@ class TradeJournalRAG:
         if self.feature_matrix is None or len(self.trades) == 0:
             return TradeRagEvaluation(
                 is_allowed=True,
-                recommendation="APPROVE_STANDARD",
+                recommendation="UNINITIALIZED_NEUTRAL",
                 twin_count=0,
-                win_rate_pct=80.0,
-                trap_risk_pct=0.15,
-                avg_pnl=50.0,
-                profit_factor=2.5,
-                median_duration_min=12,
-                max_safe_holding_min=25,
-                dominant_exit_reason="MACRO_SPIKE_HARVEST",
+                win_rate_pct=50.0,
+                trap_risk_pct=0.50,
+                avg_pnl=0.0,
+                profit_factor=1.0,
+                median_duration_min=10,
+                max_safe_holding_min=15,
+                dominant_exit_reason="UNKNOWN",
                 closest_twin=None,
-                regime_notes="RAG memory uninitialized (clean pass)",
+                regime_notes="RAG memory uninitialized (neutral fallback applied)",
                 query_latency_ms=0.01,
             )
 
@@ -218,16 +218,20 @@ class TradeJournalRAG:
         diff = (self.feature_matrix - query_vec) * self.weights
         distances = np.sum(diff * diff, axis=1)
 
-        # Top K nearest indices
+        # Top K nearest indices (safe against k >= len(self.trades))
         k = min(top_k, len(self.trades))
-        top_indices = np.argpartition(distances, k)[:k]
-        top_indices = top_indices[np.argsort(distances[top_indices])]
+        if k >= len(self.trades):
+            top_indices = np.argsort(distances)[:k]
+        else:
+            top_indices = np.argpartition(distances, k)[:k]
+            top_indices = top_indices[np.argsort(distances[top_indices])]
 
         matched_trades: List[Dict[str, Any]] = [self.trades[idx] for idx in top_indices]
 
         # Analyze Twins
         wins = [t for t in matched_trades if bool(t.get("is_win", False)) or float(t.get("realized_pnl", 0)) > 0]
-        losses = [t for t in matched_trades if t not in wins]
+        win_set = {id(t) for t in wins}
+        losses = [t for t in matched_trades if id(t) not in win_set]
         win_count = len(wins)
         total_count = len(matched_trades)
         wr = (win_count / total_count * 100.0) if total_count > 0 else 0.0

@@ -50,6 +50,7 @@ PORT = int(os.getenv("SCALPER_APP_PORT", "443"))
 PORT_HTTP = int(os.getenv("SCALPER_APP_HTTP_PORT", "80"))
 
 SESSIONS: dict[str, float] = {}
+SESSION_LOCK = threading.Lock()
 SESSION_TTL = 86400 * 30  # 30 days
 
 class InMemoryRateLimiter:
@@ -81,6 +82,8 @@ class InMemoryRateLimiter:
             while fails and fails[0] < cutoff:
                 fails.pop(0)
             fails.append(now)
+            if len(self._auth_failures) > 2000:
+                self._auth_failures = {k: v for k, v in self._auth_failures.items() if v and v[-1] >= cutoff}
             return len(fails) >= 5
 
     def is_auth_locked(self, ip: str) -> bool:
@@ -142,13 +145,21 @@ def _read_hft_state() -> dict:
         # Check bot pause state and vault telemetry
         try:
             bot_state_file = DATA / "bot_state.json"
-            best["bot_running"] = json.load(open(bot_state_file)).get("bot_running", True) if bot_state_file.exists() else True
+            if bot_state_file.exists():
+                with open(bot_state_file, "r", encoding="utf-8") as bf:
+                    best["bot_running"] = json.load(bf).get("bot_running", True)
+            else:
+                best["bot_running"] = True
         except Exception:
             best["bot_running"] = True
+
         try:
-            vault_file = DATA / "vault.json"
+            vault_file = DATA / "stratton_vault.json"
+            if not vault_file.exists():
+                vault_file = DATA / "vault.json"
             if vault_file.exists():
-                best["vault"] = json.load(open(vault_file))
+                with open(vault_file, "r", encoding="utf-8") as vf:
+                    best["vault"] = json.load(vf)
         except Exception:
             pass
         return best
@@ -875,8 +886,8 @@ class HFTHandler(BaseHTTPRequestHandler):
                 return
             try:
                 cmd_file = DATA / "command.json"
-                tmp_cmd = cmd_file.with_suffix(".tmp")
-                with open(tmp_cmd, "w") as f:
+                tmp_cmd = cmd_file.with_suffix(f".{os.getpid()}_{threading.get_ident()}.tmp")
+                with open(tmp_cmd, "w", encoding="utf-8") as f:
                     json.dump({"action": "FLATTEN", "time": time.time()}, f)
                 tmp_cmd.replace(cmd_file)
                 self.send_response(200)
@@ -910,14 +921,14 @@ class HFTHandler(BaseHTTPRequestHandler):
                     except Exception:
                         cur_running = True
                 new_running = not cur_running
-                tmp_bot = bot_state_file.with_suffix(".tmp")
-                with open(tmp_bot, "w") as f:
+                tmp_bot = bot_state_file.with_suffix(f".{os.getpid()}_{threading.get_ident()}.tmp")
+                with open(tmp_bot, "w", encoding="utf-8") as f:
                     json.dump({"bot_running": new_running, "updated_at": time.time()}, f)
                 tmp_bot.replace(bot_state_file)
                 
                 cmd_file = DATA / "command.json"
-                tmp_cmd = cmd_file.with_suffix(".tmp")
-                with open(tmp_cmd, "w") as f:
+                tmp_cmd = cmd_file.with_suffix(f".{os.getpid()}_{threading.get_ident()}.tmp")
+                with open(tmp_cmd, "w", encoding="utf-8") as f:
                     json.dump({"action": "RESUME" if new_running else "PAUSE", "time": time.time()}, f)
                 tmp_cmd.replace(cmd_file)
                 
@@ -958,11 +969,13 @@ class HFTHandler(BaseHTTPRequestHandler):
                 self.wfile.write(b'{"error": "Unauthorized: Operator Master Key or PIN required", "code": "UNAUTHORIZED"}')
                 return
             try:
-                vault_file = DATA / "vault.json"
+                vault_file = DATA / "stratton_vault.json"
+                if not vault_file.exists() and (DATA / "vault.json").exists():
+                    vault_file = DATA / "vault.json"
                 vault_data = {"harvest_history": [], "total_harvested": 0.0}
                 if vault_file.exists():
                     try:
-                        with open(vault_file, "r") as vf:
+                        with open(vault_file, "r", encoding="utf-8") as vf:
                             vault_data = json.load(vf)
                     except Exception:
                         pass

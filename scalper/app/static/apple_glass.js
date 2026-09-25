@@ -36,29 +36,38 @@ let historySearchQuery = '';
 let historyLoaded = false;
 let lastHadPosition = false;
 
-// View Switching: Desk <-> Daily History via Segmented Buttons
-function switchView(viewName) {
-  currentView = viewName;
-  const deskBtn = document.getElementById('btn-view-desk');
-  const histBtn = document.getElementById('btn-view-history');
-  const deskView = document.getElementById('view-desk');
-  const histView = document.getElementById('view-history');
-
-  if (viewName === 'history') {
-    if (deskBtn) deskBtn.classList.remove('active');
-    if (histBtn) histBtn.classList.add('active');
-    if (deskView) deskView.classList.remove('active');
-    if (histView) histView.classList.add('active');
-
+// History Drawer Modal Controller (Bottom Sheet)
+function openHistoryDrawer() {
+  const drawer = document.getElementById('history-drawer-overlay');
+  if (drawer) {
+    drawer.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
     if (!historyLoaded) {
       loadDailyHistory(1);
     }
-  } else {
-    if (histBtn) histBtn.classList.remove('active');
-    if (deskBtn) deskBtn.classList.add('active');
-    if (histView) histView.classList.remove('active');
-    if (deskView) deskView.classList.add('active');
+  }
+}
 
+function closeHistoryDrawer() {
+  const drawer = document.getElementById('history-drawer-overlay');
+  if (drawer) {
+    drawer.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+}
+
+function handleDrawerOverlayClick(e) {
+  if (e.target && e.target.id === 'history-drawer-overlay') {
+    closeHistoryDrawer();
+  }
+}
+
+// View Switching: Desk <-> Daily History via Segmented Buttons or Drawer
+function switchView(viewName) {
+  if (viewName === 'history') {
+    openHistoryDrawer();
+  } else {
+    closeHistoryDrawer();
     requestChartDraw();
   }
 }
@@ -101,10 +110,6 @@ function updateIctKillzoneTicker() {
   if (timeVal >= 7 && timeVal < 10) {
     kzName = "London Open Killzone";
     kzHours = "07:00 – 10:00 UTC";
-    isActive = true;
-  } else if (timeVal >= 14 && timeVal < 15) {
-    kzName = "ICT Silver Bullet";
-    kzHours = "14:00 – 15:00 UTC";
     isActive = true;
   } else if (timeVal >= 12 && timeVal < 15) {
     kzName = "New York Open Killzone";
@@ -321,11 +326,16 @@ function updateDashboard(d) {
   // Broker Account Badge & Leverage
   const brokerBadgeEl = document.getElementById('broker-account-badge');
   if (brokerBadgeEl) {
-    if (d.mode && d.mode.includes("Real")) {
+    const isReal = (d.account_mode && d.account_mode.toUpperCase() === "REAL") ||
+                   (d.mode && d.mode.toUpperCase().includes("REAL"));
+    if (isReal) {
       brokerBadgeEl.innerText = 'LiteFinance MT5 Real Account';
       brokerBadgeEl.style.borderColor = 'rgba(48, 209, 88, 0.45)';
+      brokerBadgeEl.style.color = 'rgba(48, 209, 88, 0.95)';
     } else {
-      brokerBadgeEl.innerText = d.mode || 'LiteFinance MT5 Real Account';
+      brokerBadgeEl.innerText = d.mode || 'LiteFinance MT5 Demo Account';
+      brokerBadgeEl.style.borderColor = 'rgba(255, 159, 10, 0.45)';
+      brokerBadgeEl.style.color = 'rgba(255, 159, 10, 0.95)';
     }
   }
 
@@ -394,7 +404,7 @@ function updateDashboard(d) {
   // 5. Broker Radar & Margin Telemetry
   const freeMarginEl = document.getElementById('margin-free-val');
   if (freeMarginEl) {
-    freeMarginEl.innerText = `Free Margin: $${(d.equity || bal).toFixed(2)}`;
+    freeMarginEl.innerText = `$${(d.equity || bal).toFixed(2)}`;
   }
   const radarSpreadEl = document.getElementById('radar-spread');
   if (radarSpreadEl && d.spread_bps !== undefined) {
@@ -402,7 +412,7 @@ function updateDashboard(d) {
   }
   const radarFsmEl = document.getElementById('radar-fsm');
   if (radarFsmEl) {
-    radarFsmEl.innerText = `${d.fsm_state || 'SCANNING'} · Silver Bullet`;
+    radarFsmEl.innerText = `${d.fsm_state || 'SCANNING'} · Breakout + Retest`;
   }
   const radarLevelsEl = document.getElementById('radar-levels');
   if (radarLevelsEl && midPrice > 0) {
@@ -420,13 +430,13 @@ function updateDashboard(d) {
 function renderLivePositionHUD(pos, midPrice) {
   const tabCountEl = document.getElementById('tab-pos-count');
   const hud = document.getElementById('panel-card3-pos');
+  const idle = document.getElementById('panel-pos-idle');
   const cardTitle = document.getElementById('card3-title');
 
   if (!pos || !pos.is_active) {
     if (tabCountEl) tabCountEl.innerText = '0';
-    if (lastHadPosition && currentCard3Tab === 'position') {
-      switchCard3View('chart');
-    }
+    if (hud) hud.style.display = 'none';
+    if (idle) idle.style.display = 'block';
     lastHadPosition = false;
     if (cardTitle) cardTitle.innerText = 'Market Order Flow · 1m Micro Ticks';
     return;
@@ -434,9 +444,8 @@ function renderLivePositionHUD(pos, midPrice) {
 
   // Active Position Detected!
   if (tabCountEl) tabCountEl.innerText = '1';
-  if (!lastHadPosition) {
-    switchCard3View('position');
-  }
+  if (hud) hud.style.display = 'flex';
+  if (idle) idle.style.display = 'none';
   lastHadPosition = true;
   if (cardTitle) cardTitle.innerText = `Active Market Position · ${pos.direction} Ticket #${pos.ticket_id || '91456523-1'}`;
 
@@ -458,10 +467,10 @@ function renderLivePositionHUD(pos, midPrice) {
   if (ticketEl) ticketEl.innerText = '#' + (pos.ticket_id || '91456523-1');
 
   const volEl = document.getElementById('hud-pos-vol');
-  if (volEl) volEl.innerText = (pos.volume || 0.02).toFixed(2) + ' Lots';
+  if (volEl) volEl.innerText = (pos.volume || 0.01).toFixed(2) + ' Lots';
 
   const stagEl = document.getElementById('hud-pos-stagnation');
-  if (stagEl) stagEl.innerText = `Holding: ${pos.duration_min || 1}m / 25m scratch limit`;
+  if (stagEl) stagEl.innerText = `Holding: ${pos.duration_min || 1}m / 25m`;
 
   const pnlEl = document.getElementById('hud-pos-pnl');
   if (pnlEl) {
@@ -496,7 +505,7 @@ function renderActiveOrders(pos, logs) {
     tbody.innerHTML = `
       <tr>
         <td colspan="7" style="text-align: center; color: var(--text-tertiary); padding: 18px;">
-          No open market tickets · FSM State: SCANNING for high-confluence ICT Silver Bullet
+          No open market tickets · FSM State: SCANNING for high-confluence ICT Breakout + Retest
         </td>
       </tr>
     `;

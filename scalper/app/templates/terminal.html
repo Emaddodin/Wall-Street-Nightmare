@@ -2,451 +2,426 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Stratton Oakmont · Institutional Burgundy Desk</title>
+  <title>S · O · Institutional Quantitative Desk</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#090205">
+  <meta name="theme-color" content="#070204">
 
-  <!-- Icons -->
-  <link rel="apple-touch-icon" sizes="180x180" href="/static/stratton_logo.svg?v=18">
-  <link rel="icon" type="image/svg+xml" href="/static/stratton_logo.svg?v=18">
-  <link rel="manifest" href="/manifest.json?v=18">
+  <!-- Favicon & Touch Icons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/stratton_logo.svg?v=19">
+  <link rel="icon" type="image/svg+xml" href="/static/stratton_logo.svg?v=19">
+  <link rel="manifest" href="/manifest.json?v=19">
 
-  <!-- JPMC Tiempos & Space Grotesk Typography -->
+  <!-- JPMC Tiempos / Newsreader & JetBrains Mono Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,600&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,600;1,6..72,700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Institutional Burgundy Glass Stylesheet -->
-  <link rel="stylesheet" href="/static/apple_glass.css?v=18">
+  <link rel="stylesheet" href="/static/apple_glass.css?v=19">
 </head>
 <body>
 
   <!-- ====================================================================
-       INSTITUTIONAL QUANT DESK (DESKTOP 100VH · MOBILE NATIVE TOUCH FLOW)
+       MOBILE-FIRST SINGLE-PAGE INSTITUTIONAL TERMINAL
        ==================================================================== -->
-  <main class="desk-container">
+  <main class="mobile-desk-viewport">
 
-    <!-- Embedded Glass Desk Header Bar -->
-    <header class="desk-header">
-      
-      <!-- Top Row: Brand & Live Market Capsule -->
-      <div class="header-top-row">
-        <!-- Brand Crest & Typography -->
-        <div class="brand-section">
-          <div class="brand-crest">
-            <img src="/static/stratton_logo.svg?v=18" alt="Stratton Logo">
-          </div>
-          <div class="brand-meta">
-            <span class="brand-name">STRATTON OAKMONT</span>
-            <span class="brand-sub">QUANTITATIVE DESK · XAU/USD</span>
-          </div>
-        </div>
-
-        <!-- Live Market Capsule -->
-        <div class="market-capsule">
-          <span class="live-pulse-dot"></span>
-          <span class="market-symbol">XAU/USD</span>
-          <span class="market-price tabular" id="nav-quote-price">$4,358.15</span>
-          <span class="market-spread tabular" id="nav-quote-spread">0.5 pts</span>
-        </div>
+    <!-- 1. Ultra-Chic Decluttered Top Bar (JP Morgan Serif Logotype + Corner Ledger) -->
+    <header class="mobile-desk-header">
+      <!-- Left: Abbreviated JPMC Logotype -->
+      <div class="brand-section">
+        <span class="brand-jpmc-logo">S · O</span>
       </div>
 
-      <!-- Segmented View Switcher (Desk <-> Daily History) -->
-      <div class="view-nav-group">
-        <button class="view-nav-btn active" id="btn-view-desk" onclick="switchView('desk')">
+      <!-- Right: Corner History Button & Minimal Operator Status -->
+      <div class="header-corner-actions">
+        <!-- 474D Compounding History & Live Journal Modal Trigger -->
+        <button class="btn-corner-ledger" id="btn-open-history" onclick="openHistoryDrawer()" title="View 474-Day Compounding Ledger & Live Trade Journal">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7"></rect>
-            <rect x="14" y="3" width="7" height="7"></rect>
-            <rect x="14" y="14" width="7" height="7"></rect>
-            <rect x="3" y="14" width="7" height="7"></rect>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
           </svg>
-          <span>Desk</span>
+          <span>474D LEDGER</span>
         </button>
-        <button class="view-nav-btn" id="btn-view-history" onclick="switchView('history')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="16" y1="2" x2="16" y2="6"></line>
-            <line x1="8" y1="2" x2="8" y2="6"></line>
-            <line x1="3" y1="10" x2="21" y2="10"></line>
-          </svg>
-          <span>Daily History (474 Days)</span>
-        </button>
-      </div>
 
-      <!-- Minimal ICT Killzone Status Capsule -->
-      <div class="killzone-capsule" id="killzone-capsule" title="ICT Session & Algorithm Killzone">
-        <span class="killzone-dot" id="killzone-dot"></span>
-        <span class="killzone-name" id="killzone-name">NY AM Silver Bullet</span>
-        <span class="killzone-time tabular" id="killzone-time">14:00 – 15:00 UTC</span>
-      </div>
-
-      <!-- Executive Action Controls -->
-      <div class="header-actions">
-        <!-- Security Authorization Badge Button -->
-        <button class="btn-glass" id="operator-auth-btn" onclick="openAuthModal()" title="Operator Key Status (Click to Authorize/Lock)">
+        <!-- Minimal Operator Lock Trigger -->
+        <button class="btn-corner-auth" id="operator-auth-btn" onclick="openAuthModal()" title="Operator Key Status">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" id="lock-icon-svg">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
           </svg>
           <span id="operator-lock-label">Locked</span>
         </button>
+      </div>
+    </header>
 
-        <!-- Armed State Toggle -->
+    <!-- Hidden compatibility span for tab-pos-count & card3-title -->
+    <span id="tab-pos-count" style="display: none;">0</span>
+    <span id="card3-title" style="display: none;">Market Order Flow</span>
+
+    <!-- 2. Giant Centered Balance Hero Stage (Apple Card / Private Wealth Style) -->
+    <section class="hero-balance-stage">
+      <!-- Mode & Leverage Capsule -->
+      <div class="account-mode-capsule">
+        <span class="live-pulse-dot" id="mode-pulse-dot"></span>
+        <span id="broker-account-badge">LiteFinance MT5 Real Account</span>
+        <span class="leverage-chip tabular" id="broker-leverage-badge">1:500</span>
+      </div>
+
+      <!-- Giant Centered Balance -->
+      <div class="hero-balance-numeral tabular">
+        <span class="currency-sym">$</span><span id="hero-int">59</span><span class="decimal-sym" id="hero-dec">.87</span>
+      </div>
+
+      <!-- Hero Sub-Row Metrics: Today's PnL, Live Gold Quote, Free Margin -->
+      <div class="hero-sub-pills">
+        <div class="hero-pill">
+          <span class="pill-label">Today</span>
+          <span class="pill-val tabular" id="hero-pnl-chip">+$0.00 (0.0%)</span>
+        </div>
+        <div class="hero-pill">
+          <span class="pill-label">XAU/USD Mid</span>
+          <span class="pill-val tabular" id="nav-quote-price">$4,358.15</span>
+          <span class="pill-sub tabular" id="nav-quote-spread">0.5 pt</span>
+        </div>
+        <div class="hero-pill">
+          <span class="pill-label">Free Margin</span>
+          <span class="pill-val tabular" id="margin-free-val">$59.87</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Mobile Live Position Frame (Fluid Auto-Height, Perfectly Proportioned) -->
+    <section class="mobile-position-section">
+
+      <!-- Active Position Card: Automatically displayed when a trade is live -->
+      <div id="panel-card3-pos" class="live-position-hud" style="display: none;">
+        <div class="pos-top-bar">
+          <div class="pos-badge-group">
+            <span class="dir-badge buy" id="hud-pos-dir">BUY</span>
+            <span class="pos-ticket-id tabular" id="hud-pos-ticket">#91456523-1</span>
+            <span class="pos-vol-badge tabular" id="hud-pos-vol">0.01 Lots</span>
+          </div>
+          <div class="pos-holding-time tabular" id="hud-pos-stagnation">
+            Holding: 0m / 25m
+          </div>
+        </div>
+
+        <div class="pos-pnl-stage">
+          <span class="pos-pnl-header">FLOATING PROFIT / LOSS</span>
+          <div class="pos-pnl-numeral tabular" id="hud-pos-pnl">+$0.00</div>
+        </div>
+
+        <div class="pos-price-progress">
+          <div class="price-step">
+            <span class="price-step-label">ENTRY</span>
+            <span class="price-step-val tabular" id="hud-pos-entry">$4,358.00</span>
+          </div>
+          <div class="price-step-arrow">──►</div>
+          <div class="price-step">
+            <span class="price-step-label">CURRENT</span>
+            <span class="price-step-val tabular" id="hud-pos-current">$4,358.15</span>
+          </div>
+        </div>
+
+        <div class="pos-safeguards-row">
+          <div class="safeguard-badge">
+            <span class="sg-lbl">Broker Hard SL</span>
+            <strong class="sg-val tabular" id="hud-pos-sl">$4,356.50</strong>
+          </div>
+          <div class="safeguard-badge">
+            <span class="sg-lbl">Watermark Lock</span>
+            <strong class="sg-val tabular" id="hud-pos-wm">-18% Pullback</strong>
+          </div>
+        </div>
+
+        <!-- Touch-Friendly 46px Emergency Close Button -->
+        <button class="btn-glass destructive btn-close-live-ticket" onclick="triggerEmergencyFlatten()">
+          <span>Close Live Ticket (Flatten)</span>
+        </button>
+      </div>
+
+      <!-- Standby Scanner & Flow (Displayed when no active market positions) -->
+      <div id="panel-pos-idle" class="position-idle-card">
+        <div class="idle-card-head">
+          <div class="idle-status-row">
+            <span class="live-pulse-dot gold"></span>
+            <span class="idle-status-title" id="radar-fsm">SCANNING · Breakout + Retest</span>
+          </div>
+          <div class="card-sub-tabs">
+            <button class="card-sub-tab active" id="btn-card3-chart" onclick="switchCard3View('chart')">1m Flow</button>
+            <button class="card-sub-tab" id="btn-card3-radar" onclick="switchCard3View('radar')">Radar</button>
+          </div>
+        </div>
+
+        <!-- Panel A: Real-Time Tick Flow Chart -->
+        <div id="panel-card3-chart" class="chart-box">
+          <canvas id="tickChart"></canvas>
+        </div>
+
+        <!-- Panel C: Broker Scanning & Monitoring Radar -->
+        <div id="panel-card3-radar" class="broker-radar-grid" style="display: none;">
+          <div class="radar-cell">
+            <span class="metric-label">Broker Gateway</span>
+            <span class="tabular" style="font-weight: 600; color: var(--signal-active);" id="radar-gateway">CONNECTED · MT5</span>
+          </div>
+          <div class="radar-cell">
+            <span class="metric-label">Spread Surveillance</span>
+            <span class="tabular" style="font-weight: 600; color: #FFF;" id="radar-spread">0.28 pts (Cutoff 4.5)</span>
+          </div>
+          <div class="radar-cell">
+            <span class="metric-label">Direct Socket Latency</span>
+            <span class="tabular" style="font-weight: 600; color: #FFF;">&lt; 1.8ms</span>
+          </div>
+          <div class="radar-cell">
+            <span class="metric-label">Key Monitored Levels</span>
+            <span class="tabular" style="font-size: 11px; color: var(--text-secondary);" id="radar-levels">Asia $4,328.5 – $4,365.2</span>
+          </div>
+          <div class="radar-cell">
+            <span class="metric-label">Risk Defenses</span>
+            <span class="tabular" style="font-weight: 600; color: var(--signal-active);">Hard SL + -18% WM</span>
+          </div>
+          <div class="radar-cell">
+            <span class="metric-label">Circuit Breakers</span>
+            <span class="tabular" style="font-weight: 600; color: var(--signal-active);">0/2 Losses (Armed)</span>
+          </div>
+        </div>
+
+        <div class="idle-footer-line">
+          <span id="chart-kz-label">ICT Killzone: NY Open Session</span>
+          <span class="tabular">Execution Latency: &lt;1.8ms</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 4. Laya Decision Engine & Macro Sentinel Card -->
+    <section class="glass-card mobile-metric-card">
+      <div class="card-head">
+        <span class="card-title">Laya Decision Engine</span>
+        <span class="card-badge tabular" id="laya-grade-badge">READY · 6,613 TRADES</span>
+      </div>
+
+      <div class="laya-metrics-grid">
+        <div class="metric-cell">
+          <span class="metric-label">Confidence</span>
+          <span class="metric-val tabular" id="laya-conf-val">91.5%</span>
+        </div>
+        <div class="metric-cell">
+          <span class="metric-label">Twin Win Rate</span>
+          <span class="metric-val tabular" id="rag-twin-wr">80.0%</span>
+        </div>
+        <div class="metric-cell">
+          <span class="metric-label">Trap Risk</span>
+          <span class="metric-val tabular" id="rag-trap-risk">15.0%</span>
+        </div>
+        <div class="metric-cell">
+          <span class="metric-label">Safe Lifespan</span>
+          <span class="metric-val tabular" id="rag-safe-min">25 min</span>
+        </div>
+      </div>
+
+      <div class="macro-sentinel-box">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span class="metric-label">Macro Heat Sentinel</span>
+          <span class="card-badge tabular" id="macro-heat-val">40/100 (MODERATE)</span>
+        </div>
+        <div class="macro-sentinel-text">
+          Gold consolidates above key support with interbank structural liquidity sweeps intact.
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Executive Controls & Vault Bar -->
+    <section class="glass-card mobile-controls-card">
+      <div class="card-head">
+        <span class="card-title">Execution Controls & Reserves</span>
+        <span class="card-badge tabular" id="card-vault-val">$1.57 USD Vault</span>
+      </div>
+
+      <div class="controls-action-grid">
+        <!-- Armed Bot Toggle Button -->
         <button class="btn-glass" id="bot-toggle-btn" onclick="toggleAutoTrade()">
-          <span id="bot-toggle-dot" style="width: 6px; height: 6px; border-radius: 50%; background: var(--signal-active);"></span>
+          <span id="bot-toggle-dot" style="width: 7px; height: 7px; border-radius: 50%; background: var(--signal-active);"></span>
           <span id="bot-toggle-label">Armed</span>
+        </button>
+
+        <!-- Sovereign 30% Vault Cashout -->
+        <button class="btn-glass" onclick="openModal('vault-modal')">
+          <span>Sweep 30% Vault</span>
         </button>
 
         <!-- Emergency Flatten -->
         <button class="btn-glass destructive" onclick="triggerEmergencyFlatten()">
-          <span>Flatten</span>
+          <span>Flatten All</span>
         </button>
       </div>
-    </header>
 
-    <!-- ==================================================================
-         VIEW 1: DESK (COCKPIT · STRICTLY FITS 100VH ON DESKTOP)
-         ================================================================== -->
-    <section id="view-desk" class="view-panel active">
-      <div class="bento-grid">
-        
-        <!-- Card 1: Trading Equity, Margin & Account Reserves (Col 6) -->
-        <div class="glass-card col-6">
-          <div>
-            <div class="card-head">
-              <span class="card-title">Trading Equity & Margin</span>
-              <span class="card-badge" id="broker-account-badge">LiteFinance MT5 Real Account</span>
-            </div>
-            <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-              <div class="display-equity tabular">
-                <span class="currency">$</span><span id="hero-int">59</span><span class="decimal" id="hero-dec">.87</span>
-              </div>
-              <div style="text-align: right;">
-                <span class="card-badge tabular" id="broker-leverage-badge" style="color: var(--signal-active);">1:1000 LEVERAGE</span>
-                <div style="font-size: 11px; color: var(--text-tertiary);" id="margin-free-val">Free Margin: $59.87</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="metrics-ribbon">
-            <div class="metric-cell">
-              <span class="metric-label">Today's PnL</span>
-              <span class="metric-val tabular" id="hero-pnl-chip">+$0.00 (0.0%)</span>
-            </div>
-            <div class="metric-cell">
-              <span class="metric-label">Stratton Vault</span>
-              <span class="metric-val tabular" id="card-vault-val">$1.57 USD</span>
-            </div>
-            <div class="metric-cell">
-              <span class="metric-label">Dollar Risk Floor</span>
-              <span class="metric-val tabular" id="card-risk-floor">≤ $50.00 Strict</span>
-            </div>
-          </div>
-
-          <button class="btn-glass" style="width: 100%; margin-top: 10px;" onclick="openModal('vault-modal')">
-            Sweep 30% Vault Cash
-          </button>
+      <div class="safeguards-mini-grid">
+        <div class="glass-row">
+          <span class="glass-row-label">Dollar Risk Floor</span>
+          <span class="glass-row-value tabular" id="card-risk-floor">≤ $50.00 Strict</span>
         </div>
-
-        <!-- Card 2: Laya System 1 Decision Architecture & Macro Sentinel (Col 6) -->
-        <div class="glass-card col-6">
-          <div>
-            <div class="card-head">
-              <span class="card-title">Laya Decision Engine</span>
-              <span class="card-badge" id="laya-grade-badge">READY · 6,613 TRADES</span>
-            </div>
-            
-            <div class="laya-metrics-grid">
-              <div class="metric-cell">
-                <span class="metric-label">Confidence</span>
-                <span class="metric-val tabular" id="laya-conf-val">91.5%</span>
-              </div>
-              <div class="metric-cell">
-                <span class="metric-label">Twin Win Rate</span>
-                <span class="metric-val tabular" id="rag-twin-wr">80.0%</span>
-              </div>
-              <div class="metric-cell">
-                <span class="metric-label">Trap Risk</span>
-                <span class="metric-val tabular" id="rag-trap-risk">15.0%</span>
-              </div>
-              <div class="metric-cell">
-                <span class="metric-label">Safe Lifespan</span>
-                <span class="metric-val tabular" id="rag-safe-min">25 min</span>
-              </div>
-            </div>
-          </div>
-
-          <div style="margin-top: 10px; padding: 9px 12px; background: rgba(255, 255, 255, 0.025); border-radius: 9px; border: var(--glass-border-subtle);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span class="metric-label">Macro Heat Sentinel</span>
-              <span class="card-badge tabular" id="macro-heat-val">40/100 (MODERATE)</span>
-            </div>
-            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">
-              Kitco Macro Sentinel: Gold consolidates above $4,330 support amid Hormuz diplomacy and central bank accumulation.
-            </div>
-          </div>
+        <div class="glass-row">
+          <span class="glass-row-label">Trade Dollar Cap</span>
+          <span class="glass-row-value tabular" id="forensic-dollar-cap">min($50, 8% Eq)</span>
         </div>
-
-        <!-- Card 3: Dynamic Order Flow Chart / Live Position HUD / Broker Radar (Col 8) -->
-        <div class="glass-card col-8">
-          <div>
-            <div class="card-head">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="card-title" id="card3-title">Market Order Flow · 1m Micro Ticks</span>
-                <span class="card-badge tabular" id="chart-pulse-badge">60 TICKS STREAMING</span>
-              </div>
-
-              <!-- Card 3 Sub-Tabs Switcher (No Emojis) -->
-              <div class="card-sub-tabs">
-                <button class="card-sub-tab active" id="btn-card3-chart" onclick="switchCard3View('chart')">1m Flow</button>
-                <button class="card-sub-tab" id="btn-card3-pos" onclick="switchCard3View('position')">Live Position (<span id="tab-pos-count">0</span>)</button>
-                <button class="card-sub-tab" id="btn-card3-radar" onclick="switchCard3View('radar')">Broker Radar</button>
-              </div>
-            </div>
-
-            <!-- Panel A: Real-Time Tick Chart -->
-            <div id="panel-card3-chart" class="chart-box">
-              <canvas id="tickChart"></canvas>
-            </div>
-
-            <!-- Panel B: Dynamic Live Position Cockpit HUD (Auto-activates when in trade) -->
-            <div id="panel-card3-pos" class="live-position-hud" style="display: none;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span class="dir-badge buy" id="hud-pos-dir">BUY</span>
-                  <span class="tabular" style="font-weight: 700; color: #FFF;" id="hud-pos-ticket">#91456523-1</span>
-                  <span class="tabular" style="font-size: 11.5px; color: var(--text-secondary);" id="hud-pos-vol">0.02 Lots</span>
-                </div>
-                <div class="tabular" style="font-size: 11px; color: var(--text-tertiary);" id="hud-pos-stagnation">
-                  Holding: 0m / 25m scratch limit
-                </div>
-              </div>
-
-              <div style="display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0;">
-                <div>
-                  <span class="metric-label">Floating Profit / Loss</span>
-                  <div class="pos-pnl-numeral tabular" id="hud-pos-pnl" style="color: var(--signal-active);">+$0.00</div>
-                </div>
-                <div style="text-align: right;">
-                  <span class="metric-label">Price Progress</span>
-                  <div class="tabular" style="font-size: 14px; font-weight: 600; color: #FFF;">
-                    <span id="hud-pos-entry">$4,358.00</span> → <span id="hud-pos-current">$4,358.15</span>
-                  </div>
-                </div>
-              </div>
-
-              <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: var(--glass-border-subtle); flex-wrap: wrap; gap: 8px;">
-                <div style="display: flex; gap: 12px; font-size: 11px; color: var(--text-secondary);">
-                  <span>DOM Hard SL: <strong class="tabular" id="hud-pos-sl">#stop_loss_price_1</strong></span>
-                  <span>Watermark Lock: <strong class="tabular" id="hud-pos-wm">-18% Pullback</strong></span>
-                </div>
-                <button class="btn-glass destructive" style="height: 28px; padding: 0 12px; font-size: 11px;" onclick="triggerEmergencyFlatten()">
-                  Close Ticket
-                </button>
-              </div>
-            </div>
-
-            <!-- Panel C: Broker Scanning & Monitoring Radar -->
-            <div id="panel-card3-radar" class="broker-radar-grid" style="display: none;">
-              <div class="radar-cell">
-                <span class="metric-label">Broker Gateway</span>
-                <span class="tabular" style="font-weight: 600; color: var(--signal-active);" id="radar-gateway">CONNECTED · MT5 Playwright</span>
-              </div>
-              <div class="radar-cell">
-                <span class="metric-label">Spread Surveillance</span>
-                <span class="tabular" style="font-weight: 600; color: #FFF;" id="radar-spread">0.28 pts (Cutoff 4.5)</span>
-              </div>
-              <div class="radar-cell">
-                <span class="metric-label">Direct Socket Latency</span>
-                <span class="tabular" style="font-weight: 600; color: #FFF;">&lt; 1.8ms</span>
-              </div>
-              <div class="radar-cell">
-                <span class="metric-label">Engine FSM Scanner</span>
-                <span class="tabular" style="font-weight: 600; color: var(--gold-accent);" id="radar-fsm">SCANNING · Silver Bullet</span>
-              </div>
-              <div class="radar-cell">
-                <span class="metric-label">Key Monitored Levels</span>
-                <span class="tabular" style="font-size: 11px; color: var(--text-secondary);" id="radar-levels">Asia $4,328.5 – $4,365.2</span>
-              </div>
-              <div class="radar-cell">
-                <span class="metric-label">Circuit Breakers</span>
-                <span class="tabular" style="font-weight: 600; color: var(--signal-active);">0/2 Losses (Arm Ready)</span>
-              </div>
-            </div>
-
-          </div>
-
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 11px; color: var(--text-tertiary); flex-wrap: wrap; gap: 4px;">
-            <span id="chart-kz-label">ICT Killzone: NY PM Macro Session</span>
-            <span class="tabular">Execution Latency: &lt;1.8ms</span>
-          </div>
-        </div>
-
-        <!-- Card 4: Forensic Risk Controls HUD (Col 4) -->
-        <div class="glass-card col-4">
-          <div>
-            <div class="card-head">
-              <span class="card-title">Forensic Risk Defenses</span>
-              <span class="card-badge" style="color: var(--signal-active);">4/4 ARMED</span>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <div class="glass-row">
-                <span class="glass-row-label">Peak Watermark Lock</span>
-                <span class="glass-row-value tabular">-18% Pullback Exit</span>
-              </div>
-              <div class="glass-row">
-                <span class="glass-row-label">Broker DOM Hard SL</span>
-                <span class="glass-row-value tabular">#stop_loss_price_1</span>
-              </div>
-              <div class="glass-row">
-                <span class="glass-row-label">Trade Dollar Cap</span>
-                <span class="glass-row-value tabular" id="forensic-dollar-cap">min($50, 8% Eq)</span>
-              </div>
-              <div class="glass-row">
-                <span class="glass-row-label">Stagnation Exit</span>
-                <span class="glass-row-value tabular">25 Min Hard Scratch</span>
-              </div>
-            </div>
-          </div>
-
-          <div style="margin-top: 6px; font-size: 10px; color: var(--text-tertiary); line-height: 1.4;">
-            Guarantees physical hard-stop injection at broker DOM level. Physically blocks multi-burst stack loss.
-          </div>
-        </div>
-
-        <!-- Card 5: Open Tickets & Execution State (Col 12) -->
-        <div class="glass-card col-12">
-          <div class="card-head">
-            <span class="card-title">Open Tickets & Broker Execution State</span>
-            <span class="card-badge" id="open-tickets-count">0 OPEN POSITIONS</span>
-          </div>
-
-          <div class="table-wrap">
-            <table class="glass-table">
-              <thead>
-                <tr>
-                  <th>Ticket</th>
-                  <th>Direction</th>
-                  <th>Volume</th>
-                  <th>Entry Price</th>
-                  <th>Market Price</th>
-                  <th>Floating PnL</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="active-orders-body">
-                <tr>
-                  <td colspan="7" style="text-align: center; color: var(--text-tertiary); padding: 14px;">
-                    No open market tickets · FSM State: SCANNING for high-confluence ICT Silver Bullet
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
       </div>
     </section>
 
-    <!-- ==================================================================
-         VIEW 2: DAILY PERFORMANCE & COMPOUNDING HISTORY (474 DAYS)
-         ================================================================== -->
-    <section id="view-history" class="view-panel">
-      <div class="history-container">
+    <!-- 6. Active Execution Log Table -->
+    <section class="glass-card mobile-tickets-card">
+      <div class="card-head">
+        <span class="card-title">Live Orders & Tickets</span>
+        <span class="card-badge" id="open-tickets-count">0 OPEN POSITIONS</span>
+      </div>
 
-        <!-- Top Statistical Ribbon -->
-        <div class="history-stats-bar">
-          <div class="history-stat-box">
-            <span class="metric-label">Compounding Days</span>
-            <span class="metric-val tabular" id="hist-total-trades">474 Days Tracked</span>
-          </div>
-          <div class="history-stat-box">
-            <span class="metric-label">Initial Seed Capital</span>
-            <span class="metric-val tabular" id="hist-seed-capital">$60.00 USD</span>
-          </div>
-          <div class="history-stat-box">
-            <span class="metric-label">Total Vaulted Reserve</span>
-            <span class="metric-val tabular" style="color: var(--signal-active);">$15,555,395.41</span>
-          </div>
-          <div class="history-stat-box">
-            <span class="metric-label">Overall Win Rate</span>
-            <span class="metric-val tabular" style="color: var(--signal-active);">79.0% (5,226 Wins)</span>
-          </div>
-        </div>
-
-        <!-- Filter & Search Toolbar -->
-        <div class="history-toolbar">
-          <div class="history-filters">
-            <button class="filter-pill active" data-filter="all" onclick="setDailyFilter('all')">All Days (474)</button>
-            <button class="filter-pill" data-filter="win" onclick="setDailyFilter('win')">Profitable Days</button>
-            <button class="filter-pill" data-filter="loss" onclick="setDailyFilter('loss')">Defensive Days</button>
-          </div>
-
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <input type="text" class="history-search-input" id="history-search" placeholder="Search by date or day number..." oninput="handleDailySearch(this.value)">
-            <button class="btn-glass" style="height: 28px; padding: 0 10px; font-size: 11px;" onclick="loadDailyHistory(currentHistoryPage)">
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        <!-- Scrollable Daily History Glass Table -->
-        <div class="glass-card history-table-card">
-          <div class="history-table-scroll">
-            <table class="glass-table">
-              <thead>
-                <tr>
-                  <th>Day #</th>
-                  <th>Date</th>
-                  <th>Starting Equity</th>
-                  <th>Day Realized PnL</th>
-                  <th class="hide-mobile">Vault Cashout (30%)</th>
-                  <th class="hide-mobile">Cumulative Vault</th>
-                  <th>Ending Equity</th>
-                  <th class="hide-mobile">Trades (Wins)</th>
-                  <th>Win Rate</th>
-                  <th class="hide-mobile">Status</th>
-                </tr>
-              </thead>
-              <tbody id="history-table-body">
-                <tr>
-                  <td colspan="10" style="text-align: center; color: var(--text-tertiary); padding: 30px;">
-                    Loading daily compounding history from empirical ledger...
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Pagination Footer -->
-          <div class="history-footer">
-            <span id="history-page-info">Showing 1 - 25 of 474 days</span>
-            <div class="pagination-group">
-              <button class="btn-page" id="btn-page-first" onclick="changeDailyPage(1)">First</button>
-              <button class="btn-page" id="btn-page-prev" onclick="changeDailyPage(currentHistoryPage - 1)">Prev</button>
-              <span class="tabular" style="font-size: 11px; padding: 0 4px;" id="history-page-counter">Page 1 of 19</span>
-              <button class="btn-page" id="btn-page-next" onclick="changeDailyPage(currentHistoryPage + 1)">Next</button>
-              <button class="btn-page" id="btn-page-last" onclick="changeDailyPage(totalHistoryPages)">Last</button>
-            </div>
-          </div>
-        </div>
-
+      <div class="table-wrap">
+        <table class="glass-table">
+          <thead>
+            <tr>
+              <th>Ticket</th>
+              <th>Dir</th>
+              <th>Volume</th>
+              <th>Entry</th>
+              <th>Floating PnL</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="active-orders-body">
+            <tr>
+              <td colspan="6" style="text-align: center; color: var(--text-tertiary); padding: 14px;">
+                No open market tickets · FSM State: SCANNING
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
+
+    <!-- Compatibility hidden elements for killzone -->
+    <div style="display: none;">
+      <span id="killzone-dot"></span>
+      <span id="killzone-name">NY Open</span>
+      <span id="killzone-time">12:00 – 15:00 UTC</span>
+    </div>
 
   </main>
 
-  <!-- Vault Harvest Modal (Frosted Glass) -->
+  <!-- ====================================================================
+       474-DAY COMPOUNDING HISTORY & LIVE TRADE JOURNAL DRAWER (BOTTOM SHEET)
+       ==================================================================== -->
+  <div class="glass-modal-overlay history-drawer-overlay" id="history-drawer-overlay" style="display: none;" onclick="handleDrawerOverlayClick(event)">
+    <div class="history-drawer-box" id="history-drawer-box">
+      <!-- Swipe/Drag Handle Indicator -->
+      <div class="drawer-drag-indicator"></div>
+
+      <!-- Drawer Header -->
+      <div class="drawer-header">
+        <div>
+          <h3 class="drawer-title">Compounding Ledger</h3>
+          <span class="drawer-subtitle">474 Empirical Days · Day 1 Backtest to Live Journal</span>
+        </div>
+        <button class="drawer-close-btn" onclick="closeHistoryDrawer()" aria-label="Close History">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- History Statistics Ribbon -->
+      <div class="history-stats-bar">
+        <div class="history-stat-box">
+          <span class="metric-label">Compounding Days</span>
+          <span class="metric-val tabular" id="hist-total-trades">474 Days Tracked</span>
+        </div>
+        <div class="history-stat-box">
+          <span class="metric-label">Initial Seed</span>
+          <span class="metric-val tabular" id="hist-seed-capital">$60.00 USD</span>
+        </div>
+        <div class="history-stat-box">
+          <span class="metric-label">Total Vaulted</span>
+          <span class="metric-val tabular" style="color: var(--signal-active);">$15.5M+</span>
+        </div>
+        <div class="history-stat-box">
+          <span class="metric-label">Overall Win Rate</span>
+          <span class="metric-val tabular" style="color: var(--signal-active);">79.0% (5,226W)</span>
+        </div>
+      </div>
+
+      <!-- Filter Pills & Search Input -->
+      <div class="history-toolbar">
+        <div class="history-filters">
+          <button class="filter-pill active" data-filter="all" onclick="setDailyFilter('all')">All Days (474)</button>
+          <button class="filter-pill" data-filter="win" onclick="setDailyFilter('win')">Profitable</button>
+          <button class="filter-pill" data-filter="loss" onclick="setDailyFilter('loss')">Defensive</button>
+        </div>
+
+        <div class="history-search-row">
+          <input type="text" class="history-search-input" id="history-search" placeholder="Search date (YYYY-MM-DD) or day #..." oninput="handleDailySearch(this.value)">
+          <button class="btn-glass" style="height: 36px; padding: 0 12px; font-size: 11px;" onclick="loadDailyHistory(currentHistoryPage)">
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Scrollable History Table -->
+      <div class="history-table-card">
+        <div class="history-table-scroll">
+          <table class="glass-table">
+            <thead>
+              <tr>
+                <th>Day #</th>
+                <th>Date</th>
+                <th>Starting Eq</th>
+                <th>Day PnL</th>
+                <th class="hide-mobile">Vault (30%)</th>
+                <th class="hide-mobile">Cumul Vault</th>
+                <th>Ending Eq</th>
+                <th class="hide-mobile">Trades</th>
+                <th>Win Rate</th>
+                <th class="hide-mobile">Status</th>
+              </tr>
+            </thead>
+            <tbody id="history-table-body">
+              <tr>
+                <td colspan="10" style="text-align: center; color: var(--text-tertiary); padding: 25px;">
+                  Loading daily compounding history from empirical ledger...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="history-footer">
+          <span id="history-page-info">Showing 1 - 25 of 474 days</span>
+          <div class="pagination-group">
+            <button class="btn-page" id="btn-page-first" onclick="changeDailyPage(1)">First</button>
+            <button class="btn-page" id="btn-page-prev" onclick="changeDailyPage(currentHistoryPage - 1)">Prev</button>
+            <span class="tabular" style="font-size: 11px; padding: 0 6px;" id="history-page-counter">Page 1 of 19</span>
+            <button class="btn-page" id="btn-page-next" onclick="changeDailyPage(currentHistoryPage + 1)">Next</button>
+            <button class="btn-page" id="btn-page-last" onclick="changeDailyPage(totalHistoryPages)">Last</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Vault Harvest Modal -->
   <div class="glass-modal-overlay" id="vault-modal" style="display: none;">
     <div class="glass-modal-box">
       <div class="card-head">
         <span class="card-title">Stratton Vault Profit Sweep</span>
-        <button class="btn-glass" onclick="closeModal('vault-modal')" style="height: 26px; padding: 0 8px; font-size: 11px;">Close</button>
+        <button class="btn-glass" onclick="closeModal('vault-modal')" style="height: 28px; padding: 0 10px; font-size: 11px;">Close</button>
       </div>
-      <p style="color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5;">
+      <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 12.5px; line-height: 1.5;">
         Daily 30% sovereign profit sweep moves realized gains into hard off-broker reserves to protect against tail risk.
       </p>
       <div class="glass-row" style="margin-bottom: 16px;">
@@ -454,10 +429,10 @@
         <span class="glass-row-value tabular">$1.57 USD</span>
       </div>
       <div style="display: flex; gap: 10px;">
-        <button class="btn-glass primary" style="flex: 1;" onclick="triggerVaultHarvest()">
+        <button class="btn-glass primary" style="flex: 1; height: 42px;" onclick="triggerVaultHarvest()">
           Sweep 30% Cash Now
         </button>
-        <button class="btn-glass" onclick="closeModal('vault-modal')">
+        <button class="btn-glass" style="height: 42px;" onclick="closeModal('vault-modal')">
           Dismiss
         </button>
       </div>
@@ -469,20 +444,20 @@
     <div class="glass-modal-box">
       <div class="card-head">
         <span class="card-title">Operator Security Verification</span>
-        <button class="btn-glass" onclick="closeModal('auth-modal')" style="height: 26px; padding: 0 8px; font-size: 11px;">Close</button>
+        <button class="btn-glass" onclick="closeModal('auth-modal')" style="height: 28px; padding: 0 10px; font-size: 11px;">Close</button>
       </div>
       <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 12px; line-height: 1.5;">
         Enter Stratton Operator Master Key or PIN to arm broker execution controls (Auto-Trade & Emergency Flatten).
       </p>
       <div style="margin-bottom: 14px;">
-        <input type="password" id="operator-pin-input" placeholder="Enter PIN (e.g. 8888) or Token" class="history-search-input" style="width: 100%; height: 40px; text-align: center; font-size: 16px; letter-spacing: 0.15em;" autocomplete="off">
+        <input type="password" id="operator-pin-input" placeholder="Enter PIN (e.g. 8888) or Token" class="history-search-input" style="width: 100%; height: 44px; text-align: center; font-size: 18px; letter-spacing: 0.15em;" autocomplete="off">
         <div id="auth-modal-error" style="color: var(--signal-alert); font-size: 11.5px; margin-top: 6px; display: none;"></div>
       </div>
       <div style="display: flex; gap: 10px;">
-        <button class="btn-glass primary" style="flex: 1; height: 38px;" id="btn-submit-auth" onclick="submitOperatorAuth()">
+        <button class="btn-glass primary" style="flex: 1; height: 44px; font-weight: 600;" id="btn-submit-auth" onclick="submitOperatorAuth()">
           Authorize Operator
         </button>
-        <button class="btn-glass" style="height: 38px;" onclick="closeModal('auth-modal')">
+        <button class="btn-glass" style="height: 44px;" onclick="closeModal('auth-modal')">
           Cancel
         </button>
       </div>
@@ -494,19 +469,19 @@
     <div class="glass-modal-box" style="border-color: rgba(255, 69, 58, 0.45); box-shadow: 0 0 30px rgba(255, 69, 58, 0.2);">
       <div class="card-head">
         <span class="card-title" style="color: var(--signal-alert);">Immediate Broker Liquidation</span>
-        <button class="btn-glass" onclick="closeModal('confirm-flatten-modal')" style="height: 26px; padding: 0 8px; font-size: 11px;">Close</button>
+        <button class="btn-glass" onclick="closeModal('confirm-flatten-modal')" style="height: 28px; padding: 0 10px; font-size: 11px;">Close</button>
       </div>
-      <p style="color: var(--text-primary); margin-bottom: 12px; font-size: 12.5px; line-height: 1.5; font-weight: 500;">
+      <p style="color: var(--text-primary); margin-bottom: 12px; font-size: 13px; line-height: 1.5; font-weight: 500;">
         Are you sure you want to execute emergency close?
       </p>
       <div style="background: rgba(255, 69, 58, 0.1); border: 1px solid rgba(255, 69, 58, 0.25); border-radius: 8px; padding: 10px; margin-bottom: 16px; font-size: 11.5px; color: var(--text-secondary); line-height: 1.45;">
         This command immediately cancels all active orders and closes all live positions at current market price.
       </div>
       <div style="display: flex; gap: 10px;">
-        <button class="btn-glass destructive" style="flex: 1; height: 38px; font-weight: 700;" id="btn-confirm-flatten" onclick="executeFlattenNow()">
+        <button class="btn-glass destructive" style="flex: 1; height: 44px; font-weight: 700;" id="btn-confirm-flatten" onclick="executeFlattenNow()">
           Confirm & Liquidate
         </button>
-        <button class="btn-glass" style="height: 38px;" onclick="closeModal('confirm-flatten-modal')">
+        <button class="btn-glass" style="height: 44px;" onclick="closeModal('confirm-flatten-modal')">
           Abort
         </button>
       </div>
@@ -514,6 +489,6 @@
   </div>
 
   <!-- Client Script -->
-  <script src="/static/apple_glass.js?v=18"></script>
+  <script src="/static/apple_glass.js?v=19"></script>
 </body>
 </html>
