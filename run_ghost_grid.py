@@ -40,11 +40,17 @@ logger = logging.getLogger("GhostRunner")
 # Global engine ref for graceful shutdown
 engine_ref = None
 
-def notify(message):
+try:
+    from bark_integration import send_alert
+except ImportError:
+    send_alert = None
+
+def notify(title: str, message: str, priority: str = "high"):
     try:
-        url = "https://ntfy.sh/tbt_ghost_grid"
-        req = urllib.request.Request(url, data=message.encode('utf-8'), method='POST')
-        urllib.request.urlopen(req, timeout=5)
+        clean_msg = " · ".join([line.strip() for line in message.strip().splitlines() if line.strip()])
+        clean_title = title.strip()
+        if send_alert:
+            send_alert(title=clean_title, message=clean_msg, priority=priority)
     except Exception as e:
         logger.error(f"Failed to send ntfy notification: {e}")
 
@@ -102,7 +108,11 @@ async def main():
     engine = GhostEngine(gateway)
     engine_ref = engine
     
-    notify(f"👻 Ghost Grid started. Balance: ${account.balance}")
+    notify(
+        title="👻 Ghost Grid Armed (DEMO)",
+        message=f"LiteFinance DEMO · Balance: ${account.balance:.2f} · Grid Scalper Active",
+        priority="high"
+    )
     
     # Graceful shutdown handler
     loop = asyncio.get_running_loop()

@@ -31,10 +31,12 @@ class CompoundingLadder:
         self.max_loss_floor = max_loss_floor
         
         self.tiers = [
-            CompoundingTier(threshold=50.0, lot_size=0.10, grid_count=8, max_drawdown_pts=15.0, risk_grade="careful"),
-            CompoundingTier(threshold=100.0, lot_size=0.50, grid_count=10, max_drawdown_pts=10.0, risk_grade="aggressive"),
-            CompoundingTier(threshold=250.0, lot_size=0.50, grid_count=12, max_drawdown_pts=20.0, risk_grade="standard"),
-            CompoundingTier(threshold=500.0, lot_size=0.50, grid_count=12, max_drawdown_pts=45.0, risk_grade="buffered"),
+            CompoundingTier(threshold=0.0, lot_size=0.01, grid_count=3, max_drawdown_pts=50.0, risk_grade="micro_survival"),
+            CompoundingTier(threshold=30.0, lot_size=0.02, grid_count=3, max_drawdown_pts=25.0, risk_grade="escape_velocity"),
+            CompoundingTier(threshold=50.0, lot_size=0.05, grid_count=5, max_drawdown_pts=15.0, risk_grade="careful"),
+            CompoundingTier(threshold=100.0, lot_size=0.10, grid_count=8, max_drawdown_pts=10.0, risk_grade="aggressive"),
+            CompoundingTier(threshold=250.0, lot_size=0.20, grid_count=10, max_drawdown_pts=20.0, risk_grade="standard"),
+            CompoundingTier(threshold=500.0, lot_size=0.30, grid_count=12, max_drawdown_pts=45.0, risk_grade="buffered"),
             CompoundingTier(threshold=1000.0, lot_size=0.50, grid_count=15, max_drawdown_pts=70.0, risk_grade="maximum"),
             CompoundingTier(threshold=2000.0, lot_size=0.50, grid_count=15, max_drawdown_pts=140.0, risk_grade="overdue")
         ]

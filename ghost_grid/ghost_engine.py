@@ -30,6 +30,21 @@ try:
 except ImportError:
     get_politician_brain = None
 
+try:
+    from bark_integration import send_alert
+except ImportError:
+    send_alert = None
+
+def push_ntfy(title: str, message: str, tags: str = "ghost,zap", priority: str = "high") -> None:
+    """Dispatches push notification via project NTFY channel."""
+    try:
+        clean_msg = " · ".join([line.strip() for line in message.strip().splitlines() if line.strip()])
+        clean_title = title.strip()
+        if send_alert:
+            send_alert(title=clean_title, message=clean_msg, priority=priority)
+    except Exception as e:
+        logger.debug("push_ntfy dispatch failed: %s", e)
+
 logger = logging.getLogger("GhostEngine")
 
 class GhostEngine:
@@ -105,6 +120,22 @@ class GhostEngine:
         return new_candle_formed
 
     async def tick(self, quote):
+        # Production Sentinel Invariants:
+        # Inviolable Weekend Flatten (Friday 20:30 UTC - Sunday 22:00 UTC)
+        now_utc = datetime.now(timezone.utc)
+        is_weekend_lockout = (now_utc.weekday() == 4 and (now_utc.hour > 20 or (now_utc.hour == 20 and now_utc.minute >= 30))) or now_utc.weekday() == 5
+        if is_weekend_lockout:
+            if self.active_positions:
+                logger.warning("🚨 INVIOLABLE FRIDAY 20:30 UTC FORCE-FLATTEN TRIGGERED! Auto-flattening open grid...")
+                await self._flatten_grid(is_win=False, reason="Friday Weekend Force-Flatten")
+            return
+
+        # Spread Blowout Guard (> $0.45 / 4.5 pips)
+        spread = quote.ask - quote.bid
+        if spread > 0.45:
+            logger.warning("⚠️ Spread blowout detected ($%.2f > $0.45). Grid entry/exit paused.", spread)
+            return
+
         # Update OHLCV
         new_candle = await self._update_candles(quote)
         
@@ -139,10 +170,10 @@ class GhostEngine:
         if total_volume > 0:
             avg_entry /= total_volume
             
-        # Hard total grid loss floor
-        if total_pnl <= -15.0:
-            logger.warning("Hard grid loss floor reached (-$15). Flattening!")
-            await self._flatten_grid(is_win=False)
+        # Hard total grid loss floor (-$5.00 for micro capital protection)
+        if total_pnl <= -5.00:
+            logger.warning("Hard grid loss floor reached (-$5.00). Flattening!")
+            await self._flatten_grid(is_win=False, reason="Hard Stop Loss Ceiling Hit (-$5.00)")
             return
             
         # Call GridExitController
@@ -158,27 +189,40 @@ class GhostEngine:
             is_win = total_pnl > 0
             await self._flatten_grid(is_win=is_win)
             
-    async def _flatten_grid(self, is_win: bool):
-        logger.info("Flattening all grid positions.")
+    async def _flatten_grid(self, is_win: bool, reason: str = "Exit Triggered"):
+        logger.info(f"Flattening all grid positions ({reason}).")
         try:
             await self.gateway.flatten_all_positions()
         except Exception as e:
             logger.error(f"Error flattening positions: {e}")
             
         hold_time = time.time() - self.grid_start_time if self.grid_start_time else 0
-        total_lot = sum(p["volume"] for p in self.active_positions)
+        total_lot = sum(p.get("volume", 0.0) for p in self.active_positions)
         
         self.chameleon.record_trade_result(is_win=is_win, hold_time=hold_time, lot_size=total_lot, slippage=0)
         self.active_positions.clear()
         self.grid_start_time = None
         self.exit_controller.reset()
         
-        # Check compounding / withdrawal
+        # Check compounding / withdrawal & push rich alert
         try:
             account = await self.gateway.get_account_snapshot()
+            win_tag = "💰 Profit Locked" if is_win else "🛑 Risk Stopped"
+            push_ntfy(
+                title=f"👻 Ghost Grid: {win_tag}",
+                message=f"{reason} · Balance: ${account.balance:.2f} · Active Orders Closed",
+                tags="moneybag,ghost" if is_win else "octagonal_sign,shield",
+                priority="high"
+            )
             if self.compounding.check_withdrawal(account.balance):
                 logger.info(f"Withdrawal threshold met! Current balance: {account.balance}")
                 self.cycle_start_balance = account.balance
+                push_ntfy(
+                    title="🎯 Withdrawal Threshold Met",
+                    message=f"Balance ${account.balance:.2f} exceeds withdrawal threshold.",
+                    tags="bank,trophy",
+                    priority="urgent"
+                )
             self.save_state()
         except Exception as e:
             logger.error(f"Error checking withdrawal: {e}")
@@ -278,3 +322,11 @@ class GhostEngine:
                 logger.error(f"Failed to place grid order {i+1}: {e}")
                 
         logger.info(f"Grid deployment complete. {len(self.active_positions)} positions active.")
+        if self.active_positions:
+            total_active_lots = sum(p.get("volume", 0.0) for p in self.active_positions)
+            push_ntfy(
+                title=f"⚡ Ghost Grid Deployed: {broker_dir}",
+                message=f"Dispatched {len(self.active_positions)} orders · Total: {total_active_lots:.2f} lots @ ${quote.mid:.2f} · Tier: {tier.risk_grade}",
+                tags="zap,ghost",
+                priority="high"
+            )

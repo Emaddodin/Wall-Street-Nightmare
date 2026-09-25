@@ -11,14 +11,14 @@ class GridExitConfig:
     tp1_scale_out_pct: float = 0.60
     trail_pct: float = 0.40
     watermark_pullback_pct: float = 0.30
-    watermark_min_peak: float = 50.0
+    watermark_min_peak: float = 2.00   # Peak profit in USD before watermark ratchet locks in
     time_decay_min_secs: float = 300.0
-    time_decay_min_pl: float = 5.0
-    hard_stop_loss: float = -15.0
-    spike_harvest_pts: float = 200.0
+    time_decay_min_pl: float = 0.50    # Minimum USD profit expected after 5 minutes
+    hard_stop_loss: float = -5.00      # Micro-account hard stop ceiling ($5 max risk)
+    spike_harvest_usd: float = 8.00    # Rapid macro spike harvest in USD ($8-24 gain)
     spike_harvest_secs: float = 120.0
     spike_harvest_pct: float = 0.80
-    stall_range_pts: float = 0.30
+    stall_range_pts: float = 0.35
     stall_secs: float = 90.0
 
 @dataclass
@@ -71,7 +71,7 @@ class GridExitController:
             return GridExitDecision(action="CLOSE_ALL", reason="Hard stop loss hit")
             
         # 7. Spike Harvest
-        if total_pl >= self.config.spike_harvest_pts and elapsed_time <= self.config.spike_harvest_secs:
+        if total_pl >= self.config.spike_harvest_usd and elapsed_time <= self.config.spike_harvest_secs:
             return GridExitDecision(action="SCALE_OUT_80", reason="Spike harvest triggered")
             
         # 4. Grid Watermark
