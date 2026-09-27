@@ -1,0 +1,18 @@
+{
+ "real_valid_avg": 2.219,
+ "real_valid_pf": 1.073,
+ "real_valid_n": 70,
+ "random_direction_200": {
+  "null_mean_avg": -1.694,
+  "null_sd_avg": 7.628,
+  "p_avg": 0.3433,
+  "p_pf": 0.3483,
+  "secs": 217
+ },
+ "permutation_200": {
+  "null_mean_avg": -1.925,
+  "null_sd_avg": 6.823,
+  "p_avg": 0.3035,
+  "p_pf": 0.3035
+ }
+}

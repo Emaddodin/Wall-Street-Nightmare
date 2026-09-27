@@ -433,6 +433,10 @@ def evaluate_position_tick(
     return None
 
 
+import os
+MIN_ENTRY_ATR = float(os.getenv("BT_MIN_ATR", "0"))
+
+
 def run_live_loop_backtest(
     data_dir: str = "data/candles",
     start_date_str: str = "2025-01-21",
@@ -683,6 +687,9 @@ def run_live_loop_backtest(
                             if trend_ok and retest_ok and w >= 0.45 and curr_px <= op_px:
                                 sig_dir, sig_strat, wick_r = "SELL", "BREAKOUT_RETEST", w
                                 active_bo_type = None
+
+                    if sig_dir and curr_atr < MIN_ENTRY_ATR:
+                        sig_dir = None   # volatility filter: friction ($0.25) eats low-ATR setups
 
                     if sig_dir:
                         regime_eval = regime_engine.evaluate_regime_fit(

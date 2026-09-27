@@ -1,8 +1,10 @@
 """
 scalper/brain/laya_oracle.py
 ============================
-Laya Non-Autoregressive System 1 Decision Oracle for Institutional Scalping.
-Wraps 'convaiinnovations/laya' into an ultra-low latency, non-blocking decision engine.
+Jeff System 1 Decision Oracle for Institutional Scalping (formerly Laya; class and function names kept
+for compatibility, aliased as JeffOracle / get_jeff_oracle).
+Wraps Jeff 1 (GestaltLabs/Jeff-1, served locally via scalper/brain/jeff_client.py) into a non-blocking
+decision engine that falls back to the calibrated rule engine whenever Jeff is unavailable.
 Integrates Semantic ICT Knowledge RAG and Real-Time Macro Watchdog to evaluate:
 - Setup Quality & Liquidity Trap Vetoes
 - Dynamic Compounding Tier Multipliers (1.25x - 1.50x lot size on A+ Confluence)
@@ -32,8 +34,7 @@ from scalper.brain.trade_journal_rag import get_trade_journal_rag, TradeJournalR
 
 logger = logging.getLogger("laya_oracle")
 
-MODEL_NAME = os.getenv("LAYA_MODEL", "convaiinnovations/laya")
-USE_CPU = os.getenv("LAYA_FORCE_CPU", "1") == "1"
+MODEL_NAME = os.getenv("JEFF_MODEL", "GestaltLabs/Jeff-1")
 
 
 @dataclass
@@ -79,7 +80,7 @@ class LayaOracle:
     def __init__(self, model_id: str = MODEL_NAME):
         self.model_id = model_id
         self._agent = None
-        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="laya_worker")
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="jeff_worker")
         self._is_ready = False
         self._loading = False
         self._last_decision: Optional[LayaDecision] = None
@@ -94,32 +95,48 @@ class LayaOracle:
         self._executor.submit(self._warmup_model)
 
     def _warmup_model(self) -> None:
-        """Loads Laya model in worker thread or uses calibrated mathematical fallback."""
-        if os.getenv("LAYA_SKIP_HEAVY_WEIGHTS", "1") == "1":
+        """Connects to the local Jeff server in a worker thread or uses the calibrated rule fallback."""
+        if os.getenv("JEFF_SKIP_HEAVY_WEIGHTS", os.getenv("LAYA_SKIP_HEAVY_WEIGHTS", "0")) == "1":
             self._is_ready = False
             self._loading = False
-            logger.info("🧠 Laya System 1: Running with Calibrated Mathematical RLCD Decision Engine (0.45ms latency).")
+            logger.info("🧠 Jeff System 1: Jeff server disabled (JEFF_SKIP_HEAVY_WEIGHTS=1), running Calibrated Rule Decision Engine.")
             return
 
-        try:
-            self._loading = True
-            logger.info("Initializing Laya System 1 Decision Model (%s)...", self.model_id)
-            import laya
+        self._loading = True
+        # Backend order: Jeff server (only when JEFF_URL is set explicitly) -> real Laya Router -> rule fallback.
+        errors = []
+        if os.getenv("JEFF_URL"):
+            try:
+                from scalper.brain.jeff_client import JeffClient
 
-            # Set device
-            device = "cpu" if USE_CPU else None
-            # Load Laya model
-            self._agent = laya.load(self.model_id, device=device)
+                client = JeffClient()
+                if not client.health():
+                    raise RuntimeError("Jeff server reported not ok")
+                self._agent = client
+                self.model_id = f"{MODEL_NAME} ({client.model_id})"
+                self._is_ready = True
+                self._loading = False
+                logger.info("🧠 Jeff System 1 (%s) connected and armed for live decisions.", client.model_id)
+                return
+            except Exception as e:
+                errors.append(f"jeff: {e}")
+        try:
+            from laya import Router
+
+            router = Router()
+            # Cold-start the checkpoint now (first call is ~25s) so live decisions never pay for it.
+            router.predict({"warmup": "xauusd"}, {"q": {"type": "noul", "instructions": "Is this a test?"}})
+            self._agent = router
+            self.model_id = "convaiinnovations/laya"
             self._is_ready = True
             self._loading = False
-            logger.info("🧠 Laya System 1 Model loaded successfully and armed for live decisions.")
+            logger.info("🧠 Laya System 1 (real model) loaded and armed for live decisions.")
+            return
         except Exception as e:
-            self._loading = False
-            self._is_ready = False
-            logger.warning(
-                "Laya PyTorch weights warmup deferred (%s). Running with Calibrated Mathematical RLCD Fallback Engine.",
-                e,
-            )
+            errors.append(f"laya: {e}")
+        self._loading = False
+        self._is_ready = False
+        logger.warning("AI model unavailable (%s). Running with Calibrated Rule Fallback Engine.", "; ".join(errors))
 
     @property
     def is_ready(self) -> bool:
@@ -128,7 +145,7 @@ class LayaOracle:
     def evaluate_setup_sync(self, market_state: Dict[str, Any]) -> LayaDecision:
         """
         Synchronous setup evaluation.
-        Uses Laya if resident in memory, else calibrated institutional rule fallback.
+        Uses Jeff if its server is connected, else calibrated institutional rule fallback.
         """
         t0 = time.perf_counter()
         direction = str(market_state.get("direction", "BUY") or "BUY").upper()
@@ -271,7 +288,7 @@ class LayaOracle:
                 matched_titles = ["S&R Breakout", "Candle Rejection", "Fair Value Retest"]
             rules_text = ""
 
-        # 5. If Laya Model is loaded, evaluate via Non-Autoregressive Forward Pass
+        # 5. If Jeff is connected, evaluate the setup via its typed Choice/Noul/Score readout
         if self.is_ready:
             try:
                 state = {
@@ -306,7 +323,13 @@ class LayaOracle:
                     "confluence_score": {
                         "type": "score",
                         "instructions": "Rate institutional order flow confluence from 0 (poor) to 10 (perfect).",
-                        "criteria": ["0: no confluence", "5: standard setup", "10: flawless A+ institutional alignment"],
+                        "criteria": [
+                            "0: no confluence",
+                            "1: weak confluence",
+                            "2: standard setup",
+                            "3: strong confluence",
+                            "4: flawless A+ institutional alignment",
+                        ],
                     },
                 }
 
@@ -315,7 +338,9 @@ class LayaOracle:
 
                 grade = answers.get("setup_grade", {}).get("choice", "high_probability")
                 trap_prob = float(answers.get("liquidity_trap_risk", {}).get("noul", 0.20))
-                conf_score = float(answers.get("confluence_score", {}).get("score", 7.5))
+                score_ans = answers.get("confluence_score", {})
+                n_levels = max(2, len(questions["confluence_score"]["criteria"]))
+                conf_score = float(score_ans.get("score", (n_levels - 1) * 0.75)) / (n_levels - 1) * 10.0
                 confidence = float(answers.get("setup_grade", {}).get("confidence", 0.85))
 
                 is_valid = (trap_prob < 0.60) and (grade != "toxic_trap")
@@ -359,7 +384,7 @@ class LayaOracle:
                     compounding_multiplier=compounding_mult,
                     decision_latency_ms=latency,
                     matched_ict_concepts=matched_titles,
-                    reasoning=f"Laya System 1: Grade {grade} (Conf: {confidence*100:.1f}%, Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, Twins WR: {rag_eval.win_rate_pct:.1f}%, Pol: {pol_eval.regime.value})",
+                    reasoning=f"Jeff System 1: Grade {grade} (Conf: {confidence*100:.1f}%, Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, Twins WR: {rag_eval.win_rate_pct:.1f}%, Pol: {pol_eval.regime.value})",
                     empirical_win_rate_pct=regime_eval.empirical_win_rate_pct,
                     regime_notes=f"{regime_eval.regime_notes} | {rag_eval.regime_notes} | {pol_eval.active_catalyst}",
                     political_regime=pol_eval.regime.value,
@@ -375,7 +400,7 @@ class LayaOracle:
                     self._last_decision = decision
                 return decision
             except Exception as e:
-                logger.debug("Laya forward pass error, falling back: %s", e)
+                logger.debug("Jeff inference error, falling back: %s", e)
 
         # 6. Calibrated Mathematical RLCD Fallback Engine
         # Strictly calibrated scoring based on geometric probabilities & 473-day empirical + political priors
@@ -427,7 +452,7 @@ class LayaOracle:
             compounding_multiplier=compounding_mult,
             decision_latency_ms=latency,
             matched_ict_concepts=matched_titles,
-            reasoning=f"Laya Calibrated Engine: Grade {grade} (Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, Twins WR: {rag_eval.win_rate_pct:.1f}%, Pol: {pol_eval.regime.value}, ICT: {', '.join(matched_titles[:2])})",
+            reasoning=f"Jeff Calibrated Engine: Grade {grade} (Confluence: {conf_score:.1f}/10, Prior WR: {regime_eval.empirical_win_rate_pct:.1f}%, Twins WR: {rag_eval.win_rate_pct:.1f}%, Pol: {pol_eval.regime.value}, ICT: {', '.join(matched_titles[:2])})",
             empirical_win_rate_pct=regime_eval.empirical_win_rate_pct,
             regime_notes=f"{regime_eval.regime_notes} | {rag_eval.regime_notes} | {pol_eval.active_catalyst}",
             political_regime=pol_eval.regime.value,
@@ -468,7 +493,7 @@ class LayaOracle:
 
         return {
             "model": self.model_id,
-            "architecture": "Non-Autoregressive System 1 Decision Model",
+            "architecture": "Jeff 1 typed-decision LoRA (Qwen3-4B) with calibrated rule fallback",
             "is_ready": self._is_ready,
             "latency_ms": round(last_dec.decision_latency_ms, 2) if last_dec else 0.45,
             "last_grade": last_dec.setup_grade if last_dec else "READY",
@@ -481,7 +506,7 @@ class LayaOracle:
             "macro_next_event": watchdog_tele.get("next_event", "Safe"),
             "empirical_win_rate": f"{last_dec.empirical_win_rate_pct:.1f}%" if last_dec else "79.5%",
             "regime_notes": last_dec.regime_notes if last_dec else "473-Day Continuous Macro Priors Active",
-            "reasoning": last_dec.reasoning if last_dec else "Laya System 1 Surveillance Active",
+            "reasoning": last_dec.reasoning if last_dec else "Jeff System 1 Surveillance Active",
             "politician": self.politician.get_telemetry(),
             "geopolitical_heat": f"{self.politician.get_current_macro_state()[2]:.1f}/100",
             "political_regime": self.politician.get_current_macro_state()[0].value,
@@ -505,3 +530,9 @@ def get_laya_oracle() -> LayaOracle:
     if _oracle_instance is None:
         _oracle_instance = LayaOracle()
     return _oracle_instance
+
+
+# Jeff aliases (the Laya names remain the canonical import for existing callers)
+JeffDecision = LayaDecision
+JeffOracle = LayaOracle
+get_jeff_oracle = get_laya_oracle

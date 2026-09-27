@@ -76,6 +76,8 @@ LLAMA_COMPLETION_URL = os.getenv("LLAMA_SERVER_URL", "http://127.0.0.1:8080/comp
 
 MAX_RISK_STOP_USD = 15.00      # Hard -$15.00 loss floor
 RAPID_SPIKE_TARGET_USD = 50.00 # Target rapid profit spike harvest (+50% / $50 per tier)
+MIN_ENTRY_ATR_1M = float(os.getenv("APEX_MIN_ENTRY_ATR", "1.5"))  # walk-forward validated: PF 1.3 -> 1.8/1.35 (H1/H2) on real gold data
+AUTO_SWITCH_TO_REAL = os.getenv("APEX_AUTO_SWITCH_REAL", "0") == "1"  # operator opt-in: a demo win never moves live capital by default
 MIN_DEMO_WIN_FOR_SWITCH = 1.00 # Minimum profit ($1.00 = 1.0 pt on 0.01 lots) to trigger Demo -> Real switch
 
 
@@ -597,7 +599,20 @@ async def run_live_scalper():
 
     logger.info("Entering live trading loop with Laya System 1 Surveillance...")
     tick_count = 0
+    zero_assets_reads = 0
     last_quote_time = time.time()
+
+    # Startup reconciliation: never stack new entries on top of unmanaged broker positions.
+    try:
+        start_acc = await gw.get_account_snapshot(force_fresh=True)
+        if start_acc.assets_used > 0.0:
+            logger.warning("🚨 Orphan broker positions at startup (assets used $%.2f). Flattening before trading.", start_acc.assets_used)
+            orphan_res = await gw.flatten_all_positions()
+            if not orphan_res.get("success"):
+                logger.error("Startup flatten incomplete: %s. Trading paused until resolved.", orphan_res)
+                scalper.trading_paused = True
+    except Exception as e:
+        logger.error("Startup reconciliation failed: %s", e)
 
     try:
         while not stop_event.is_set():
@@ -733,6 +748,10 @@ async def run_live_scalper():
                     
                     # 2.1 Ghost Position Watchdog (if broker closed order or hit SL/TP externally)
                     if acc.assets_used <= 0.0:
+                        zero_assets_reads += 1
+                    else:
+                        zero_assets_reads = 0
+                    if acc.assets_used <= 0.0 and zero_assets_reads >= 2:
                         oldest_pos_age = time.time() - min(p["open_time"] for p in scalper.active_positions)
                         if oldest_pos_age >= 2.0:
                             logger.warning("👻 BROKER CLOSED POSITION (TP/SL/External): 0 assets used (age %.1fs). Reconciling...", oldest_pos_age)
@@ -792,8 +811,8 @@ async def run_live_scalper():
                                 )
                                 # Check Demo-to-Real Auto-Switch Trigger on broker-side win!
                                 if getattr(scalper, "account_mode", "REAL") == "DEMO":
-                                    if pnl_diff >= MIN_DEMO_WIN_FOR_SWITCH:
-                                        logger.info("🎯 CONFIRMED DEMO WIN (+${pnl_diff:.2f} >= $%.2f)! Initiating transition to LIVE REAL account...",
+                                    if AUTO_SWITCH_TO_REAL and pnl_diff >= MIN_DEMO_WIN_FOR_SWITCH:
+                                        logger.info("🎯 CONFIRMED DEMO WIN (+$%.2f >= $%.2f)! Initiating transition to LIVE REAL account...",
                                                     pnl_diff, MIN_DEMO_WIN_FOR_SWITCH)
                                         push_ntfy(
                                             title=f"🎯 Demo Win Locked (+${pnl_diff:.2f})!",
@@ -1054,7 +1073,7 @@ async def run_live_scalper():
                             )
                             # Check Demo-to-Real Auto-Switch Trigger on First Win
                             if getattr(scalper, "account_mode", "REAL") == "DEMO":
-                                if tot_pnl >= MIN_DEMO_WIN_FOR_SWITCH:
+                                if AUTO_SWITCH_TO_REAL and tot_pnl >= MIN_DEMO_WIN_FOR_SWITCH:
                                     logger.info("🎯 CONFIRMED DEMO WIN DETECTED (+${tot_pnl:.2f} >= $%.2f)! Initiating transition to LIVE REAL account...",
                                                 tot_pnl, MIN_DEMO_WIN_FOR_SWITCH)
                                     push_ntfy(
@@ -1163,6 +1182,9 @@ async def run_live_scalper():
                         allowed, session_label = scalper.is_in_allowed_session(allow_news_expansion=is_post_expansion)
                         if allowed:
                             sig: Optional[ApexSignal] = scalper.evaluate_strategy()
+                            if sig and sig.atr_1m < MIN_ENTRY_ATR_1M:
+                                logger.info("Skipping %s setup: 1m ATR %.2f < %.2f (friction eats low-volatility setups)", sig.strategy_type, sig.atr_1m, MIN_ENTRY_ATR_1M)
+                                sig = None
                             if sig:
                                 acc = await gw.get_account_snapshot(force_fresh=True)
                                 eff_bal = scalper.get_effective_balance(acc.balance)
@@ -1202,7 +1224,7 @@ async def run_live_scalper():
                                     "recent_high": recent_high,
                                     "recent_low": recent_low,
                                 }
-                                laya_decision = laya_oracle.evaluate_setup_sync(market_state)
+                                laya_decision = await laya_oracle.evaluate_setup(market_state)
     
                                 # Micro-Account Capital Preservation Shield (<$100):
                                 is_a_plus_titan = (
@@ -1361,6 +1383,8 @@ async def run_live_scalper():
                                     )
                                 else:
                                     err_msg = order_res.get("error", "Unknown error")
+                                    # An unconfirmed order may still be live: pause entries until the watchdog reconciles.
+                                    scalper.cooldown_until = max(scalper.cooldown_until, time.time() + 30.0)
                                     logger.error("❌ BROKER ORDER FAILED / REJECTED: %s | Requested: %s %.2f lots", err_msg, sig.direction, lot_size)
                                     push_ntfy(
                                         title=f"⚠️ Rejected: {sig.direction} {lot_size}L @ ${sig.entry_price:.2f}",

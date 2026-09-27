@@ -1,0 +1,44 @@
+{
+ "calendar_w15": {
+  "frozen_share_of_bars": 0.0083,
+  "post_share": 0.0133,
+  "frozen_hours": 83.3
+ },
+ "calendar_w5": {
+  "frozen_share_of_bars": 0.0051,
+  "post_share": 0.0135,
+  "frozen_hours": 50.6
+ },
+ "offline_fallback": {
+  "frozen_share_of_bars": 0.0031,
+  "post_share": 0.0075,
+  "frozen_hours": 31.2
+ },
+ "HIGH_events_frozen_at_T_by_offline_fallback": [
+  41,
+  220
+ ],
+ "offline_coverage_by_first_word": {
+  "CPI": 0.15,
+  "Core": 0.3,
+  "FOMC": 0.0,
+  "Fed": 0.0,
+  "GDP": 0.43,
+  "ISM": 0.0,
+  "JOLTS": 0.0,
+  "Jackson": 0.0,
+  "Nonfarm": 0.75,
+  "PPI": 0.4,
+  "Retail": 0.29
+ },
+ "NFP_not_first_friday": [
+  "2025-01-10 Fri",
+  "2025-07-03 Thu",
+  "2025-11-20 Thu",
+  "2025-12-16 Tue",
+  "2026-01-09 Fri",
+  "2026-02-11 Wed",
+  "2026-05-08 Fri",
+  "2026-07-02 Thu"
+ ]
+}

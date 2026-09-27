@@ -38,3 +38,10 @@ old/
 scratch/
 .agents/
 skills-lock.json
+
+# LiteFinance session + live state (secrets)
+lf_session.json
+ghost_grid_state.json
+
+# Untrusted upstream pickles (arbitrary code on load) - never commit
+xau_alpha/xaubot/upstream/**/*.pkl

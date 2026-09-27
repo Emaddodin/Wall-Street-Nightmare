@@ -1,0 +1,19 @@
+{
+ "n_cuts": 40,
+ "real": {
+  "cuts_with_violation": 0,
+  "compared_orders": 13210
+ },
+ "injected_leak": {
+  "cuts_with_violation": 34,
+  "compared_orders": 12993
+ },
+ "signal_coverage": {
+  "emitted": 535,
+  "warmup": 0,
+  "gate_session": 48,
+  "gate_news": 6,
+  "unknown_at_cut": 0,
+  "UNEXPLAINED": 0
+ }
+}

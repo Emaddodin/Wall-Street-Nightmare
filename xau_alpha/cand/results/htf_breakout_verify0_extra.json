@@ -1,0 +1,47 @@
+{
+ "orders_without_10s_bar_within_60s(dropped_as_stale)": 0,
+ "orders_filled_on_bar_opening_exactly_at_t": 535,
+ "orders": 535,
+ "delay+10s": {
+  "train": {
+   "n": 169,
+   "pf": 1.366,
+   "avg_pts": 3.917
+  },
+  "valid": {
+   "n": 69,
+   "pf": 1.097,
+   "avg_pts": 2.918
+  }
+ },
+ "delay+30s": {
+  "train": {
+   "n": 168,
+   "pf": 1.506,
+   "avg_pts": 5.25
+  },
+  "valid": {
+   "n": 69,
+   "pf": 1.147,
+   "avg_pts": 4.36
+  }
+ },
+ "gaps_train": {
+  "tp_gap_n": 2,
+  "tp_gap_sum": 3.89,
+  "sl_gap_n": 1,
+  "sl_gap_sum": 0.2,
+  "pf": 1.542,
+  "pf_tp_gaps_removed": 1.54,
+  "net_pnl": 909.6
+ },
+ "gaps_valid": {
+  "tp_gap_n": 1,
+  "tp_gap_sum": 92.14,
+  "sl_gap_n": 4,
+  "sl_gap_sum": 102.67,
+  "pf": 1.073,
+  "pf_tp_gaps_removed": 1.03,
+  "net_pnl": 155.3
+ }
+}

@@ -1,0 +1,7 @@
+# file=audio/tzwj.wav model=small task=transcribe lang=yo p=0.83 duration=975.8s
+# top_langs=yo:0.83, en:0.06, sw:0.05, ht:0.03, sn:0.02
+[00:00.00 - 00:06.18] I tried turning 14 dollars into thousands, I believe the hood account after seeing over has $100 and then started
+[00:06.18 - 00:12.34] over an actually hit $5300 plus target here's the entire unedited proof of every single entry
+[00:12.34 - 00:17.96] and exit now people show you the winds I recorded every single trade the mistakes that
+[00:17.96 - 00:23.44] went out the first time and the esoter surgeons that change everything on attempt too in this
+[00:23.44 - 00:28.64] video I'm working you to my full trade log step by step so you can see what went
