@@ -1,0 +1,14 @@
+# file=audio/scalp.wav model=small task=transcribe lang=en p=0.98 duration=37.2s
+# top_langs=en:0.98, yo:0.01, sw:0.00, pt:0.00, ht:0.00
+[00:01.65 - 00:05.71] Okay, so what do we can see now? Can you see this? Now, what can we do? We can easily stick
+[00:05.71 - 00:09.77] stock into some more trades, right? That's what we can easily stick to on this trade, right?
+[00:09.77 - 00:13.71] We can easily system it. Now, what I'm trying to do is I'm trying to optimize my capital
+[00:13.71 - 00:18.15] to begin with, because my capital is still extremely low. So let's let me just add some
+[00:18.15 - 00:21.63] more trades. And like I said, the reason why I can add more trades because I'm using
+[00:21.63 - 00:25.99] unlimited leverage. So don't be confused at all. So it may last a capital just pushes
+[00:25.99 - 00:29.45] up a little bit more. I'm closing. Okay, I'm closing the straight. I'm closing the
+[00:29.45 - 00:31.85] Can you say that hits my maximum zone in the sport?
+[00:31.85 - 00:32.97] I should be expecting retracement.
+[00:32.97 - 00:34.09] Let me live this trade, good.
+[00:34.09 - 00:37.37] So now we have about 238 bucks, 238 bucks.
+# elapsed=787s

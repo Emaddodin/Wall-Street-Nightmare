@@ -1,0 +1,164 @@
+{
+ "rule": "ratio>=2.0 vs quiet same-minute median of prior 20 weekdays AND r(T) > max r(T-10..T-1)",
+ "events_in_data_range": 305,
+ "no_bar": 2,
+ "HIGH_unique_minutes": {
+  "n": 196,
+  "match": 111,
+  "rate": 0.566
+ },
+ "HIGH_placebo_T-60": {
+  "n": 196,
+  "match": 11,
+  "rate": 0.056
+ },
+ "HIGH_placebo_T+60": {
+  "n": 196,
+  "match": 11,
+  "rate": 0.056
+ },
+ "HIGH_placebo_T+7": {
+  "n": 196,
+  "match": 1,
+  "rate": 0.005
+ },
+ "HIGH_T_beats_T-60_and_T+60": {
+  "n": 196,
+  "rate": 0.801
+ },
+ "MEDIUM_all": {
+  "n": 94,
+  "match": 47,
+  "rate": 0.5
+ },
+ "claims_alone_minutes": {
+  "n": 56,
+  "match": 21,
+  "rate": 0.375
+ },
+ "by_type": {
+  "CHAIR_TESTIMONY": {
+   "n": 5,
+   "match": 0,
+   "rate": 0.0
+  },
+  "CHAIR_TESTIMONY_TEXT": {
+   "n": 2,
+   "match": 1,
+   "rate": 0.5
+  },
+  "CLAIMS": {
+   "n": 80,
+   "match": 39,
+   "rate": 0.487
+  },
+  "CPI": {
+   "n": 19,
+   "match": 19,
+   "rate": 1.0
+  },
+  "FOMC": {
+   "n": 14,
+   "match": 13,
+   "rate": 0.929
+  },
+  "FOMC_MINUTES": {
+   "n": 13,
+   "match": 6,
+   "rate": 0.462
+  },
+  "FOMC_PRESS": {
+   "n": 14,
+   "match": 3,
+   "rate": 0.214
+  },
+  "GDP": {
+   "n": 12,
+   "match": 7,
+   "rate": 0.583
+  },
+  "GDP_ADV": {
+   "n": 7,
+   "match": 2,
+   "rate": 0.286
+  },
+  "ISM_MFG": {
+   "n": 20,
+   "match": 6,
+   "rate": 0.3
+  },
+  "ISM_SRV": {
+   "n": 20,
+   "match": 7,
+   "rate": 0.35
+  },
+  "JACKSON_HOLE": {
+   "n": 2,
+   "match": 2,
+   "rate": 1.0
+  },
+  "JOLTS": {
+   "n": 19,
+   "match": 5,
+   "rate": 0.263
+  },
+  "NFP": {
+   "n": 18,
+   "match": 18,
+   "rate": 1.0
+  },
+  "PCE": {
+   "n": 19,
+   "match": 7,
+   "rate": 0.368
+  },
+  "PPI": {
+   "n": 19,
+   "match": 15,
+   "rate": 0.789
+  },
+  "RETAIL": {
+   "n": 20,
+   "match": 14,
+   "rate": 0.7
+  }
+ },
+ "median_ratio_by_type": {
+  "CHAIR_TESTIMONY": 0.93,
+  "CHAIR_TESTIMONY_TEXT": 11.41,
+  "CLAIMS": 2.09,
+  "CPI": 7.4,
+  "FOMC": 7.48,
+  "FOMC_MINUTES": 2.01,
+  "FOMC_PRESS": 2.5,
+  "GDP": 2.54,
+  "GDP_ADV": 1.92,
+  "ISM_MFG": 1.76,
+  "ISM_SRV": 1.82,
+  "JACKSON_HOLE": 5.92,
+  "JOLTS": 1.36,
+  "NFP": 7.46,
+  "PCE": 1.89,
+  "PPI": 3.79,
+  "RETAIL": 2.4
+ },
+ "median_spr_max_by_type": {
+  "CHAIR_TESTIMONY": 1.19,
+  "CHAIR_TESTIMONY_TEXT": 8.072,
+  "CLAIMS": 2.707,
+  "CPI": 5.93,
+  "FOMC": 5.115,
+  "FOMC_MINUTES": 2.19,
+  "FOMC_PRESS": 0.96,
+  "GDP": 2.722,
+  "GDP_ADV": 2.71,
+  "ISM_MFG": 3.29,
+  "ISM_SRV": 4.176,
+  "JACKSON_HOLE": 9.475,
+  "JOLTS": 3.48,
+  "NFP": 5.935,
+  "PCE": 2.71,
+  "PPI": 4.06,
+  "RETAIL": 3.895
+ }
+}

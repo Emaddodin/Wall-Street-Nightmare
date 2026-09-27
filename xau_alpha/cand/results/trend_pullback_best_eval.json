@@ -1,0 +1,654 @@
+{
+ "module": "trend_pullback",
+ "params": {
+  "trend": "ema",
+  "zone": "fvg",
+  "trig": "eng",
+  "sess": "day",
+  "ex": "tr4",
+  "sigma": 1.0,
+  "smin": 1.0,
+  "gap": 15,
+  "W": 30
+ },
+ "drift_per_min": {
+  "0": 0.003239309975477071,
+  "1": 0.0009730906835632812
+ },
+ "lf_base": {
+  "train": {
+   "n": 606,
+   "wr": 0.274,
+   "pf": 1.081,
+   "avg_pts": 0.266,
+   "avg_R": 0.092,
+   "sum_R": 55.7,
+   "maxdd_R": 45.0,
+   "avg_risk": 5.04,
+   "tpd": 3.12
+  },
+  "valid": {
+   "n": 255,
+   "wr": 0.259,
+   "pf": 0.752,
+   "avg_pts": -1.797,
+   "avg_R": 0.002,
+   "sum_R": 0.5,
+   "maxdd_R": 44.8,
+   "avg_risk": 10.71,
+   "tpd": 2.97
+  },
+  "train_long": {
+   "n": 470,
+   "wr": 0.277,
+   "pf": 1.096,
+   "avg_pts": 0.306,
+   "avg_R": 0.111,
+   "sum_R": 52.0,
+   "maxdd_R": 35.5,
+   "avg_risk": 4.87,
+   "tpd": 3.33
+  },
+  "valid_long": {
+   "n": 134,
+   "wr": 0.261,
+   "pf": 0.838,
+   "avg_pts": -0.974,
+   "avg_R": -0.021,
+   "sum_R": -2.8,
+   "maxdd_R": 24.4,
+   "avg_risk": 9.2,
+   "tpd": 2.79
+  },
+  "train_short": {
+   "n": 136,
+   "wr": 0.265,
+   "pf": 1.036,
+   "avg_pts": 0.13,
+   "avg_R": 0.027,
+   "sum_R": 3.6,
+   "maxdd_R": 30.9,
+   "avg_risk": 5.65,
+   "tpd": 2.57
+  },
+  "valid_short": {
+   "n": 121,
+   "wr": 0.256,
+   "pf": 0.684,
+   "avg_pts": -2.709,
+   "avg_R": 0.027,
+   "sum_R": 3.3,
+   "maxdd_R": 25.1,
+   "avg_risk": 12.37,
+   "tpd": 3.18
+  },
+  "train_flip_eligible": {
+   "n": 292,
+   "wr": 0.233,
+   "pf": 1.186,
+   "avg_pts": 0.407,
+   "avg_R": 0.192,
+   "sum_R": 56.1,
+   "maxdd_R": 24.3,
+   "avg_risk": 2.82,
+   "tpd": 2.03
+  },
+  "valid_flip_eligible": {
+   "n": 28,
+   "wr": 0.179,
+   "pf": 1.481,
+   "avg_pts": 1.299,
+   "avg_R": 0.27,
+   "sum_R": 7.5,
+   "maxdd_R": 14.7,
+   "avg_risk": 3.32,
+   "tpd": 1.22
+  },
+  "train_t": 0.95,
+  "train_drop_best_month_pf": 0.986,
+  "train_exits": {
+   "sl": 386,
+   "time": 96,
+   "trail": 77,
+   "be": 47
+  },
+  "train_risk_q10_50_90": [
+   2.1,
+   4.1,
+   8.98
+  ],
+  "train_flip_share": 0.482,
+  "train_hold_min_q10_50_90": [
+   4.3,
+   43.4,
+   240.2
+  ],
+  "train_long_share": 0.776,
+  "train_avg_nights": 0.0,
+  "valid_t": 0.01,
+  "valid_drop_best_month_pf": 0.668,
+  "valid_exits": {
+   "sl": 166,
+   "trail": 39,
+   "time": 29,
+   "be": 21
+  },
+  "valid_risk_q10_50_90": [
+   3.95,
+   7.94,
+   21.75
+  ],
+  "valid_flip_share": 0.11,
+  "valid_hold_min_q10_50_90": [
+   5.0,
+   42.0,
+   240.2
+  ],
+  "valid_long_share": 0.525,
+  "valid_avg_nights": 0.0,
+  "train_halves_pf": [
+   1.006,
+   1.145
+  ]
+ },
+ "lf_harsh": {
+  "train": {
+   "n": 617,
+   "wr": 0.241,
+   "pf": 0.806,
+   "avg_pts": -0.747,
+   "avg_R": -0.155,
+   "sum_R": -95.8,
+   "maxdd_R": 108.9,
+   "avg_risk": 5.37,
+   "tpd": 3.18
+  },
+  "valid": {
+   "n": 256,
+   "wr": 0.242,
+   "pf": 0.65,
+   "avg_pts": -2.754,
+   "avg_R": -0.118,
+   "sum_R": -30.1,
+   "maxdd_R": 55.7,
+   "avg_risk": 11.09,
+   "tpd": 2.98
+  },
+  "train_long": {
+   "n": 476,
+   "wr": 0.25,
+   "pf": 0.825,
+   "avg_pts": -0.654,
+   "avg_R": -0.135,
+   "sum_R": -64.4,
+   "maxdd_R": 76.8,
+   "avg_risk": 5.19,
+   "tpd": 3.38
+  },
+  "valid_long": {
+   "n": 135,
+   "wr": 0.23,
+   "pf": 0.691,
+   "avg_pts": -2.081,
+   "avg_R": -0.155,
+   "sum_R": -21.0,
+   "maxdd_R": 33.5,
+   "avg_risk": 9.6,
+   "tpd": 2.81
+  },
+  "train_short": {
+   "n": 141,
+   "wr": 0.213,
+   "pf": 0.75,
+   "avg_pts": -1.062,
+   "avg_R": -0.223,
+   "sum_R": -31.4,
+   "maxdd_R": 43.5,
+   "avg_risk": 5.96,
+   "tpd": 2.66
+  },
+  "valid_short": {
+   "n": 121,
+   "wr": 0.256,
+   "pf": 0.616,
+   "avg_pts": -3.504,
+   "avg_R": -0.076,
+   "sum_R": -9.1,
+   "maxdd_R": 29.1,
+   "avg_risk": 12.76,
+   "tpd": 3.18
+  },
+  "train_flip_eligible": {
+   "n": 258,
+   "wr": 0.19,
+   "pf": 0.797,
+   "avg_pts": -0.534,
+   "avg_R": -0.159,
+   "sum_R": -41.1,
+   "maxdd_R": 53.5,
+   "avg_risk": 2.94,
+   "tpd": 1.94
+  },
+  "valid_flip_eligible": {
+   "n": 17,
+   "wr": 0.118,
+   "pf": 0.322,
+   "avg_pts": -2.187,
+   "avg_R": -0.659,
+   "sum_R": -11.2,
+   "maxdd_R": 11.8,
+   "avg_risk": 3.38,
+   "tpd": 1.31
+  },
+  "train_t": -1.87,
+  "train_drop_best_month_pf": 0.726,
+  "train_exits": {
+   "sl": 407,
+   "time": 92,
+   "trail": 74,
+   "be": 44
+  },
+  "train_risk_q10_50_90": [
+   2.39,
+   4.46,
+   9.24
+  ],
+  "train_flip_share": 0.418,
+  "train_hold_min_q10_50_90": [
+   3.8,
+   38.8,
+   240.2
+  ],
+  "train_long_share": 0.771,
+  "train_avg_nights": 0.0,
+  "valid_t": -0.86,
+  "valid_drop_best_month_pf": 0.576,
+  "valid_exits": {
+   "sl": 168,
+   "trail": 35,
+   "time": 28,
+   "be": 25
+  },
+  "valid_risk_q10_50_90": [
+   4.36,
+   8.31,
+   22.11
+  ],
+  "valid_flip_share": 0.066,
+  "valid_hold_min_q10_50_90": [
+   4.9,
+   41.8,
+   240.2
+  ],
+  "valid_long_share": 0.527,
+  "valid_avg_nights": 0.0,
+  "train_halves_pf": [
+   0.681,
+   0.916
+  ]
+ },
+ "mid": {
+  "train": {
+   "n": 600,
+   "wr": 0.285,
+   "pf": 1.24,
+   "avg_pts": 0.721,
+   "avg_R": 0.239,
+   "sum_R": 143.6,
+   "maxdd_R": 36.9,
+   "avg_risk": 4.89,
+   "tpd": 3.09
+  },
+  "valid": {
+   "n": 254,
+   "wr": 0.268,
+   "pf": 0.814,
+   "avg_pts": -1.292,
+   "avg_R": 0.078,
+   "sum_R": 19.7,
+   "maxdd_R": 35.7,
+   "avg_risk": 10.55,
+   "tpd": 2.95
+  },
+  "train_long": {
+   "n": 465,
+   "wr": 0.286,
+   "pf": 1.256,
+   "avg_pts": 0.75,
+   "avg_R": 0.262,
+   "sum_R": 121.6,
+   "maxdd_R": 30.7,
+   "avg_risk": 4.72,
+   "tpd": 3.3
+  },
+  "valid_long": {
+   "n": 134,
+   "wr": 0.261,
+   "pf": 0.895,
+   "avg_pts": -0.609,
+   "avg_R": 0.037,
+   "sum_R": 5.0,
+   "maxdd_R": 21.6,
+   "avg_risk": 9.03,
+   "tpd": 2.79
+  },
+  "train_short": {
+   "n": 135,
+   "wr": 0.281,
+   "pf": 1.189,
+   "avg_pts": 0.619,
+   "avg_R": 0.163,
+   "sum_R": 22.0,
+   "maxdd_R": 19.0,
+   "avg_risk": 5.48,
+   "tpd": 2.55
+  },
+  "valid_short": {
+   "n": 120,
+   "wr": 0.275,
+   "pf": 0.752,
+   "avg_pts": -2.055,
+   "avg_R": 0.122,
+   "sum_R": 14.7,
+   "maxdd_R": 18.2,
+   "avg_risk": 12.24,
+   "tpd": 3.16
+  },
+  "train_flip_eligible": {
+   "n": 299,
+   "wr": 0.247,
+   "pf": 1.401,
+   "avg_pts": 0.797,
+   "avg_R": 0.376,
+   "sum_R": 112.5,
+   "maxdd_R": 17.0,
+   "avg_risk": 2.74,
+   "tpd": 2.02
+  },
+  "valid_flip_eligible": {
+   "n": 32,
+   "wr": 0.219,
+   "pf": 2.341,
+   "avg_pts": 3.181,
+   "avg_R": 0.798,
+   "sum_R": 25.5,
+   "maxdd_R": 11.1,
+   "avg_risk": 3.24,
+   "tpd": 1.19
+  },
+  "train_t": 2.28,
+  "train_drop_best_month_pf": 1.141,
+  "train_exits": {
+   "sl": 376,
+   "time": 97,
+   "trail": 80,
+   "be": 47
+  },
+  "train_risk_q10_50_90": [
+   1.97,
+   3.94,
+   8.82
+  ],
+  "train_flip_share": 0.498,
+  "train_hold_min_q10_50_90": [
+   5.0,
+   46.2,
+   240.2
+  ],
+  "train_long_share": 0.775,
+  "train_avg_nights": 0.01,
+  "train_beta": {
+   "all": {
+    "n": 600,
+    "avg_pts": 0.721,
+    "avg_beta_pts": 0.177,
+    "avg_beta_adj_pts": 0.544
+   },
+   "long": {
+    "n": 465,
+    "avg_pts": 0.75,
+    "avg_beta_pts": 0.305,
+    "avg_beta_adj_pts": 0.446
+   },
+   "short": {
+    "n": 135,
+    "avg_pts": 0.619,
+    "avg_beta_pts": -0.263,
+    "avg_beta_adj_pts": 0.883
+   }
+  },
+  "valid_t": 0.5,
+  "valid_drop_best_month_pf": 0.726,
+  "valid_exits": {
+   "sl": 163,
+   "trail": 39,
+   "time": 30,
+   "be": 22
+  },
+  "valid_risk_q10_50_90": [
+   3.76,
+   7.78,
+   21.64
+  ],
+  "valid_flip_share": 0.126,
+  "valid_hold_min_q10_50_90": [
+   5.4,
+   43.1,
+   240.2
+  ],
+  "valid_long_share": 0.528,
+  "valid_avg_nights": 0.0,
+  "valid_beta": {
+   "all": {
+    "n": 254,
+    "avg_pts": -1.292,
+    "avg_beta_pts": 0.007,
+    "avg_beta_adj_pts": -1.299
+   },
+   "long": {
+    "n": 134,
+    "avg_pts": -0.609,
+    "avg_beta_pts": 0.085,
+    "avg_beta_adj_pts": -0.694
+   },
+   "short": {
+    "n": 120,
+    "avg_pts": -2.055,
+    "avg_beta_pts": -0.079,
+    "avg_beta_adj_pts": -1.976
+   }
+  },
+  "train_halves_pf": [
+   1.145,
+   1.32
+  ]
+ },
+ "duka_raw": {
+  "train": {
+   "n": 617,
+   "wr": 0.261,
+   "pf": 0.977,
+   "avg_pts": -0.076,
+   "avg_R": 0.013,
+   "sum_R": 7.8,
+   "maxdd_R": 48.0,
+   "avg_risk": 5.17,
+   "tpd": 3.18
+  },
+  "valid": {
+   "n": 256,
+   "wr": 0.246,
+   "pf": 0.717,
+   "avg_pts": -2.084,
+   "avg_R": -0.027,
+   "sum_R": -7.0,
+   "maxdd_R": 48.4,
+   "avg_risk": 10.89,
+   "tpd": 2.98
+  },
+  "train_long": {
+   "n": 476,
+   "wr": 0.265,
+   "pf": 1.005,
+   "avg_pts": 0.018,
+   "avg_R": 0.039,
+   "sum_R": 18.5,
+   "maxdd_R": 42.2,
+   "avg_risk": 4.99,
+   "tpd": 3.38
+  },
+  "valid_long": {
+   "n": 135,
+   "wr": 0.237,
+   "pf": 0.773,
+   "avg_pts": -1.411,
+   "avg_R": -0.059,
+   "sum_R": -8.0,
+   "maxdd_R": 28.4,
+   "avg_risk": 9.4,
+   "tpd": 2.81
+  },
+  "train_short": {
+   "n": 141,
+   "wr": 0.248,
+   "pf": 0.895,
+   "avg_pts": -0.392,
+   "avg_R": -0.076,
+   "sum_R": -10.7,
+   "maxdd_R": 30.8,
+   "avg_risk": 5.76,
+   "tpd": 2.66
+  },
+  "valid_short": {
+   "n": 121,
+   "wr": 0.256,
+   "pf": 0.672,
+   "avg_pts": -2.834,
+   "avg_R": 0.008,
+   "sum_R": 1.0,
+   "maxdd_R": 25.9,
+   "avg_risk": 12.56,
+   "tpd": 3.18
+  },
+  "train_flip_eligible": {
+   "n": 276,
+   "wr": 0.217,
+   "pf": 1.049,
+   "avg_pts": 0.104,
+   "avg_R": 0.083,
+   "sum_R": 23.0,
+   "maxdd_R": 23.4,
+   "avg_risk": 2.82,
+   "tpd": 1.97
+  },
+  "valid_flip_eligible": {
+   "n": 24,
+   "wr": 0.125,
+   "pf": 0.55,
+   "avg_pts": -1.276,
+   "avg_R": -0.394,
+   "sum_R": -9.5,
+   "maxdd_R": 14.1,
+   "avg_risk": 3.38,
+   "tpd": 1.2
+  },
+  "train_t": 0.14,
+  "train_drop_best_month_pf": 0.888,
+  "train_exits": {
+   "sl": 406,
+   "time": 92,
+   "trail": 76,
+   "be": 43
+  },
+  "train_risk_q10_50_90": [
+   2.19,
+   4.26,
+   9.04
+  ],
+  "train_flip_share": 0.447,
+  "train_hold_min_q10_50_90": [
+   3.8,
+   38.8,
+   240.2
+  ],
+  "train_long_share": 0.771,
+  "train_avg_nights": 0.0,
+  "valid_t": -0.19,
+  "valid_drop_best_month_pf": 0.632,
+  "valid_exits": {
+   "sl": 168,
+   "trail": 36,
+   "time": 28,
+   "be": 24
+  },
+  "valid_risk_q10_50_90": [
+   4.16,
+   8.11,
+   21.91
+  ],
+  "valid_flip_share": 0.094,
+  "valid_hold_min_q10_50_90": [
+   4.9,
+   41.8,
+   240.2
+  ],
+  "valid_long_share": 0.527,
+  "valid_avg_nights": 0.0,
+  "train_halves_pf": [
+   0.845,
+   1.09
+  ]
+ },
+ "mirror_lf_base": {
+  "train": {
+   "n": 723,
+   "wr": 0.191,
+   "pf": 0.566,
+   "avg_pts": -1.577,
+   "avg_R": -0.346,
+   "sum_R": -249.9,
+   "maxdd_R": 249.9,
+   "avg_risk": 5.01,
+   "tpd": 3.73
+  },
+  "valid": {
+   "n": 298,
+   "wr": 0.218,
+   "pf": 0.705,
+   "avg_pts": -2.172,
+   "avg_R": -0.314,
+   "sum_R": -93.6,
+   "maxdd_R": 106.3,
+   "avg_risk": 10.71,
+   "tpd": 3.47
+  }
+ },
+ "null_random_valid": {
+  "p": 0.5686,
+  "null_mean": -1.745,
+  "null_sd": 1.082,
+  "null_q95": -0.308,
+  "seeds": 50
+ },
+ "null_perm_valid": {
+  "p": 0.451,
+  "null_mean": -1.831,
+  "null_sd": 0.876,
+  "null_q95": -0.486,
+  "seeds": 50
+ },
+ "null_random_train": {
+  "p": 0.0196,
+  "null_mean": -0.722,
+  "null_sd": 0.296,
+  "null_q95": -0.198,
+  "seeds": 50
+ },
+ "null_perm_train": {
+  "p": 0.0196,
+  "null_mean": -0.453,
+  "null_sd": 0.237,
+  "null_q95": -0.067,
+  "seeds": 50
+ }
+}

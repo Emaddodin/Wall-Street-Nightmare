@@ -38,3 +38,7 @@ old/
 scratch/
 .agents/
 skills-lock.json
+
+# LiteFinance session + live state (secrets)
+lf_session.json
+ghost_grid_state.json

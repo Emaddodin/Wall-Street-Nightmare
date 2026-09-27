@@ -1,0 +1,4935 @@
+{
+ "A_offline_politician": [
+  {
+   "t": "t<2s (before first poll)",
+   "state": [
+    "TRADE_WAR_TARIFFS",
+    "STRONG_BULL",
+    62.5,
+    "Trump Tariff & Trade War Geopolitical Regime Active"
+   ],
+   "BUY": {
+    "permitted": true,
+    "shield": "ARMED_SAFE",
+    "bias": "STRONG_BULL",
+    "regime": "TRADE_WAR_TARIFFS",
+    "heat": 62.5,
+    "size_mult": 1.65,
+    "tp_mult": 1.8
+   },
+   "SELL": {
+    "permitted": true,
+    "shield": "ARMED_SAFE",
+    "bias": "STRONG_BULL",
+    "regime": "TRADE_WAR_TARIFFS",
+    "heat": 62.5,
+    "size_mult": 1.0,
+    "tp_mult": 1.0
+   }
+  },
+  {
+   "t": "after first poll (all feeds failed)",
+   "state": [
+    "TRADE_WAR_TARIFFS",
+    "STRONG_BULL",
+    67.5,
+    "Trump Tariffs on China and Retaliatory Measures Shape Global Commodity Flows"
+   ],
+   "n_headlines": 2,
+   "headlines": [
+    "Trump Tariffs on China and Retaliatory Measures Shape Global Commodity Flows",
+    "Central Banks Maintain Record Physical Gold Accumulation Amid De-Dollarization"
+   ],
+   "BUY": {
+    "permitted": true,
+    "shield": "ARMED_SAFE",
+    "bias": "STRONG_BULL",
+    "regime": "TRADE_WAR_TARIFFS",
+    "heat": 67.5,
+    "size_mult": 1.65,
+    "tp_mult": 1.8
+   },
+   "SELL": {
+    "permitted": false,
+    "shield": "VETO_COUNTER_TREND_SHOCK",
+    "bias": "STRONG_BULL",
+    "regime": "TRADE_WAR_TARIFFS",
+    "heat": 67.5,
+    "size_mult": 0.0,
+    "tp_mult": 1.0
+   }
+  }
+ ],
+ "B_classifier_probes": [
+  {
+   "headline": "US and China agree trade deal; tariffs lifted on $300bn of goods",
+   "sentiment": -0.267,
+   "regime": "TRADE_WAR_TARIFFS",
+   "heat": 4.0,
+   "politician_status": "SAFE",
+   "watchdog_status": "SAFE"
+  },
+  {
+   "headline": "Trump taps Kevin Warsh as next Fed chair",
+   "sentiment": 0.6,
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "heat": 5.5,
+   "politician_status": "SAFE",
+   "watchdog_status": "CAUTION"
+  },
+  {
+   "headline": "Software stocks rally as Treasury yields rise",
+   "sentiment": 0.1,
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "heat": 5.5,
+   "politician_status": "SAFE",
+   "watchdog_status": "CAUTION"
+  },
+  {
+   "headline": "Powell warns inflation remains sticky, signals no rush to cut",
+   "sentiment": 0.6,
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "heat": 5.5,
+   "politician_status": "SAFE",
+   "watchdog_status": "CAUTION"
+  },
+  {
+   "headline": "Gold hits record high as dollar slides",
+   "sentiment": 0.5,
+   "regime": "NEUTRAL_CHOP",
+   "heat": 4.0,
+   "politician_status": "SAFE",
+   "watchdog_status": "SAFE"
+  },
+  {
+   "headline": "Gold slumps as ceasefire holds in Middle East",
+   "sentiment": -0.667,
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "heat": 4.0,
+   "politician_status": "HALT_NEW_ENTRIES",
+   "watchdog_status": "SAFE"
+  },
+  {
+   "headline": "Fed cuts rates by 25bp, signals more easing",
+   "sentiment": 0.0,
+   "regime": "FED_MONETARY_EASING",
+   "heat": 4.0,
+   "politician_status": "SAFE",
+   "watchdog_status": "SAFE"
+  },
+  {
+   "headline": "Hot CPI: inflation surges to 3.4%, rate hike bets jump",
+   "sentiment": -1.0,
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "heat": 4.0,
+   "politician_status": "HALT_NEW_ENTRIES",
+   "watchdog_status": "CAUTION"
+  },
+  {
+   "headline": "Award-winning analysts see gold flat this week",
+   "sentiment": 0.6,
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "heat": 5.5,
+   "politician_status": "SAFE",
+   "watchdog_status": "CAUTION"
+  },
+  {
+   "headline": "Central bank gold buying slows in August",
+   "sentiment": 0.667,
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "heat": 4.0,
+   "politician_status": "SAFE",
+   "watchdog_status": "SAFE"
+  }
+ ],
+ "C_macro_watchdog": {
+  "same_minute_MEDIUM_then_HIGH_is_entry_allowed": [
+   true,
+   "SAFE"
+  ],
+  "HIGH_only_is_entry_allowed": [
+   false,
+   "FREEZE: CPI m/m in 2.0m (High Volatility Risk)"
+  ],
+  "aware_NY_0830_stored_as_utc": "2026-09-11T08:30:00+00:00",
+  "true_utc": "2026-09-11T12:30:00+00:00",
+  "after_one_dovish_headline_is_entry_allowed_forever": [
+   false,
+   "FREEZE: Breaking Headline Risk (Fed turns dovish)"
+  ]
+ },
+ "D_rag_journal": {
+  "journal": "/Users/mac/Desktop/TBT-Engine/data/regime_trade_journal_full.csv",
+  "n_trades": 6613
+ },
+ "D_rag_table": [
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 0,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 1,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 6,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 8,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 9,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 10,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 11,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 12,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 13,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 14,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 15,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 16,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 17,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 86.7,
+   "trap": 0.13
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 18,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 19,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 20,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 21,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 22,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 23,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 0,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 1,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 6,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 8,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 9,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 10,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 11,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 12,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 13,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 14,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 15,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 16,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 17,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 86.7,
+   "trap": 0.13
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 18,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 19,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 20,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 21,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 22,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 23,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 0,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 1,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 6,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 8,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 9,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 10,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 11,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 12,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 13,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 14,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 15,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 16,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 17,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 86.7,
+   "trap": 0.13
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 18,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 19,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 20,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 21,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 22,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 23,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 0,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 1,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 6,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 8,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 9,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 10,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 11,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 12,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 13,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 14,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 15,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 16,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 17,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 86.7,
+   "trap": 0.13
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 18,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 19,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 20,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 21,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 22,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 23,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 0,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 1,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 6,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 8,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 9,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 10,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 11,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 12,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 13,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 14,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 15,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 16,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 17,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 86.7,
+   "trap": 0.13
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 18,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 19,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 20,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 21,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 22,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 23,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 0,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 1,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 6,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 8,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 9,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 10,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 11,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 12,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 13,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 14,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 15,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 16,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 17,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 86.7,
+   "trap": 0.13
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 18,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 19,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 20,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 21,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 22,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 23,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 0,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 1,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 6,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 8,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 9,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 10,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 11,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 12,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 13,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 40.0,
+   "trap": 0.6
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 14,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 15,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 53.3,
+   "trap": 0.47
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 16,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 17,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 86.7,
+   "trap": 0.13
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 18,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 19,
+   "allowed": true,
+   "rec": "SOVEREIGN_CONFLUENCE",
+   "twin_wr": 80.0,
+   "trap": 0.2
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 20,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 21,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 60.0,
+   "trap": 0.4
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 22,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 66.7,
+   "trap": 0.33
+  },
+  {
+   "dir": "BUY",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 23,
+   "allowed": true,
+   "rec": "APPROVE_STANDARD",
+   "twin_wr": 73.3,
+   "trap": 0.27
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 0,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 1,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 6,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 8,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 9,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 20.0,
+   "trap": 0.8
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 10,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 11,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 12,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 13,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 14,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 15,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 16,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 17,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 18,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 19,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 20,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 21,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 22,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "TRADE_WAR_TARIFFS",
+   "hour": 23,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 0,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 1,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 6,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 8,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 9,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 20.0,
+   "trap": 0.8
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 10,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 11,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 12,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 13,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 14,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 15,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 16,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 17,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 18,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 19,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 20,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 21,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 22,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "SAFE_HAVEN_ESCALATION",
+   "hour": 23,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 0,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 1,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 6,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 8,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 9,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 20.0,
+   "trap": 0.8
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 10,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 11,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 12,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 13,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 14,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 15,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 16,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 17,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 18,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 19,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 20,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 21,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 22,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "DE_DOLLARIZATION_BRICS",
+   "hour": 23,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 0,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 1,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 6,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 8,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 9,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 20.0,
+   "trap": 0.8
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 10,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 11,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 12,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 13,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 14,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 15,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 16,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 17,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 18,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 19,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 20,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 21,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 22,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "FED_MONETARY_EASING",
+   "hour": 23,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 0,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 1,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 6,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 8,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 9,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 20.0,
+   "trap": 0.8
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 10,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 11,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 12,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 13,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 14,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 15,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 16,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 17,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 18,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 19,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 20,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 21,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 22,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "HAWKISH_DOLLAR_SURGE",
+   "hour": 23,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 0,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 1,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 6,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 8,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 9,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 20.0,
+   "trap": 0.8
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 10,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 11,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 12,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 13,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 14,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 15,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 16,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 17,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 18,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 19,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 20,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 21,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 22,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "PEACE_DIVIDEND_COMPRESSION",
+   "hour": 23,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 0,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 1,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 2,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 3,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 4,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 5,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 6,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 7,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 33.3,
+   "trap": 0.67
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 8,
+   "allowed": true,
+   "rec": "BOLD_STANDARD_LOT",
+   "twin_wr": 26.7,
+   "trap": 0.73
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 9,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 20.0,
+   "trap": 0.8
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 10,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 11,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 12,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 13.3,
+   "trap": 0.87
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 13,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 14,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 15,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 16,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 6.7,
+   "trap": 0.93
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 17,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 18,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 19,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 20,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 21,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 22,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  },
+  {
+   "dir": "SELL",
+   "regime": "NEUTRAL_CHOP",
+   "hour": 23,
+   "allowed": false,
+   "rec": "VETO_BLATANT_TRAP",
+   "twin_wr": 0.0,
+   "trap": 1.0
+  }
+ ],
+ "E_oracle_fallback": [
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 0,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.15,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 1,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 2,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.15,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 3,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.15,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 4,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 5,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 6,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.15,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 7,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.15,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 8,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 9,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 10,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 11,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 12,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.15,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 13,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 14,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.15,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 15,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 16,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 17,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 18,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 19,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 20,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 21,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 22,
+   "valid": true,
+   "grade": "macro_sovereign_titan",
+   "trap": 0.15,
+   "conf": 9.8,
+   "size_mult": 1.65,
+   "tp_mult": 1.8,
+   "veto_source": ""
+  },
+  {
+   "state": "offline_seed",
+   "dir": "BUY",
+   "hour": 23,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical Regime Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 0,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 1,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 2,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 3,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 4,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 5,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 6,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 7,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 8,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 9,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 10,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 11,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 12,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 13,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 14,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 15,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 16,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 17,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 18,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 19,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 20,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 21,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 22,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "offline_seed",
+   "dir": "SELL",
+   "hour": 23,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical Regime Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 0,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.5,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 1,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 2,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 3,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 4,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 5,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 6,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 7,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 8,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 9,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 10,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 11,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 12,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 13,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 14,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 15,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 16,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 17,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 18,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 19,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 20,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 21,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 22,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "BUY",
+   "hour": 23,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical Regime Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 0,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 1,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 2,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 3,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 4,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 5,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 6,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 7,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 8,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 9,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.8,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 10,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.87,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 11,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.87,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 12,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.87,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 13,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.93,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 14,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.93,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 15,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.93,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 16,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.93,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 17,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 18,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 19,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 20,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 21,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 22,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "neutral",
+   "dir": "SELL",
+   "hour": 23,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical Regime Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 0,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 1,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 2,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 3,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 4,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 5,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 6,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 7,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 8,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 9,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 10,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 11,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 12,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 13,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 14,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 15,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 16,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 17,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 18,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 19,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 20,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 21,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 22,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Politician Shield Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "BUY",
+   "hour": 23,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical Regime Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 0,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 1,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 2,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 3,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 4,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 5,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 6,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 7,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.15,
+   "conf": 9.0,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 8,
+   "valid": true,
+   "grade": "A_plus_prime",
+   "trap": 0.1,
+   "conf": 9.8,
+   "size_mult": 1.5,
+   "tp_mult": 1.0,
+   "veto_source": ""
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 9,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.8,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 10,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.87,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 11,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.87,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 12,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.87,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 13,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.93,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 14,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.93,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 15,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.93,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 16,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.93,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 17,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 18,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 19,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 20,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 21,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 22,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 1.0,
+   "conf": 1.5,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical RAG Trade Twin Veto"
+  },
+  {
+   "state": "strong_bear",
+   "dir": "SELL",
+   "hour": 23,
+   "valid": false,
+   "grade": "toxic_trap",
+   "trap": 0.95,
+   "conf": 1.0,
+   "size_mult": 0.0,
+   "tp_mult": 1.0,
+   "veto_source": "Empirical Regime Veto"
+  }
+ ],
+ "F_parity": {
+  "calendar": {
+   "n": 12000,
+   "mismatches": 0,
+   "frozen_share": 0.0493,
+   "post_share": 0.0831
+  },
+  "offline": {
+   "n": 12000,
+   "mismatches": 0,
+   "frozen_share": 0.017,
+   "post_share": 0.0467
+  }
+ }
+}
