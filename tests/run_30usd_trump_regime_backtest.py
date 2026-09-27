@@ -97,6 +97,8 @@ def precompute_day_causal(f_path: Path) -> Optional[Dict[str, Any]]:
         .dropna()
         .reset_index()
     )
+    # Real feeds have minutes with no ticks: a 5m window with no 1m bars leaves NaN, which turns open_time into float64.
+    df_5m["open_time"] = df_5m["open_time"].astype("int64")
 
     if len(df_5m) >= 7:
         df_5m["res"] = df_5m["high"].rolling(6).max().shift(1)

@@ -1,37 +1,40 @@
 """
 ghost_grid/exit_controller.py
 =============================
-Rapid Micro-Scalp Exit Controller for MR P FX Strategy.
-Executes lightning fast profit captures and tight drawdown cuts:
-1. Target Capture: Closes all immediately at +$0.35 to +$0.60 profit per lot ($1.50 - $4.00 net basket gain).
-2. Watermark Scalp Trail: Peak profit ratchet locks in gains if momentum stalls.
-3. Time Decay: Max hold time strictly 45 - 90 seconds (MR P FX never sits in chop).
-4. Hard Floor: -$4.00 max risk per basket.
+Rapid micro-scalp exit controller for the MR P FX break & retest strategy.
+
+All thresholds are in PRICE POINTS of net basket move (after spread, measured bid/ask), converted to
+dollars with the live total lot size, so the same rules behave identically at 0.03 lots and at 0.30 lots.
+(The old dollar thresholds - +$1.20 target, $0.80 watermark - collapsed to a fraction of the spread as
+lots grew, so bigger tiers exited on noise.)
+
+  1. Hard stop        : net move <= -hard_stop_pts (the engine sets this per basket)
+  2. Quick target     : net move >= quick_tp_pts
+  3. Watermark lock   : once peak >= watermark_min_peak_pts, close green on a 30% giveback
+  4. Stagnation cut   : after stagnation_cut_secs with < stagnation_min_pts, cut it
+  5. Max hold         : hard exit at max_hold_time_secs
+The clock starts at the first fill (earliest entry_time), not at the first evaluated tick.
 """
 import logging
-import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class GridExitConfig:
-    # MR P FX Rapid Scalp Targets
-    quick_tp_pts: float = 0.40          # 40 cents Gold move ($0.40 x volume x 100)
-    quick_tp_usd: float = 1.20          # Immediate basket take-profit floor ($1.20 - $3.50)
-    
-    # Ratchet Trailing
-    watermark_min_peak: float = 0.80    # Start protecting once basket is up $0.80
-    watermark_pullback_pct: float = 0.25 # If drops 25% from peak profit, TAKE PROFIT IMMEDIATELY
-    
-    # Ultra-Strict Time Decay (Never hold > 90 seconds)
-    max_hold_time_secs: float = 90.0
+    # Original MR P FX values (docs: +35-50 cent target, 25% watermark pullback, 45s stagnation, 90s max hold,
+    # ~-$4 basket stop on 0.03 lots = 1.3pt), converted to points so they are identical at every lot size.
+    quick_tp_pts: float = 0.45
+    watermark_min_peak_pts: float = 0.30
+    watermark_pullback_pct: float = 0.25
+    watermark_floor_pts: float = 0.07
     stagnation_cut_secs: float = 45.0
-    stagnation_min_pl: float = 0.20
-    
-    # Hard Risk Stop Loss Floor
-    hard_stop_loss_usd: float = -4.00   # Max tolerable loss per basket attempt
+    stagnation_min_pts: float = 0.07
+    max_hold_time_secs: float = 90.0
+    hard_stop_pts: float = 1.30
+
 
 @dataclass
 class GridExitDecision:
@@ -39,54 +42,50 @@ class GridExitDecision:
     reason: str
     positions_to_close: List[str] = field(default_factory=list)
 
+
 def get_ghost_grid_exit_config() -> GridExitConfig:
     return GridExitConfig()
 
+
 class GridExitController:
-    """
-    Rapid Execution Exit Controller modeled on MR P FX manual scalp closing.
-    """
     def __init__(self, config: Optional[GridExitConfig] = None):
         self.config = config or get_ghost_grid_exit_config()
-        self.peak_pl = 0.0
+        self.peak_pts = 0.0
         self.grid_start_time = 0.0
-        
+
     def reset(self):
-        self.peak_pl = 0.0
+        self.peak_pts = 0.0
         self.grid_start_time = 0.0
-        
+
     def evaluate_grid_tick(self, current_price: float, grid_positions: List[dict], current_time: float) -> GridExitDecision:
         if not grid_positions:
             return GridExitDecision(action="HOLD", reason="No open positions")
-            
+
+        total_lots = sum(p.get("volume", 0.0) for p in grid_positions)
+        if total_lots <= 0:
+            return GridExitDecision(action="HOLD", reason="Zero volume")
+
+        entry_times = [p["entry_time"] for p in grid_positions if p.get("entry_time")]
+        start = min(entry_times) if entry_times else (self.grid_start_time or current_time)
         if self.grid_start_time == 0.0:
-            self.grid_start_time = current_time
-            
+            self.grid_start_time = start
+        elapsed = current_time - start
+
         total_pl = sum(p.get("unrealized_pl", 0.0) for p in grid_positions)
-        elapsed_time = current_time - self.grid_start_time
-        
-        self.peak_pl = max(self.peak_pl, total_pl)
-        
-        # 1. HARD RISK CEILING: Protect balance from any large pullback
-        if total_pl <= self.config.hard_stop_loss_usd:
-            return GridExitDecision(action="CLOSE_ALL", reason=f"Hard Stop Loss Floor Hit (${total_pl:.2f})")
-            
-        # 2. LIGHTNING PROFIT TARGET: MR P FX takes the money and runs!
-        if total_pl >= self.config.quick_tp_usd:
-            return GridExitDecision(action="CLOSE_ALL", reason=f"Rapid Scalp Target Hit (+${total_pl:.2f})")
-            
-        # 3. WATERMARK PROFIT LOCK: If was up >= $0.80 and starts dropping, CLOSE IN GREEN
-        if self.peak_pl >= self.config.watermark_min_peak:
-            pullback_threshold = self.peak_pl * (1.0 - self.config.watermark_pullback_pct)
-            if total_pl < pullback_threshold and total_pl > 0.20:
-                return GridExitDecision(action="CLOSE_ALL", reason=f"Watermark Profit Lock (+${total_pl:.2f} from peak +${self.peak_pl:.2f})")
-                
-        # 4. TIME DECAY CUT: If 45s passed and not gaining momentum, kill it
-        if elapsed_time >= self.config.stagnation_cut_secs and total_pl < self.config.stagnation_min_pl:
-            return GridExitDecision(action="CLOSE_ALL", reason=f"Stagnation Momentum Cut ({elapsed_time:.0f}s elapsed, PnL: ${total_pl:.2f})")
-            
-        # 5. HARD MAXIMUM HOLD TIME (90s): MR P FX never holds trades longer than 1-2 minutes
-        if elapsed_time >= self.config.max_hold_time_secs:
-            return GridExitDecision(action="CLOSE_ALL", reason=f"Max Scalp Hold Duration Exceeded ({elapsed_time:.0f}s)")
-            
+        pts = total_pl / (total_lots * 100.0)
+        self.peak_pts = max(self.peak_pts, pts)
+        c = self.config
+
+        if pts <= -c.hard_stop_pts:
+            return GridExitDecision(action="CLOSE_ALL", reason=f"Hard Stop ({pts:+.2f}pt / ${total_pl:.2f})")
+        if pts >= c.quick_tp_pts:
+            return GridExitDecision(action="CLOSE_ALL", reason=f"Scalp Target Hit ({pts:+.2f}pt / +${total_pl:.2f})")
+        if self.peak_pts >= c.watermark_min_peak_pts:
+            floor = self.peak_pts * (1.0 - c.watermark_pullback_pct)
+            if pts < floor and pts > c.watermark_floor_pts:
+                return GridExitDecision(action="CLOSE_ALL", reason=f"Watermark Lock ({pts:+.2f}pt from peak {self.peak_pts:+.2f}pt)")
+        if elapsed >= c.stagnation_cut_secs and pts < c.stagnation_min_pts:
+            return GridExitDecision(action="CLOSE_ALL", reason=f"Stagnation Cut ({elapsed:.0f}s, {pts:+.2f}pt)")
+        if elapsed >= c.max_hold_time_secs:
+            return GridExitDecision(action="CLOSE_ALL", reason=f"Max Hold Exceeded ({elapsed:.0f}s, {pts:+.2f}pt)")
         return GridExitDecision(action="HOLD", reason="Holding position")

@@ -23,11 +23,14 @@ class MRPSignal:
     target_pts: float    # Micro scalp target
     reasoning: str
     timestamp: float
+    wick_ratio: float = 0.5
 
 class MRPBreakRetestStrategy:
-    def __init__(self, min_warmup: int = 30):
+    def __init__(self, min_warmup: int = 30, lookback_5m: int = 6, **_ignored):
         self.min_warmup = min_warmup
+        self.lookback_5m = lookback_5m
         self.active_5m_breakout: Optional[Dict[str, Any]] = None
+        self._last_breakout_bar_ms: int = 0   # never re-arm the same 5m breakout bar
 
     def evaluate(self, candles_1m: List[Dict[str, Any]]) -> Optional[MRPSignal]:
         if len(candles_1m) < self.min_warmup:
@@ -54,25 +57,33 @@ class MRPBreakRetestStrategy:
             .dropna()
             .reset_index()
         )
-        if len(df_5m) < 7:
+        # Only COMPLETED 5m bars may confirm a breakout (the forming bar repaints).
+        last_1m_open_ms = int(df_1m["open_time"].iloc[-1]) if "open_time" in df_1m.columns else int(df_1m["datetime"].iloc[-1].timestamp() * 1000)
+        if int(df_5m["open_time"].iloc[-1]) + 5 * 60_000 > last_1m_open_ms + 60_000:
+            df_5m = df_5m.iloc[:-1].reset_index(drop=True)
+        if len(df_5m) < self.lookback_5m + 1:
             return None
 
         # Rolling 6-bar high/low range
-        highs = df_5m["high"].rolling(6).max().shift(1)
-        lows = df_5m["low"].rolling(6).min().shift(1)
+        highs = df_5m["high"].rolling(self.lookback_5m).max().shift(1)
+        lows = df_5m["low"].rolling(self.lookback_5m).min().shift(1)
 
         last_5m = df_5m.iloc[-1]
         idx = len(df_5m) - 1
         res_lvl = float(highs.iloc[idx]) if not math.isnan(highs.iloc[idx]) else 0.0
         sup_lvl = float(lows.iloc[idx]) if not math.isnan(lows.iloc[idx]) else 0.0
 
-        if res_lvl > 0 and float(last_5m["close"]) > res_lvl * 1.0002:
+        bar_ms = int(last_5m["open_time"])
+        fresh = bar_ms > self._last_breakout_bar_ms
+        if fresh and res_lvl > 0 and float(last_5m["close"]) > res_lvl * 1.0002:
+            self._last_breakout_bar_ms = bar_ms
             self.active_5m_breakout = {
                 "type": "UP",
                 "level": res_lvl,
                 "bar_time": int(last_5m["open_time"]),
             }
-        elif sup_lvl > 0 and float(last_5m["close"]) < sup_lvl * 0.9998:
+        elif fresh and sup_lvl > 0 and float(last_5m["close"]) < sup_lvl * 0.9998:
+            self._last_breakout_bar_ms = bar_ms
             self.active_5m_breakout = {
                 "type": "DOWN",
                 "level": sup_lvl,
@@ -91,17 +102,17 @@ class MRPBreakRetestStrategy:
         if curr_t_ms == 0:
             curr_t_ms = int(last_1m["datetime"].timestamp() * 1000)
 
-        # Retest valid within 20 minutes
-        if not (0 <= (curr_t_ms - b_time_ms) <= 20 * 60_000):
+        # Retest only AFTER the breakout bar has closed, and valid for 20 minutes
+        age = curr_t_ms - b_time_ms
+        if age < 5 * 60_000:
+            return None
+        if age > 25 * 60_000:
             self.active_5m_breakout = None
             return None
 
         curr_px = float(last_1m["close"])
         o, h, l, c = float(last_1m["open"]), float(last_1m["high"]), float(last_1m["low"]), float(last_1m["close"])
         rng = max(0.12, h - l)
-
-        # Average True Range (simple 14)
-        atr = 1.50 # typical gold 1m ATR default
 
         if b_type == "UP":
             trend_ok = curr_px > float(last_1m["ema20"]) > float(last_1m["ema50"])
@@ -116,6 +127,7 @@ class MRPBreakRetestStrategy:
                     breakout_level=lvl,
                     sl_price=round(l - 1.50, 2),
                     target_pts=0.45,
+                    wick_ratio=wick_ratio,
                     reasoning=f"MR P FX 5m Breakout UP + 1m Retest @ ${lvl:.2f} + Pin Wick {wick_ratio:.2f}",
                     timestamp=curr_t_ms / 1000.0
                 )
@@ -133,6 +145,7 @@ class MRPBreakRetestStrategy:
                     breakout_level=lvl,
                     sl_price=round(h + 1.50, 2),
                     target_pts=0.45,
+                    wick_ratio=wick_ratio,
                     reasoning=f"MR P FX 5m Breakout DOWN + 1m Retest @ ${lvl:.2f} + Pin Wick {wick_ratio:.2f}",
                     timestamp=curr_t_ms / 1000.0
                 )

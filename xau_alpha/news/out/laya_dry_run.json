@@ -1,0 +1,62 @@
+{
+ "signals_evaluated": 300,
+ "model_calls_attempted": 141,
+ "unique_states": 141,
+ "distinct_values_per_state_field": {
+  "asset": 1,
+  "action": 2,
+  "entry_price": 141,
+  "stop_loss": 141,
+  "rejection_wick_ratio": 1,
+  "session": 1,
+  "trend_aligned": 1,
+  "institutional_ict_principles": 2,
+  "geopolitical_regime": 1,
+  "macro_bias": 1,
+  "active_catalyst": 11
+ },
+ "router_route_counts": {
+  "english": 141
+ },
+ "state_chars_example": 1729,
+ "example_state": {
+  "asset": "XAUUSD (Gold)",
+  "action": "Candidate BUY Entry",
+  "entry_price": "$3144.51",
+  "stop_loss": "$3140.51",
+  "rejection_wick_ratio": "0.60",
+  "session": "London/NY",
+  "trend_aligned": "Yes",
+  "institutional_ict_principles": "[Bullish FVG (BISI)]: A bullish FVG (BISI) is a 3-candle imbalance produced by an upward displacement candle whose neighbors fail to overlap on the wick range \u2014 `L_{n+1} > H_{n-1}`. The unworked region between the two non-overlapping wicks is a buy-side imbalance / sell-side inefficiency: the algorithm went up too fast to deliver two-sided trade, so the unworked zone stays open as a future revisit target. Bullish FVGs are **discount-array references** when sitting below current price. | [Bullish Turtle Soup]: A bullish Turtle Soup is a **failed bearish breakout**: price wicks below a known SSL level, closes back above, and rallies. The pattern documents the failure of breakdown traders' shorts and the trapping of breakout sellers \u2014 providing the buy-side counter-flow that institutions need to fill long positions. Functions as a high-conviction long entry signal at known SSL levels. | [Bullish Rejection Block]: A bullish rejection block is a candle with a **long lower wick** that rejects downward at a key level, leaving the body near the top of the range. The wick documents an SSL sweep + immediate reversal. \u26a0 **The tradeable level sits just below the candle's body, not at the wick low** \u2014 \"we're only going to be looking for a move just below the bodies of the candle\" (`ICT-2017-HTF-PD-ARRAYS` [29:09]). Functions as a discount-side reference for future long entries.",
+  "geopolitical_regime": "NEUTRAL_CHOP",
+  "macro_bias": "NEUTRAL",
+  "active_catalyst": "replay"
+ },
+ "example_questions": {
+  "setup_grade": {
+   "type": "choice",
+   "instructions": "Grade the quality of this XAUUSD trade setup based on institutional ICT rules.",
+   "criteria": {
+    "A_plus_prime": "Strong displacement, clean rejection wick >=0.45, aligned with session killzone and EMA trend",
+    "high_probability": "Good geometry, retest confirmed, minor opposing friction",
+    "marginal": "Low wick ratio or mixed EMA alignment",
+    "toxic_trap": "Likely fakeout, opposing order block, or low-liquidity chop"
+   }
+  },
+  "liquidity_trap_risk": {
+   "type": "noul",
+   "instructions": "Is this breakout an institutional liquidity trap / false breakout?"
+  },
+  "confluence_score": {
+   "type": "score",
+   "instructions": "Rate institutional order flow confluence from 0 (poor) to 10 (perfect).",
+   "criteria": [
+    "0: no confluence",
+    "1: weak confluence",
+    "2: standard setup",
+    "3: strong confluence",
+    "4: flawless A+ institutional alignment"
+   ]
+  }
+ }
+}

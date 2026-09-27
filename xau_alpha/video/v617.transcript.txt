@@ -1,0 +1,481 @@
+# TRANSCRIPT: v617
+# video: -6170051788186523182.MP4 (13:00, 1280x720, YouTube video by 'MR P FX')
+# engine: faster-whisper 1.2.1, model Systran/faster-whisper-small, int8, CPU, VAD on
+# raw-whisper file=audio/v617.wav model=small task=transcribe lang=en p=0.91 duration=778.9s
+# raw-whisper top_langs=en:0.91, yo:0.07, sw:0.01, ht:0.00, sn:0.00
+# raw-whisper elapsed=1423s
+# note: Language auto-detected en p=0.91 (Yoruba 0.07).
+# Timestamps are video time [mm:ss.ss]. Evidence label: MEASURED (machine transcription;
+#   whisper errors remain in ORIGINAL). Section ENGLISH = source is English, so the
+#   translation is the original, with phrase fixes; [cap] = confirmed by burned-in caption,
+#   [ctx] = inferred from trading context (OPINION).
+
+====================================================================================================
+ORIGINAL (verbatim whisper output, language = English)
+====================================================================================================
+[00:00.00 - 00:06.48] Here is a $27 account with over $8,000 of withdrawal within 24 hours. And here is a $239
+[00:06.48 - 00:13.52] account with over $9,000 of withdrawals within 24 hours. Now, we are starting with a $50 account
+[00:13.52 - 00:18.56] and the mission is to replicate these exact same results within the next few hours.
+[00:18.56 - 00:22.00] 1. We'll be using a standard support and resistance.
+[00:22.00 - 00:24.96] 2. We'll be using a standard breakout and return.
+[00:24.96 - 00:27.68] 3. We'll be using a rejection candlesticks.
+[00:27.68 - 00:32.56] Number 4 will be using a standard timeframe of 5 minutes and also a 1 minute timeframe.
+[00:32.56 - 00:36.80] The leverage you'll be using will be 1 to unlimited leverage and will be trading on
+[00:36.80 - 00:40.88] gold currently. That's XAU USD. What you must notice is that we'll be trading
+[00:40.88 - 00:45.52] extremely fast and that means thinking very very fast. And the reason for that is because we're
+[00:45.52 - 00:50.32] using unlimited leverage and we'll be using a lot of risk on this trade. Because we're trying to
+[00:50.32 - 00:55.12] push $50 into several thousands of dollars so that if you can watch this video from
+[00:55.12 - 01:00.24] beginning till the end, you should be able to see exactly how we'll be optimizing our risk
+[01:00.24 - 01:05.60] management and you should be seeing exactly how we'll be storming into our sniper entries to prevent
+[01:05.60 - 01:10.16] any form of crazy retracement. Lastly, all I'll be using will be my mobile device,
+[01:10.16 - 01:15.44] only just my mobile device. So you can actually see we are using a $50 account around the spot
+[01:15.44 - 01:19.20] and you can just see the account right here. This is exactly what we'll be using. Like I
+[01:19.20 - 01:22.88] already told you, we'll be using one to all limited leverage and then we'll be trading
+[01:22.88 - 01:27.76] using a $50 account smoothly just like that. Okay, so let's start now. Now we'll be using a
+[01:27.76 - 01:31.84] gold chart like I already told you, you can see the account, everything is actually clean. So let's
+[01:31.84 - 01:36.72] just go to a gold, right? So that's what we'll just be using. All right, now first, we're looking at
+[01:36.72 - 01:41.44] a standard breakout and we're combining with our rejection candlestick creating a functional level
+[01:41.44 - 01:45.52] just around the spot. Very clean, right? Everything's looking good. And now what we're
+[01:45.52 - 01:49.28] expecting is for this chart to heat as soon, which it seems like it has done, right? It's
+[01:49.28 - 01:51.68] Zooming that out, you can easily see that.
+[01:51.68 - 01:53.36] So if I go my one meter imprim now,
+[01:53.36 - 01:54.96] you can easily see that also.
+[01:54.96 - 01:55.96] Just drop in there.
+[01:55.96 - 01:59.00] And now we can storm into some trades on 0.1,
+[01:59.00 - 02:00.08] but then just a second,
+[02:00.08 - 02:02.04] let's just click confirm some other stops.
+[02:02.04 - 02:02.80] Yeah.
+[02:02.80 - 02:04.44] Okay, it's around that level now.
+[02:04.44 - 02:05.64] You can easily see that.
+[02:05.64 - 02:06.92] It just hits a functional level.
+[02:06.92 - 02:07.76] Look at that.
+[02:07.76 - 02:08.60] Can you see that?
+[02:08.60 - 02:09.48] It just hits a functional level.
+[02:09.48 - 02:11.16] So what I want to do now is,
+[02:11.16 - 02:12.68] I want to storm into the straight.
+[02:12.68 - 02:14.08] I want to storm into the straight.
+[02:14.08 - 02:16.00] So let's just go on 0.1.
+[02:16.00 - 02:18.44] Remember, I'm using unlimited leverage
+[02:18.44 - 02:21.48] And because of that, I can add more trades than usual, right?
+[02:21.48 - 02:24.24] Even though it's why we need to get a sniper entrance, right?
+[02:24.24 - 02:25.08] Good.
+[02:25.08 - 02:26.72] Okay, so this is what we're having now.
+[02:26.72 - 02:28.58] We'll still be adding some more trades, I think,
+[02:28.58 - 02:31.64] but let's just try doubling to like a hundred bucks.
+[02:31.64 - 02:33.08] Let's see, when he hits a hundred bucks,
+[02:33.08 - 02:34.26] I'm closing the straight,
+[02:34.26 - 02:36.60] so that we can optimize our capital first.
+[02:36.60 - 02:38.00] So we can optimize.
+[02:38.00 - 02:40.44] Okay, I'm getting ready to shut down the straights.
+[02:40.44 - 02:41.56] I'm getting ready.
+[02:41.56 - 02:43.36] Okay, we're almost there.
+[02:43.36 - 02:44.88] Okay, let's just shut down the straights.
+[02:44.88 - 02:46.38] Let's close the straight, let's close, boom.
+[02:46.38 - 02:48.04] So we're having about 98 bucks.
+[02:48.04 - 02:50.60] a little bit below 100 bucks, but that's the okay.
+[02:50.60 - 02:52.92] Now let's check out for the next formation instantly.
+[02:52.92 - 02:54.40] Now what are we having here?
+[02:54.40 - 02:57.00] We're still having a $98 just in case, right?
+[02:57.00 - 02:59.64] $98, so you're not confused, just be with us.
+[02:59.64 - 03:00.76] $98.
+[03:00.76 - 03:03.40] And then we are having a massive rejection.
+[03:03.40 - 03:04.52] And what can you see here now?
+[03:04.52 - 03:08.04] The chart is literally pushing towards the top already, right?
+[03:08.04 - 03:10.48] Everything looking very clean and smooth.
+[03:10.48 - 03:12.52] Okay, so what we can see now, can you see this?
+[03:12.52 - 03:13.36] Now what can we do?
+[03:13.36 - 03:15.68] We can easily stick stock into some more trades, right?
+[03:15.68 - 03:18.00] as well we can easily stay on the straight.
+[03:18.00 - 03:19.40] We can easily system it.
+[03:19.40 - 03:21.52] Now what I'm trying to do is I'm trying to optimize
+[03:21.52 - 03:22.88] my capital to begin with
+[03:22.88 - 03:25.04] because my capital is still extremely low.
+[03:25.04 - 03:27.12] So let me just add some more trades.
+[03:27.12 - 03:29.32] And like I said, the reason why I can add more trades
+[03:29.32 - 03:30.94] because I'm using unlimited leverage.
+[03:30.94 - 03:32.44] So don't be confused at all.
+[03:32.44 - 03:35.60] So in Midlands, our capital just pushes up a little bit more.
+[03:35.60 - 03:37.40] I'm closing, okay, I'm closing the straight.
+[03:37.40 - 03:38.24] I'm closing the straight.
+[03:38.24 - 03:40.16] Can you see it has hit my maximum Zona in the spot?
+[03:40.16 - 03:41.28] I should be expecting retracement.
+[03:41.28 - 03:42.40] Let me leave the straight, good.
+[03:42.40 - 03:45.60] So now we have about 238 bucks, 238 bucks.
+[03:45.60 - 03:50.24] just around the spot right balance equity and my free margin everything is good okay now let's
+[03:50.24 - 03:55.12] look at it again i think we're going into another trade here again now we're having a maximum capital
+[03:55.12 - 03:58.72] so i just want to storm into some more trades because i'm expecting that this chart to push
+[03:58.72 - 04:03.04] above this region which it seems like it's already doing look at that so i want to add some more
+[04:03.04 - 04:08.48] trades i want to add some more okay let me just turn it to 0.5 this time around oh let's just go
+[04:08.48 - 04:13.68] in now okay okay let's storm into this trade let's stop me but but then can you see the stuff
+[04:13.68 - 04:18.36] Now what I'm actually saying yet. Let's tell me to the straight though. Let's just stop it because the chat is actually moving
+[04:18.36 - 04:24.88] So we don't want to play too much like that, right? We don't want to play too much like that. Okay. Okay. Let's talk into some more
+[04:25.84 - 04:30.56] Okay, okay. I think we might add but let's let's just hold on for the meantime
+[04:31.12 - 04:37.62] I just hold on kind of like dropping down now. Just add a K. Okay. It's okay
+[04:37.62 - 04:39.98] Okay, I think there's this pushing up remember
+[04:39.98 - 04:46.62] I'm trying to optimize capital as much as possible, right? Why is it unlimited leverage? Okay. Okay.
+[04:48.22 - 04:55.34] Okay, still fluctuating. Okay, 68 to red. 68 to red. Not very good. But we're back into some
+[04:55.34 - 04:59.82] nice profit. So we just want to stop to push up a little bit more again. And we can, we can
+[04:59.82 - 05:04.22] shut down our trade to gain one to optimize the capital to push above first, because we're using
+[05:04.22 - 05:08.86] unlimited leverage and we are using a lot of risk are trading with unlimited leverage, right?
+[05:08.86 - 05:15.18] Okay, so we're simply in around this 47 dollars 47. Okay. Now this pushing up. Okay. Let's let's
+[05:15.18 - 05:19.42] shop down the street. Let's get ready. We'll be shutting on the street very soon. When you just
+[05:19.42 - 05:23.50] see let's say 1000 bucks. I'm living the street when you just see but then you can easily see a
+[05:23.50 - 05:27.10] level that is getting created just around this region. Right. Can you see that? Hey, that's it.
+[05:27.10 - 05:31.74] That's it. It's okay. So we just live like 1000 bucks. We might expect like a retracement
+[05:31.74 - 05:35.82] around that. So it's fine. Okay, let's just leave the tree. Okay. So what are we having now?
+[05:35.82 - 05:40.77] All right, so we're still having a thousand bucks about having just around a thousand bucks
+[05:40.77 - 05:46.89] Yeah, so that for the meantime, we just have to wait maybe a little bit because the chart is actually just plain iron a crazy region
+[05:46.89 - 05:48.57] Right, so we'll be storming to the trade
+[05:48.57 - 05:54.61] But now we'll have to chill a little bit because we just hit about a thousand dollars of profit meaning that a capital is kind of like much
+[05:54.61 - 06:01.33] Most stable now a leverage might drop for only meter from unlimited to around one one to two thousand
+[06:01.33 - 06:03.85] I don't know because the leverage can fluctuate sometimes
+[06:03.85 - 06:07.69] But let's see just hope we use unlimited leverage as we continue trading
+[06:07.69 - 06:13.75] But for the meantime, we just wait to give the chat some Britain space for the meantime wait for the chat to create a more perfect formation
+[06:13.75 - 06:20.45] Because we are not playing around because we are using all meter leverage and we need to make sure that every single entry that we give is
+[06:20.53 - 06:26.81] Actually as precise as possible. All right. Okay guys. So this is exactly what we're having currently you can easily see what what just happened
+[06:27.01 - 06:31.69] Drop down towards our range here for retas and now it pushed up and is playing around a build up level, right?
+[06:31.69 - 06:35.85] So we'll be storming to this trade because it has pushed above a build up level, right?
+[06:35.85 - 06:39.37] So we're waiting for this stuff, right? Now if you wouldn't check out the stuff
+[06:39.37 - 06:43.11] You should notice another build up level that is just occurring just right beside it, right?
+[06:43.11 - 06:48.79] You can easily see that right just occurring right beside it and then this became the second right and so it dropped back down to
+[06:48.79 - 06:53.99] Give a retest right and now it's pushing up above to us this particular range that we're having just around this region
+[06:53.99 - 06:57.97] So maybe I see here this region where zooming off the straight, but then is dropping down
+[06:57.97 - 07:01.41] So I would want to add some traits because it has actually
+[07:01.77 - 07:05.37] What the clean gotten rejected from around the zone towards a build up level
+[07:05.37 - 07:08.61] So what we should be expecting next should be a massive push towards the top
+[07:08.61 - 07:15.31] So I would just want to stock into some traits again using I think my 0.5 using my 0.5
+[07:15.89 - 07:20.65] But I'm just monitoring to see okay. Okay. I think I think we can go into this trade
+[07:20.65 - 07:25.97] I think we're going to the straight this doesn't look bad because you can see that she just hit a maximum zone around the spot
+[07:25.97 - 07:29.49] So I think I go into the straight I think can go into we can go into the straight
+[07:29.81 - 07:32.73] Let's just talk into some traits. Yes talking to some traits
+[07:33.47 - 07:39.13] Guys remember this is possible to start into so many trades like in 0.5 because I'm using only meter leverage
+[07:39.13 - 07:40.85] So you don't have to ask that in the comment section
+[07:40.85 - 07:46.53] You don't have to act that again the comment section against the worst the pushing about over 200 currently does
+[07:46.81 - 07:51.55] Okay, dropping a bit also back to zero. All right, you were back to zero
+[07:51.55 - 07:58.11] Okay, so just fluctuating fluctuating right just to fluctuating and the reason why you can see free margin also
+[07:58.11 - 08:01.75] So you don't have to ask that in the comment section is because of unlimited leverage also
+[08:01.75 - 08:06.55] So you don't have to ask that also right? Okay, so it's all because of unlimited leverage. Okay
+[08:06.55 - 08:13.93] So the chat is actually pushing nicely now. So, okay, so that's over 500 500 dollars of profits over 500 dollars
+[08:14.39 - 08:18.99] Okay, okay. Good. So this exactly what you're having now. So this just pushing nicely
+[08:18.99 - 08:24.37] This is just pushing nicely but then we it's getting okay. So this I think maybe like
+[08:24.71 - 08:26.99] 3000 and above should be okay for us
+[08:27.23 - 08:32.75] We don't want to keep going like that because we are stuck in it a lot of treats. Okay, let's just wait a bit more
+[08:32.75 - 08:36.23] Let's just wait a bit more. I want I want to have at least
+[08:36.71 - 08:38.51] $3,000 on this account
+[08:38.51 - 08:40.67] But then you can see what you're having for the meantime
+[08:40.67 - 08:43.31] But then I want to have at least 3k on this account
+[08:43.63 - 08:48.91] At least 3k but I might be zooming off this trade because look at this look at look at we're having rejection
+[08:48.91 - 08:49.83] and it's completing again.
+[08:49.83 - 08:50.71] Okay, let's leave the straight.
+[08:50.71 - 08:51.79] I think that's it.
+[08:51.79 - 08:52.63] That's it.
+[08:52.63 - 08:53.45] But then let's just be patient.
+[08:53.45 - 08:55.67] If we can hit 3000, at least 3000,
+[08:55.67 - 08:57.99] then I zoom up the straight because we're already,
+[08:57.99 - 08:59.99] we're already getting, okay, I think we'll just leave.
+[08:59.99 - 09:00.83] We'll just leave.
+[09:00.83 - 09:02.07] We might not wait for 3000.
+[09:02.07 - 09:05.03] We might have to stock in maybe some more trades again.
+[09:05.03 - 09:06.19] Right? Let's just leave.
+[09:06.19 - 09:07.19] Let's just leave. Boom.
+[09:07.19 - 09:09.19] Okay, so that's roughly like 2.5K.
+[09:09.19 - 09:11.55] So we'll have to look for another position now.
+[09:11.55 - 09:12.83] We'll have to look for another position,
+[09:12.83 - 09:15.79] but this is actually great 2.5K already, right?
+[09:15.79 - 09:18.41] Remember, we started from just $50 a profit.
+[09:18.41 - 09:23.57] Now $50 of capital, even though we are trying to stock in a lot of trades, right?
+[09:23.57 - 09:26.93] So that's basically a balance, equity of course, and our free margin.
+[09:26.93 - 09:30.41] We're trying to stock in a lot of trades, of course.
+[09:30.41 - 09:32.53] But yeah, so we're really over 2.5K now.
+[09:32.53 - 09:35.37] So you can see that a connecting candlestick actually just got formed.
+[09:35.37 - 09:37.53] So let's talk into some more trades again.
+[09:37.53 - 09:39.74] Let's talk into some more trades again.
+[09:39.74 - 09:40.74] Okay.
+[09:40.74 - 09:44.30] Now we just want to hit 3K and above and we are good.
+[09:44.30 - 09:45.86] Just 3K and above and we are good.
+[09:45.86 - 09:48.26] 3K and above and we are good.
+[09:48.26 - 09:52.22] We can see the connecting candlestick again, just in case we didn't see it before.
+[09:52.22 - 09:53.74] So let's just see.
+[09:53.74 - 09:54.74] Let's just see.
+[09:54.74 - 09:57.98] Okay, that's the next candlestick pushing up.
+[09:57.98 - 10:00.34] Okay, five minutes.
+[10:00.34 - 10:03.54] It seems to have hit a level, but then that's over $3,000.
+[10:03.54 - 10:05.74] Okay, drop begin.
+[10:05.74 - 10:06.74] Playing around.
+[10:06.74 - 10:07.74] Okay, it's just fluctuating.
+[10:07.74 - 10:11.34] Let's wait for you to push up at least a little bit so we don't close and then
+[10:11.34 - 10:12.34] it's below $3,000.
+[10:12.34 - 10:17.58] Let's just wait for you to push up a little bit more, just a little bit more.
+[10:17.58 - 10:22.04] I'm going to show you the level also that it has hit a level that okay. Let me just show you that already now
+[10:22.62 - 10:25.66] Look at our normal standard. I know my standard
+[10:26.62 - 10:31.86] Resistance level that was actually created. Yeah, you can see that right a standard resistance level that is actually around the spot
+[10:31.86 - 10:37.20] And so because of that we'll have to live the street anytime from now. Okay. That's that's over 3000
+[10:37.20 - 10:41.44] Let's live the street boom. So now we are running over three thousand dollars of profit very smooth
+[10:41.44 - 10:45.74] So these account is actually extremely clean. You can see that over three thousand dollars. Yeah
+[10:45.74 - 10:51.80] equity also, of course, and then a free margin also just everything just looking very smooth like that
+[10:51.80 - 10:54.20] You can see let me just show you this all over again
+[10:54.20 - 10:57.90] You can see the account everything is actually clean everything is actually clean as clean as
+[10:58.30 - 11:04.90] As clean as it gets right so what we just processing next on this account to just the processing it would drop very quickly again
+[11:04.90 - 11:06.74] right so just process our withdrawals and
+[11:07.14 - 11:11.12] We just be right back just cashed out about 2.3 K
+[11:11.12 - 11:15.28] That's what we just cashed out 2.998 right. So I'll just cash that a presently
+[11:15.92 - 11:22.08] 3000 bucks smoothly just like that and you can see our deposit was about $50 there and the balance is not back to
+[11:22.64 - 11:29.44] $50 just the way it was before right so that everything is actually very very clean and everything is actually very very smooth yet
+[11:29.44 - 11:35.56] Boom alright, just remember guys always simply use there just like I already told you majorly was a rejection candlestick as support
+[11:35.56 - 11:40.64] support and resistance, we used just a 5 minutes to 1 minute frame, we're using a 1 to all
+[11:40.64 - 11:45.36] limited leverage, and the overall foundation for all of our trades today was a breakout
+[11:45.36 - 11:49.60] and retest, waited for a maximum breakout to occur, and then in the middle as the retest
+[11:49.60 - 11:53.72] was completed, we stomped into the trade. We also looked for build up levels of course
+[11:53.72 - 11:57.00] to make sure that when we're stomping into our trades, our trades are as sniper as
+[11:57.00 - 12:01.52] possible because we're using all limited leverage so it means that any little fluctuation
+[12:01.52 - 12:04.84] can take us out. And then the reason why we have to leave now is because we can
+[12:04.84 - 12:09.88] continue trading like that because the market is not extremely favorable now anymore. The
+[12:09.88 - 12:14.68] formations that we get created from this zone, because it has hit a maximum resistance level,
+[12:14.68 - 12:18.84] so going into those trades from there becomes risky, so because of that, we can't just keep
+[12:18.84 - 12:24.44] going indefinitely. So because of that, we just have to stop on $3000. We are able to push a $50
+[12:24.44 - 12:29.64] account to over $3000 just like that. And of course, we don't like tempting the broker or
+[12:29.64 - 12:33.72] wasting peeps, so because of that, we just have to hit on the withdrawal, but instantly,
+[12:33.72 - 12:35.72] you just cash out all our profits from the market.
+[12:35.72 - 12:39.84] Lastly, just to make my middle of this video hit over 1000 likes, I'll be coming back to
+[12:39.84 - 12:43.64] this very video running through the comment section and I'll be selecting 3 random traders
+[12:43.64 - 12:46.56] that will be funding 3000 dollars each just like that.
+[12:46.56 - 12:49.44] So that if you're new to this YouTube channel, just remember to hit on subscribe button,
+[12:49.44 - 12:52.64] hit on like button and also remember to turn on your notification bell so you don't
+[12:52.64 - 12:54.80] miss any videos that will be dropping down from this place.
+[12:54.80 - 12:56.80] So that is it, bye from me guys, I'm Mr. P, peace.
+
+====================================================================================================
+ENGLISH (translation not required: source is English; normalized for whisper mis-hearings)
+====================================================================================================
+[00:00.00 - 00:06.48] Here is a $27 account with over $8,000 of withdrawal within 24 hours. And here is a $239
+[00:06.48 - 00:13.52] account with over $9,000 of withdrawals within 24 hours. Now, we are starting with a $50 account
+[00:13.52 - 00:18.56] and the mission is to replicate these exact same results within the next few hours.
+[00:18.56 - 00:22.00] 1. We'll be using a standard support and resistance.
+[00:22.00 - 00:24.96] 2. We'll be using a standard breakout and return.
+[00:24.96 - 00:27.68] 3. We'll be using a rejection candlesticks.
+[00:27.68 - 00:32.56] Number 4 will be using a standard timeframe of 5 minutes and also a 1 minute timeframe.
+[00:32.56 - 00:36.80] The leverage you'll be using will be 1 to unlimited leverage and will be trading on
+[00:36.80 - 00:40.88] gold currently. That's XAU USD. What you must notice is that we'll be trading
+[00:40.88 - 00:45.52] extremely fast and that means thinking very very fast. And the reason for that is because we're
+[00:45.52 - 00:50.32] using unlimited leverage and we'll be using a lot of risk on this trade. Because we're trying to
+[00:50.32 - 00:55.12] push $50 into several thousands of dollars so that if you can watch this video from
+[00:55.12 - 01:00.24] beginning till the end, you should be able to see exactly how we'll be optimizing our risk
+[01:00.24 - 01:05.60] management and you should be seeing exactly how we'll be storming into our sniper entries to prevent
+[01:05.60 - 01:10.16] any form of crazy retracement. Lastly, all I'll be using will be my mobile device,
+[01:10.16 - 01:15.44] only just my mobile device. So you can actually see we are using a $50 account around the spot
+[01:15.44 - 01:19.20] and you can just see the account right here. This is exactly what we'll be using. Like I
+[01:19.20 - 01:22.88] already told you, we'll be using unlimited leverage and then we'll be trading   {ctx}
+[01:22.88 - 01:27.76] using a $50 account smoothly just like that. Okay, so let's start now. Now we'll be using a
+[01:27.76 - 01:31.84] gold chart like I already told you, you can see the account, everything is actually clean. So let's
+[01:31.84 - 01:36.72] just go to a gold, right? So that's what we'll just be using. All right, now first, we're looking at
+[01:36.72 - 01:41.44] a standard breakout and we're combining with our rejection candlestick creating a functional level
+[01:41.44 - 01:45.52] just around the spot. Very clean, right? Everything's looking good. And now what we're
+[01:45.52 - 01:49.28] expecting is for this chart to heat as soon, which it seems like it has done, right? It's
+[01:49.28 - 01:51.68] Zooming that out, you can easily see that.
+[01:51.68 - 01:53.36] So if I go to my one-minute timeframe now,   {ctx}
+[01:53.36 - 01:54.96] you can easily see that also.
+[01:54.96 - 01:55.96] Just drop in there.
+[01:55.96 - 01:59.00] And now we can storm into some trades on 0.1,
+[01:59.00 - 02:00.08] but then just a second,
+[02:00.08 - 02:02.04] let's just click confirm some other stops.
+[02:02.04 - 02:02.80] Yeah.
+[02:02.80 - 02:04.44] Okay, it's around that level now.
+[02:04.44 - 02:05.64] You can easily see that.
+[02:05.64 - 02:06.92] It just hits a functional level.
+[02:06.92 - 02:07.76] Look at that.
+[02:07.76 - 02:08.60] Can you see that?
+[02:08.60 - 02:09.48] It just hits a functional level.
+[02:09.48 - 02:11.16] So what I want to do now is,
+[02:11.16 - 02:12.68] I want to storm into the trade.   {ctx}
+[02:12.68 - 02:14.08] I want to storm into the trade.   {ctx}
+[02:14.08 - 02:16.00] So let's just go on 0.1.
+[02:16.00 - 02:18.44] Remember, I'm using unlimited leverage
+[02:18.44 - 02:21.48] And because of that, I can add more trades than usual, right?
+[02:21.48 - 02:24.24] Even though it's why we need to get a sniper entrance, right?
+[02:24.24 - 02:25.08] Good.
+[02:25.08 - 02:26.72] Okay, so this is what we're having now.
+[02:26.72 - 02:28.58] We'll still be adding some more trades, I think,
+[02:28.58 - 02:31.64] but let's just try doubling to like a hundred bucks.
+[02:31.64 - 02:33.08] Let's see, when he hits a hundred bucks,
+[02:33.08 - 02:34.26] I'm closing the trade,   {ctx}
+[02:34.26 - 02:36.60] so that we can optimize our capital first.
+[02:36.60 - 02:38.00] So we can optimize.
+[02:38.00 - 02:40.44] Okay, I'm getting ready to shut down the trades.   {ctx}
+[02:40.44 - 02:41.56] I'm getting ready.
+[02:41.56 - 02:43.36] Okay, we're almost there.
+[02:43.36 - 02:44.88] Okay, let's just shut down the trades.   {ctx}
+[02:44.88 - 02:46.38] Let's close the trade, let's close, boom.   {ctx}
+[02:46.38 - 02:48.04] So we're having about 98 bucks.
+[02:48.04 - 02:50.60] a little bit below 100 bucks, but that's the okay.
+[02:50.60 - 02:52.92] Now let's check out for the next formation instantly.
+[02:52.92 - 02:54.40] Now what are we having here?
+[02:54.40 - 02:57.00] We're still having a $98 just in case, right?
+[02:57.00 - 02:59.64] $98, so you're not confused, just be with us.
+[02:59.64 - 03:00.76] $98.
+[03:00.76 - 03:03.40] And then we are having a massive rejection.
+[03:03.40 - 03:04.52] And what can you see here now?
+[03:04.52 - 03:08.04] The chart is literally pushing towards the top already, right?
+[03:08.04 - 03:10.48] Everything looking very clean and smooth.
+[03:10.48 - 03:12.52] Okay, so what we can see now, can you see this?
+[03:12.52 - 03:13.36] Now what can we do?
+[03:13.36 - 03:15.68] We can easily stick stock into some more trades, right?
+[03:15.68 - 03:18.00] as well we can easily stay on the trade.   {ctx}
+[03:18.00 - 03:19.40] We can easily system it.
+[03:19.40 - 03:21.52] Now what I'm trying to do is I'm trying to optimize
+[03:21.52 - 03:22.88] my capital to begin with
+[03:22.88 - 03:25.04] because my capital is still extremely low.
+[03:25.04 - 03:27.12] So let me just add some more trades.
+[03:27.12 - 03:29.32] And like I said, the reason why I can add more trades
+[03:29.32 - 03:30.94] because I'm using unlimited leverage.
+[03:30.94 - 03:32.44] So don't be confused at all.
+[03:32.44 - 03:35.60] So in Midlands, our capital just pushes up a little bit more.
+[03:35.60 - 03:37.40] I'm closing, okay, I'm closing the trade.   {ctx}
+[03:37.40 - 03:38.24] I'm closing the trade.   {ctx}
+[03:38.24 - 03:40.16] Can you see it has hit my maximum zone around the spot?   {ctx}
+[03:40.16 - 03:41.28] I should be expecting retracement.
+[03:41.28 - 03:42.40] Let me leave the trade, good.   {ctx}
+[03:42.40 - 03:45.60] So now we have about 238 bucks, 238 bucks.
+[03:45.60 - 03:50.24] just around the spot right balance equity and my free margin everything is good okay now let's
+[03:50.24 - 03:55.12] look at it again i think we're going into another trade here again now we're having a maximum capital
+[03:55.12 - 03:58.72] so i just want to storm into some more trades because i'm expecting that this chart to push
+[03:58.72 - 04:03.04] above this region which it seems like it's already doing look at that so i want to add some more
+[04:03.04 - 04:08.48] trades i want to add some more okay let me just turn it to 0.5 this time around oh let's just go
+[04:08.48 - 04:13.68] in now okay okay let's storm into this trade let's stop me but but then can you see the stuff
+[04:13.68 - 04:18.36] Now what I'm actually saying yet. Let's tell me to the trade though. Let's just stop it because the chart is actually moving   {ctx}
+[04:18.36 - 04:24.88] So we don't want to play too much like that, right? We don't want to play too much like that. Okay. Okay. Let's talk into some more
+[04:25.84 - 04:30.56] Okay, okay. I think we might add but let's let's just hold on for the meantime
+[04:31.12 - 04:37.62] I just hold on kind of like dropping down now. Just add a K. Okay. It's okay
+[04:37.62 - 04:39.98] Okay, I think there's this pushing up remember
+[04:39.98 - 04:46.62] I'm trying to optimize capital as much as possible, right? Why is it unlimited leverage? Okay. Okay.
+[04:48.22 - 04:55.34] Okay, still fluctuating. Okay, 68 to red. 68 to red. Not very good. But we're back into some
+[04:55.34 - 04:59.82] nice profit. So we just want to stop to push up a little bit more again. And we can, we can
+[04:59.82 - 05:04.22] shut down our trade to gain one to optimize the capital to push above first, because we're using
+[05:04.22 - 05:08.86] unlimited leverage and we are using a lot of risk are trading with unlimited leverage, right?
+[05:08.86 - 05:15.18] Okay, so we're simply in around this 47 dollars 47. Okay. Now this pushing up. Okay. Let's let's
+[05:15.18 - 05:19.42] shut down the trade. Let's get ready. We'll be shutting on the trade very soon. When you just   {ctx}
+[05:19.42 - 05:23.50] see let's say 1000 bucks. I'm leave the trade when you just see but then you can easily see a   {ctx}
+[05:23.50 - 05:27.10] level that is getting created just around this region. Right. Can you see that? Hey, that's it.
+[05:27.10 - 05:31.74] That's it. It's okay. So we just live like 1000 bucks. We might expect like a retracement
+[05:31.74 - 05:35.82] around that. So it's fine. Okay, let's just leave the tree. Okay. So what are we having now?
+[05:35.82 - 05:40.77] All right, so we're still having a thousand bucks about having just around a thousand bucks
+[05:40.77 - 05:46.89] Yeah, so that for the meantime, we just have to wait maybe a little bit because the chart is actually just plain iron a crazy region
+[05:46.89 - 05:48.57] Right, so we'll be storming to the trade
+[05:48.57 - 05:54.61] But now we'll have to chill a little bit because we just hit about a thousand dollars of profit meaning that a capital is kind of like much
+[05:54.61 - 06:01.33] Most stable now a leverage might drop for only meter from unlimited to around one one to two thousand
+[06:01.33 - 06:03.85] I don't know because the leverage can fluctuate sometimes
+[06:03.85 - 06:07.69] But let's see just hope we use unlimited leverage as we continue trading
+[06:07.69 - 06:13.75] But for the meantime, we just wait to give the chart some breathing space for the meantime wait for the chart to create a more perfect formation   {ctx}
+[06:13.75 - 06:20.45] Because we are not playing around because we are using unlimited leverage and we need to make sure that every single entry that we give is   {ctx}
+[06:20.53 - 06:26.81] Actually as precise as possible. All right. Okay guys. So this is exactly what we're having currently you can easily see what what just happened
+[06:27.01 - 06:31.69] Drop down towards our range here for retas and now it pushed up and is playing around a build up level, right?
+[06:31.69 - 06:35.85] So we'll be storming to this trade because it has pushed above a build up level, right?
+[06:35.85 - 06:39.37] So we're waiting for this stuff, right? Now if you wouldn't check out the stuff
+[06:39.37 - 06:43.11] You should notice another build up level that is just occurring just right beside it, right?
+[06:43.11 - 06:48.79] You can easily see that right just occurring right beside it and then this became the second right and so it dropped back down to
+[06:48.79 - 06:53.99] Give a retest right and now it's pushing up above to us this particular range that we're having just around this region
+[06:53.99 - 06:57.97] So maybe I see here this region where zooming off the trade, but then is dropping down   {ctx}
+[06:57.97 - 07:01.41] So I would want to add some trades because it has actually   {ctx}
+[07:01.77 - 07:05.37] What the clean gotten rejected from around the zone towards a build up level
+[07:05.37 - 07:08.61] So what we should be expecting next should be a massive push towards the top
+[07:08.61 - 07:15.31] So I would just want to stock into some trades again using I think my 0.5 using my 0.5   {ctx}
+[07:15.89 - 07:20.65] But I'm just monitoring to see okay. Okay. I think I think we can go into this trade
+[07:20.65 - 07:25.97] I think we're going to the trade this doesn't look bad because you can see that she just hit a maximum zone around the spot   {ctx}
+[07:25.97 - 07:29.49] So I think I go into the trade I think can go into we can go into the trade   {ctx}
+[07:29.81 - 07:32.73] Let's just talk into some trades. Yes talking to some trades   {ctx}
+[07:33.47 - 07:39.13] Guys remember this is possible to start into so many trades like in 0.5 because I'm using unlimited leverage   {ctx}
+[07:39.13 - 07:40.85] So you don't have to ask that in the comment section
+[07:40.85 - 07:46.53] You don't have to act that again the comment section against the worst the pushing about over 200 currently does
+[07:46.81 - 07:51.55] Okay, dropping a bit also back to zero. All right, you were back to zero
+[07:51.55 - 07:58.11] Okay, so just fluctuating fluctuating right just to fluctuating and the reason why you can see free margin also
+[07:58.11 - 08:01.75] So you don't have to ask that in the comment section is because of unlimited leverage also
+[08:01.75 - 08:06.55] So you don't have to ask that also right? Okay, so it's all because of unlimited leverage. Okay
+[08:06.55 - 08:13.93] So the chart is actually pushing nicely now. So, okay, so that's over 500 500 dollars of profits over 500 dollars   {ctx}
+[08:14.39 - 08:18.99] Okay, okay. Good. So this exactly what you're having now. So this just pushing nicely
+[08:18.99 - 08:24.37] This is just pushing nicely but then we it's getting okay. So this I think maybe like
+[08:24.71 - 08:26.99] 3000 and above should be okay for us
+[08:27.23 - 08:32.75] We don't want to keep going like that because we are stuck in it a lot of treats. Okay, let's just wait a bit more
+[08:32.75 - 08:36.23] Let's just wait a bit more. I want I want to have at least
+[08:36.71 - 08:38.51] $3,000 on this account
+[08:38.51 - 08:40.67] But then you can see what you're having for the meantime
+[08:40.67 - 08:43.31] But then I want to have at least 3k on this account
+[08:43.63 - 08:48.91] At least 3k but I might be zooming off this trade because look at this look at look at we're having rejection
+[08:48.91 - 08:49.83] and it's completing again.
+[08:49.83 - 08:50.71] Okay, let's leave the trade.   {ctx}
+[08:50.71 - 08:51.79] I think that's it.
+[08:51.79 - 08:52.63] That's it.
+[08:52.63 - 08:53.45] But then let's just be patient.
+[08:53.45 - 08:55.67] If we can hit 3000, at least 3000,
+[08:55.67 - 08:57.99] then I zoom up the trade because we're already,   {ctx}
+[08:57.99 - 08:59.99] we're already getting, okay, I think we'll just leave.
+[08:59.99 - 09:00.83] We'll just leave.
+[09:00.83 - 09:02.07] We might not wait for 3000.
+[09:02.07 - 09:05.03] We might have to stock in maybe some more trades again.
+[09:05.03 - 09:06.19] Right? Let's just leave.
+[09:06.19 - 09:07.19] Let's just leave. Boom.
+[09:07.19 - 09:09.19] Okay, so that's roughly like 2.5K.
+[09:09.19 - 09:11.55] So we'll have to look for another position now.
+[09:11.55 - 09:12.83] We'll have to look for another position,
+[09:12.83 - 09:15.79] but this is actually great 2.5K already, right?
+[09:15.79 - 09:18.41] Remember, we started from just $50 a profit.
+[09:18.41 - 09:23.57] Now $50 of capital, even though we are trying to stock in a lot of trades, right?
+[09:23.57 - 09:26.93] So that's basically a balance, equity of course, and our free margin.
+[09:26.93 - 09:30.41] We're trying to stock in a lot of trades, of course.
+[09:30.41 - 09:32.53] But yeah, so we're really over 2.5K now.
+[09:32.53 - 09:35.37] So you can see that a engulfing(?) candlestick actually just got formed.   {ctx}
+[09:35.37 - 09:37.53] So let's talk into some more trades again.
+[09:37.53 - 09:39.74] Let's talk into some more trades again.
+[09:39.74 - 09:40.74] Okay.
+[09:40.74 - 09:44.30] Now we just want to hit 3K and above and we are good.
+[09:44.30 - 09:45.86] Just 3K and above and we are good.
+[09:45.86 - 09:48.26] 3K and above and we are good.
+[09:48.26 - 09:52.22] We can see the engulfing(?) candlestick again, just in case we didn't see it before.   {ctx}
+[09:52.22 - 09:53.74] So let's just see.
+[09:53.74 - 09:54.74] Let's just see.
+[09:54.74 - 09:57.98] Okay, that's the next candlestick pushing up.
+[09:57.98 - 10:00.34] Okay, five minutes.
+[10:00.34 - 10:03.54] It seems to have hit a level, but then that's over $3,000.
+[10:03.54 - 10:05.74] Okay, drop begin.
+[10:05.74 - 10:06.74] Playing around.
+[10:06.74 - 10:07.74] Okay, it's just fluctuating.
+[10:07.74 - 10:11.34] Let's wait for you to push up at least a little bit so we don't close and then
+[10:11.34 - 10:12.34] it's below $3,000.
+[10:12.34 - 10:17.58] Let's just wait for you to push up a little bit more, just a little bit more.
+[10:17.58 - 10:22.04] I'm going to show you the level also that it has hit a level that okay. Let me just show you that already now
+[10:22.62 - 10:25.66] Look at our normal standard. I know my standard
+[10:26.62 - 10:31.86] Resistance level that was actually created. Yeah, you can see that right a standard resistance level that is actually around the spot
+[10:31.86 - 10:37.20] And so because of that we'll have to leave the trade anytime from now. Okay. That's that's over 3000   {ctx}
+[10:37.20 - 10:41.44] Let's leave the trade boom. So now we are running over three thousand dollars of profit very smooth   {ctx}
+[10:41.44 - 10:45.74] So these account is actually extremely clean. You can see that over three thousand dollars. Yeah
+[10:45.74 - 10:51.80] equity also, of course, and then a free margin also just everything just looking very smooth like that
+[10:51.80 - 10:54.20] You can see let me just show you this all over again
+[10:54.20 - 10:57.90] You can see the account everything is actually clean everything is actually clean as clean as
+[10:58.30 - 11:04.90] As clean as it gets right so what we just processing next on this account to just the processing it would drop very quickly again
+[11:04.90 - 11:06.74] right so just process our withdrawals and
+[11:07.14 - 11:11.12] We just be right back just cashed out about 2.3 K
+[11:11.12 - 11:15.28] That's what we just cashed out 2.998 right. So I'll just cash that a presently
+[11:15.92 - 11:22.08] 3000 bucks smoothly just like that and you can see our deposit was about $50 there and the balance is not back to
+[11:22.64 - 11:29.44] $50 just the way it was before right so that everything is actually very very clean and everything is actually very very smooth yet
+[11:29.44 - 11:35.56] Boom alright, just remember guys always simply use there just like I already told you majorly was a rejection candlestick as support
+[11:35.56 - 11:40.64] support and resistance, we used just a 5 minutes to 1 minute frame, we're using a 1 to all
+[11:40.64 - 11:45.36] limited leverage, and the overall foundation for all of our trades today was a breakout
+[11:45.36 - 11:49.60] and retest, waited for a maximum breakout to occur, and then in the middle as the retest
+[11:49.60 - 11:53.72] was completed, we storming into the trade. We also looked for build up levels of course   {ctx}
+[11:53.72 - 11:57.00] to make sure that when we're storming into our trades, our trades are as sniper as   {ctx}
+[11:57.00 - 12:01.52] possible because we're using unlimited leverage so it means that any little fluctuation   {ctx}
+[12:01.52 - 12:04.84] can take us out. And then the reason why we have to leave now is because we can
+[12:04.84 - 12:09.88] continue trading like that because the market is not extremely favorable now anymore. The
+[12:09.88 - 12:14.68] formations that we get created from this zone, because it has hit a maximum resistance level,
+[12:14.68 - 12:18.84] so going into those trades from there becomes risky, so because of that, we can't just keep
+[12:18.84 - 12:24.44] going indefinitely. So because of that, we just have to stop on $3000. We are able to push a $50
+[12:24.44 - 12:29.64] account to over $3000 just like that. And of course, we don't like tempting the broker or
+[12:29.64 - 12:33.72] wasting pips, so because of that, we just have to hit on the withdrawal, but instantly,   {ctx}
+[12:33.72 - 12:35.72] you just cash out all our profits from the market.
+[12:35.72 - 12:39.84] Lastly, just to make my middle of this video hit over 1000 likes, I'll be coming back to
+[12:39.84 - 12:43.64] this very video running through the comment section and I'll be selecting 3 random traders
+[12:43.64 - 12:46.56] that will be funding 3000 dollars each just like that.
+[12:46.56 - 12:49.44] So that if you're new to this YouTube channel, just remember to hit on subscribe button,
+[12:49.44 - 12:52.64] hit on like button and also remember to turn on your notification bell so you don't
+[12:52.64 - 12:54.80] miss any videos that will be dropping down from this place.
+[12:54.80 - 12:56.80] So that is it, bye from me guys, I'm Mr. P, peace.
+
+# segments=230 segments_with_fixes=36

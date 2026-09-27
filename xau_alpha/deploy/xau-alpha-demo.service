@@ -1,0 +1,24 @@
+[Unit]
+Description=xau_alpha shift_stack (Mr P Fx buyer/seller shift + doubling stack) on LiteFinance DEMO, $13 mirror
+After=network.target
+Conflicts=ghost-grid-demo.service stratton-xau-live.service
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/ict_sniper
+EnvironmentFile=/root/ict_sniper/.env
+Environment=XAU_ALPHA_LIVE=1
+ExecStart=/root/ict_sniper/venv/bin/python -u xau_alpha/run_live.py --module shift_mtf --mode DEMO --mirror 13 --handoff 500 --demote 300
+Restart=on-failure
+RestartSec=10
+MemoryMax=1.5G
+TimeoutStopSec=40
+KillMode=mixed
+StandardOutput=append:/root/ict_sniper/logs/xau_alpha.log
+StandardError=append:/root/ict_sniper/logs/xau_alpha.log
+
+[Install]
+WantedBy=multi-user.target

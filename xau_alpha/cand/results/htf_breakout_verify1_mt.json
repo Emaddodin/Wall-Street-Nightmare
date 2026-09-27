@@ -1,0 +1,52 @@
+{
+ "train": {
+  "t": 2.821,
+  "p_one_sided_unadjusted": 0.00269,
+  "bonferroni_256": 0.6889,
+  "bonferroni_X2_family": 1,
+  "sidak_256": 0.4983,
+  "N_hb": 256,
+  "N_x2": 472,
+  "bhy_adjusted_p": 0.335,
+  "rank_of_finalist_by_p": 3,
+  "dsr": {
+   "sr_per_trade": 0.2203,
+   "sr_trials_mean": 0.1482,
+   "sr_trials_sd": 0.0527,
+   "sr0_expected_max_null": 0.1499,
+   "psr_vs_0": 0.998,
+   "dsr": 0.8214,
+   "note": "trials share the same 2025 long drift, so sr0 is centred on 0 while every trial is shifted up by beta; DSR does not control for beta (the permutation nulls do)"
+  }
+ },
+ "valid": {
+  "t_R": 0.741,
+  "p_one_sided_t_unadjusted": 0.2305,
+  "p_t_sidak_2_looks": 0.4079,
+  "p_t_sidak_16_looks": 0.9849,
+  "smallest_null_p_avg_pts": 0.285,
+  "smallest_null_p_sidak_2": 0.4888,
+  "smallest_null_p_sidak_16": 0.9953,
+  "psr_vs_0": 0.775
+ },
+ "project_logged_train_configs_approx": {
+  "per_hypothesis": {
+   "comex_momentum": 306,
+   "exhaustion_fade": 381,
+   "failed_breakout": 276,
+   "failed_breakout_twin": 216,
+   "htf_breakout": 272,
+   "ml_meta": 34,
+   "news_second_leg": 144,
+   "orb_retest": 324,
+   "range_fade": 88,
+   "round_reject": 288,
+   "silver_bullet": 264,
+   "sweep_reclaim": 162,
+   "trend_pullback": 224,
+   "zone_retest": 504
+  },
+  "total": 3483
+ },
+ "project_expected_max_t_under_null_independent": 3.44
+}

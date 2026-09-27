@@ -173,7 +173,8 @@ class LiteFinanceGateway:
 
             chart_url = f"https://my.litefinance.org/trading/chart?symbol={self.symbol}"
             logger.info("Navigating to %s...", chart_url)
-            await self._page.goto(chart_url, wait_until="domcontentloaded", timeout=45000)
+            goto_timeout = int(os.getenv("LF_GOTO_TIMEOUT", "90000"))
+            await self._page.goto(chart_url, wait_until="domcontentloaded", timeout=goto_timeout)
             await self._page.wait_for_timeout(3000)
 
             # Clear annoying overlays / 2FA popups
@@ -823,6 +824,10 @@ class LiteFinanceGateway:
                 if cur_mode != "UNKNOWN" and cur_mode != expected_mode.upper():
                     logger.error("Refusing order dispatch: Account mode is %s, expected %s", cur_mode, expected_mode)
                     return {"success": False, "error": f"ACCOUNT_MODE_MISMATCH_{cur_mode}"}
+                if cur_mode == "UNKNOWN" and expected_mode.upper() == "DEMO":
+                    # An undetectable account could be the REAL one: never let a DEMO-intended order through blind.
+                    logger.error("Refusing DEMO order dispatch: account mode could not be verified")
+                    return {"success": False, "error": "ACCOUNT_MODE_UNVERIFIED"}
 
             t0 = time.perf_counter()
             direction = direction.upper()
@@ -921,6 +926,20 @@ class LiteFinanceGateway:
                                 inp.dispatchEvent(new Event('change', {{ bubbles: true }}));
                             }}
                         }}""", f"{tp_price:.2f}")
+
+                # 3d. Read the SL field back: never dispatch an order that was meant to be protected but is not
+                if sl_price and sl_price > 0:
+                    sl_readback = await self._page.evaluate("""() => {
+                        const inp = document.querySelector('#stop_loss_price_1');
+                        return inp ? inp.value : null;
+                    }""")
+                    try:
+                        sl_ok = sl_readback is not None and abs(float(str(sl_readback).replace(",", "")) - float(sl_price)) <= 0.011
+                    except (TypeError, ValueError):
+                        sl_ok = False
+                    if not sl_ok:
+                        logger.error("Refusing order dispatch: SL field reads %r, expected %.2f", sl_readback, sl_price)
+                        return {"success": False, "error": f"SL_NOT_SET (field={sl_readback!r})"}
 
                 # 4. Click order dispatch button (target exact direction-aware button)
                 clicked_btn = direction

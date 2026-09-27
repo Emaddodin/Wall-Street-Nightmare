@@ -1,0 +1,143 @@
+{
+ "utc": "2026-09-29 21:50:19",
+ "poll_seconds": 37.2,
+ "n_headlines_cached": 40,
+ "n_calendar_events_usd": 49,
+ "state": {
+  "regime": "NEUTRAL_CHOP",
+  "bias": "MILD_BULL",
+  "heat": 44.0,
+  "top_headline": "Gold price likely headed lower as short-term liquidity needs trump long-term investment case \u2013 Saxo Bank\u2019s Hansen - Kitco"
+ },
+ "BUY": {
+  "is_permitted": true,
+  "macro_bias": "MILD_BULL",
+  "alpha_boost_multiplier": 1.35,
+  "tp_expansion_multiplier": 1.4,
+  "shield_status": "ARMED_SAFE"
+ },
+ "SELL": {
+  "is_permitted": true,
+  "macro_bias": "MILD_BULL",
+  "alpha_boost_multiplier": 1.0,
+  "tp_expansion_multiplier": 1.0,
+  "shield_status": "ARMED_SAFE"
+ },
+ "calendar_freeze_now": [
+  false,
+  "CLEAR",
+  false
+ ],
+ "top15_used_for_state": [
+  {
+   "t": "Gold price likely headed lower as short-term liquidity needs trump long-term investment case \u2013 Saxo ",
+   "sent": 0.0,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 4.0
+  },
+  {
+   "t": "Trump offers Iran economic relief for concrete nuclear concessions - Axios",
+   "sent": 0.0,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 5.5
+  },
+  {
+   "t": "Dollar Rises to 2-Month High on Growing Prospect of October U.S. Rate-Rise - WSJ",
+   "sent": 0.0,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 4.0
+  },
+  {
+   "t": "How the War is Changing the Geography of Iran\u2019s Influence - Time Magazine",
+   "sent": 0.6,
+   "reg": "SAFE_HAVEN_ESCALATION",
+   "heat": 5.5
+  },
+  {
+   "t": "The Inverse Correlation Between Gold And Interest Rates Is Breaking Down (NYSEARCA:GLD) - Seeking Al",
+   "sent": 0.0,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 5.5
+  },
+  {
+   "t": "Australia CPI preview: headline inflation seen at 4.0% after RBA hike",
+   "sent": 0.0,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 4.0
+  },
+  {
+   "t": "Gold Price Rallies as 8-Week Trading Low Blamed on China, Rates, Trump - BullionVault",
+   "sent": 0.4,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 4.0
+  },
+  {
+   "t": "Appeals court declines to pause sanctions against Trump lawyers in IRS settlement - Reuters",
+   "sent": 0.4,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 5.5
+  },
+  {
+   "t": "US Equity Markets End Lower After Higher Treasury Yields, Fed Governor's Remarks on Inflation - Yaho",
+   "sent": 0.0,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 4.0
+  },
+  {
+   "t": "U.S. targets Iran's military supply chain as diplomatic talks remain uncertain - PBS",
+   "sent": 0.0,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 4.0
+  },
+  {
+   "t": "How the BRICS Summit Could Shape Occupational and Environmental Health and Safety - Occupational Hea",
+   "sent": 0.4,
+   "reg": "DE_DOLLARIZATION_BRICS",
+   "heat": 4.0
+  },
+  {
+   "t": "China PMIs preview: official manufacturing seen back above 50 before holiday",
+   "sent": 0.0,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 4.0
+  },
+  {
+   "t": "Gold Price Forecast: Support Breakdown Deepens Bearish Pressure - FXEmpire",
+   "sent": 0.0,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 4.0
+  },
+  {
+   "t": "Trump administration\u2019s ban on nearly $1 billion in Canadian imports takes effect - Spectrum News",
+   "sent": 0.0,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 4.0
+  },
+  {
+   "t": "Equities dip as bond yields hold near multi-decade highs - KELO-AM",
+   "sent": 0.0,
+   "reg": "NEUTRAL_CHOP",
+   "heat": 4.0
+  }
+ ],
+ "substring_only_keyword_hits": {
+  "bullion": 1,
+  "sanction": 1,
+  "brics": 1,
+  "middle east": 1
+ },
+ "substring_only_examples": {
+  "bullion": [
+   "Gold Price Rallies as 8-Week Trading Low Blamed on China, Rates, Trump - BullionVault"
+  ],
+  "sanction": [
+   "Appeals court declines to pause sanctions against Trump lawyers in IRS settlement - Reuter"
+  ],
+  "brics": [
+   "China plans to complete geological map of Mars by end of 2028 - tvbrics.com"
+  ],
+  "middle east": [
+   "Middle Eastern oil exports rise to highest level since Iran war began - Financial Times"
+  ]
+ }
+}

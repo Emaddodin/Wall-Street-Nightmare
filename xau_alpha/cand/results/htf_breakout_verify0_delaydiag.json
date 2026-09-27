@@ -1,0 +1,36 @@
+{
+ "per_signal": {
+  "train_+0s": {
+   "n": 398,
+   "pf": 1.501,
+   "avg": 5.182
+  },
+  "train_+10s": {
+   "n": 398,
+   "pf": 1.479,
+   "avg": 4.985
+  },
+  "valid_+0s": {
+   "n": 137,
+   "pf": 1.269,
+   "avg": 6.989
+  },
+  "valid_+10s": {
+   "n": 137,
+   "pf": 1.27,
+   "avg": 6.995
+  }
+ },
+ "entry_worse_by_10s_delay": {
+  "mean": 0.106,
+  "median": 0.023,
+  "p10": -1.071,
+  "p90": 1.53,
+  "n": 535
+ },
+ "sequence_overlap": {
+  "trades_+0s": 234,
+  "trades_+10s": 238,
+  "same_signal": 225
+ }
+}
