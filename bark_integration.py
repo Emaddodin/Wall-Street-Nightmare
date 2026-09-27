@@ -230,7 +230,8 @@ async def push_bark_async(
     )
 
 
-DISCONNECT_BARK_NTFY = False
+# Master Notification Killswitch (Turned off per user command)
+NOTIFICATIONS_ENABLED = False
 
 
 def send_alert(
@@ -244,9 +245,10 @@ def send_alert(
 ) -> bool:
     """
     Primary notification gateway.
-    Bark is 100% disconnected per user directive.
-    NTFY is the sole active push notification provider.
+    All notifications are disabled per user directive.
     """
+    if not NOTIFICATIONS_ENABLED or os.getenv("NOTIFICATIONS_ENABLED", "0") in ("0", "false", "False", "no"):
+        return False
     ntfy_ok = _push_ntfy_fallback(title=title, message=message, priority=priority)
     logger.info("Dispatched alert '%s' -> Ntfy: %s (Bark disconnected)", title, ntfy_ok)
     return ntfy_ok
