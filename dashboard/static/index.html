@@ -67,12 +67,17 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .left { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 .chartwrap { position: relative; min-height: 0; }
 #chart { position: absolute; inset: 0; }
-.tfs { position: absolute; top: 12px; left: 12px; z-index: 3; display: flex; gap: 2px; background: rgba(21,23,26,.92); padding: 3px; border-radius: 9px; border: 1px solid var(--line); }
+.chartbar { position: absolute; top: 12px; left: 12px; z-index: 3; display: flex; gap: 8px; flex-wrap: wrap; }
+#zones { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+.ovl { display: flex; gap: 2px; background: rgba(21,23,26,.92); padding: 3px; border-radius: 9px; border: 1px solid var(--line); }
+.ovl button { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border-radius: 6px; color: var(--dim); font: 600 13px var(--label); }
+.ovl button.on { background: var(--raise); color: var(--fg); }
+.ovl button i { width: 14px; height: 0; border-top: 2px dashed var(--gold); }
+.ovl button i.z { height: 10px; border: 1px solid rgba(47,123,245,.8); background: rgba(47,123,245,.25); border-radius: 2px; }
+.ovl button:not(.on) i { opacity: .35; }
+.tfs { display: flex; gap: 2px; background: rgba(21,23,26,.92); padding: 3px; border-radius: 9px; border: 1px solid var(--line); }
 .tfs button { padding: 4px 11px; border-radius: 6px; color: var(--dim); font: 600 13px var(--label); }
 .tfs button.on { background: var(--raise); color: var(--fg); }
-.legend { position: absolute; top: 54px; left: 14px; z-index: 3; font: 500 13px var(--label); color: var(--dim); pointer-events: none; display: flex; gap: 14px; }
-.legend .k { display: inline-flex; align-items: center; gap: 6px; }
-.legend .k i { width: 14px; border-top: 2px dashed var(--gold); }
 
 /* ---------------- blotter (open trades) */
 .blotter { border-top: 1px solid var(--line); background: var(--panel); max-height: 34vh; display: flex; flex-direction: column; min-height: 0; }
@@ -159,6 +164,9 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 .card .meta { grid-column: 1 / -1; font-size: 12px; color: var(--dim); }
 .card .use { border: 1px solid var(--line); border-radius: 7px; padding: 4px 10px; font: 600 12px var(--label); color: var(--fg); grid-row: span 2; }
 .card .use:hover { border-color: var(--gold); color: var(--gold); }
+.bt { grid-column: 1 / -1; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; font-size: 12px; color: var(--dim); display: grid; gap: 2px; }
+.bt b { font: 600 11px var(--label); letter-spacing: .1em; text-transform: uppercase; }
+.bt .v { color: var(--fg); }
 .meter { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--raise); overflow: hidden; }
 .meter i { display: block; height: 100%; border-radius: 2px; }
 
@@ -173,7 +181,6 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
   main { display: flex; flex-direction: column; }
   .left { display: flex; flex-direction: column; }
   .chartwrap { height: 46vh; min-height: 280px; }
-  .legend { display: none; }
   aside { border-left: 0; border-top: 1px solid var(--line); order: -1; overflow: visible; }
   .left { order: 0; }
   .blotter { max-height: none; }
@@ -195,9 +202,12 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 <main>
   <div class="left">
     <div class="chartwrap">
-      <div class="tfs" id="tfs"><button data-tf="M1">1m</button><button data-tf="M5">5m</button><button data-tf="M15">15m</button><button data-tf="H1">1h</button></div>
-      <div class="legend" id="legend" hidden><span class="k"><i></i>Kronos forecast</span></div>
+      <div class="chartbar">
+        <div class="tfs" id="tfs"><button data-tf="M1">1m</button><button data-tf="M5">5m</button><button data-tf="M15">15m</button><button data-tf="H1">1h</button></div>
+        <div class="ovl" id="ovl"><button data-o="kronos" title="Kronos forecast path and target"><i></i>Kronos</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button></div>
+      </div>
       <div id="chart"></div>
+      <canvas id="zones"></canvas>
     </div>
     <section class="blotter" aria-label="Open trades">
       <div class="bhead">
