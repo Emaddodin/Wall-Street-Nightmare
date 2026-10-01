@@ -1,7 +1,8 @@
 """Heads-up: a setup is predicted to form soon, pushed to your phone with ntfy.
 
 After every closed entry bar (M5) and its Kronos forecast, Gold Desk looks 30 minutes ahead, during London and
-New York hours only, and sends one push when it expects one of these:
+New York hours only, and sends one push when it expects one of these (pushed only inside your trading session,
+coach.py; outside it they show on the page):
 
   zone   The higher timeframes allow the trade (H4 trend and H1 structure point that way, no shock against
          it), at least 6 of 10 Kronos paths end the forecast on the trade's side, and a quarter of the paths
@@ -207,9 +208,11 @@ class SoonAlerts:
     """Decides which predictions become a push (cooldowns, daily cap) and remembers them across restarts."""
 
     def __init__(self, topic: str = "", source: str = "", server: str = "https://ntfy.sh", push: bool = True,
-                 file: Path | None = HOME / "soon_alerts.json"):
+                 file: Path | None = HOME / "soon_alerts.json", ntfy: Ntfy | None = None, allow=None,
+                 hello: bool = True):
         self.file, self.topic, self.source = file, topic, source
-        self.ntfy = Ntfy(topic, server) if (topic and push) else None
+        self.ntfy = ntfy or (Ntfy(topic, server) if (topic and push) else None)
+        self.allow = allow or (lambda t: True)      # e.g. only inside your trading session (coach.py)
         self.data = {"last": {}, "day": ["", 0, 0], "history": [], "hello": ""}
         try:
             self.data.update(json.loads(file.read_text()))
@@ -217,7 +220,7 @@ class SoonAlerts:
             pass
         if len(self.data["day"]) != 3:
             self.data["day"] = ["", 0, 0]
-        if self.ntfy and self.data.get("hello") != topic:
+        if self.ntfy and hello and self.data.get("hello") != topic:
             self.ntfy.push("Gold Desk alerts are on",
                            "You'll get a heads-up here when Kronos and the indicator expect a gold setup "
                            f"within about {LOOK_MIN} minutes: London and New York hours, at most {DAY_CAP} a day.",
@@ -250,7 +253,7 @@ class SoonAlerts:
         pr["title"], pr["text"] = message(pr)
         self.data["history"] = (self.data["history"] + [pr])[-20:]
         self._save()
-        if self.ntfy:
+        if self.ntfy and self.allow(time.time()):
             self.ntfy.push(pr["title"], pr["text"], "high",
                            "chart_with_upwards_trend" if d == 1 else "chart_with_downwards_trend")
         return [pr]

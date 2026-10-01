@@ -26,10 +26,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from boom import BoomTracker, setup as boom_setup
+from coach import WINDOW, SessionCoach
 from engine import (LADDER, Bars, Engine, Params, Spec, SESSION_NAMES, market_hours, ny7_offset, run_backtest,
                     session_of, session_ok, utc_minutes)
 from smc import analyze as smc_analyze
-from soon import SoonAlerts, find_topic, ntfy_server
+from soon import Ntfy, SoonAlerts, find_topic, ntfy_server
 
 STATIC = Path(__file__).resolve().parent / "static"
 MAGIC = 26100102       # tags orders placed from this page
@@ -340,6 +341,7 @@ class Hub:
         self.kronos = None
         self.boom = BoomTracker(self.spec.digits)
         self.soon: SoonAlerts | None = None     # "setup likely soon" pushes to your phone (needs Kronos)
+        self.coach: SessionCoach | None = None  # your daily session on your phone: start, NY, end, ready setups
         self.booted = False                     # history loaded; until then the page opens and says why not
         self.chart_tf = entry_tf                # the timeframe the page's chart shows (its last candle request)
         self.smc, self._smc_at, self._smc_tf, self._smc_err = None, 0.0, None, None
@@ -423,6 +425,8 @@ class Hub:
                     opened = eng.add_bar(m1.t[i], m1.o[i], m1.h[i], m1.l[i], m1.c[i], m1.v[i], m1.spread[i])
                     if opened and i == len(m1) - 2:
                         self._event("execute", self.exec_text(opened), opened["side"])
+                        if self.coach:
+                            self.coach.ready_trade(opened, eng.ctx, self.tf, self.spec.digits)
                     for done in self.boom.on_bar(m1.t[i], m1.h[i], m1.l[i], m1.c[i], self.sec, eng.bar_spread(len(eng.m1) - 1)):
                         self._event("boom_end", done["text"], done["side"])
             self.forming = self._bar_dict(m1, len(m1) - 1)
@@ -495,12 +499,28 @@ class Hub:
             sig = self.boom.on_forecast(fc, boom_setup(eng), self._quote(), self.sec)
             if sig:
                 self._event("boom", sig["text"], sig["side"])
+                if self.coach:
+                    self.coach.ready_call(sig, self.spec.digits)
             if self.soon:
                 busy = {x["dir"] for x in (eng.cur, self.boom.active) if x}
                 for pr in self.soon.check(eng, fc, self.sec, busy):
                     self._event("soon", f"{pr['title']}: watch {pr['area'][0]:.2f}-{pr['area'][1]:.2f}", pr["side"])
 
     # ------------------------------------------------------------ API payloads
+    def coach_snapshot(self) -> dict:
+        """What the session pushes report: price, the day's read and today's setups (coach.py, its own thread)."""
+        with self.lock:
+            eng, tk = self.engine, self._quote()
+            k = self.kronos.latest if self.kronos else None
+            smc = self.smc or {}
+            return {"price": tk["bid"] if tk else None, "digits": self.spec.digits, "tf": self.tf,
+                    "ctx": dict(eng.ctx) if eng and eng.ctx else None,
+                    "smc": {"summary": smc.get("summary"), "levels": smc.get("levels")},
+                    "kronos": {x: k.get(x) for x in ("move", "up_prob", "minutes")} if k else None,
+                    "balance": self.src.account().get("balance"),
+                    "trades": [dict(t) for t in eng.trades[-40:]] if eng else [],
+                    "calls": [dict(c) for c in self.boom.history[-40:]] + ([dict(self.boom.active)] if self.boom.active else [])}
+
     def market(self) -> dict:
         """Is gold trading now? Synthetic demo prices never stop, so the demo is always open."""
         now = time.time()
@@ -551,6 +571,7 @@ class Hub:
                 "kronos": self.kronos.state() if self.kronos else None,
                 "boom": self.boom.state(),
                 "alerts": self.soon.state() if self.soon else None,
+                "session": self.coach.state() if self.coach else None,
                 "smc": self.smc,
                 "max_lots": min(self.max_lots, self.spec.max_lot),
             }
@@ -796,7 +817,9 @@ def main() -> None:
     ap.add_argument("--entry-tf", default="M5", choices=sorted(LADDER), help="timeframe the indicator enters on (default M5)")
     ap.add_argument("--ntfy-topic", help="ntfy topic for 'setup likely soon' pushes (default: ~/.golddesk/ntfy_topic, "
                                          "else your bots' NTFY_TOPIC)")
-    ap.add_argument("--no-alerts", action="store_true", help="never push 'setup likely soon' heads-ups to ntfy")
+    ap.add_argument("--no-alerts", action="store_true", help="never push anything to ntfy")
+    ap.add_argument("--session", default=WINDOW, help=f"your daily trading session in Tehran time, pushed to ntfy "
+                                                      f"(default {WINDOW}; 'off' for none)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
@@ -822,10 +845,15 @@ def main() -> None:
     PORT = a.port
     HUB = Hub(src, Params(), a.utc_offset, a.max_lots, a.entry_tf)
     threading.Thread(target=poll_loop, daemon=True).start()
+    topic, where = find_topic(a.ntfy_topic)
+    ntfy = Ntfy(topic, ntfy_server()) if topic and src.kind != "demo" and not a.no_alerts else None
+    if ntfy and a.session != "off":
+        HUB.coach = SessionCoach(HUB.coach_snapshot, ntfy, a.session)
+        print(f"Trading session pushes: {a.session} Tehran time, market days ({where})")
     if a.kronos:
         from kronos_signal import DEFAULT_REPO, HORIZON, KronosWorker
-        topic, where = find_topic(a.ntfy_topic)
-        HUB.soon = SoonAlerts(topic, where, ntfy_server(), push=src.kind != "demo" and not a.no_alerts)
+        HUB.soon = SoonAlerts(topic, where, ntfy_server(), push=ntfy is not None, ntfy=ntfy,
+                              allow=HUB.coach.in_session if HUB.coach else None, hello=HUB.coach is None)
         HUB.kronos = KronosWorker(HUB, repo=a.kronos_repo or DEFAULT_REPO, size=a.kronos,
                                   horizon=HORIZON.get(a.entry_tf, 15))
         print(f"Kronos-{a.kronos}: loading in the background (first run downloads it)")
