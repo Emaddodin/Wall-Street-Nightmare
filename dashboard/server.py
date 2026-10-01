@@ -28,6 +28,7 @@ from urllib.parse import parse_qs, urlparse
 from boom import BoomTracker, setup as boom_setup
 from engine import (LADDER, Bars, Engine, Params, Spec, SESSION_NAMES, ny7_offset, run_backtest,
                     session_of, session_ok, utc_minutes)
+from soon import SoonAlerts, find_topic, ntfy_server
 
 STATIC = Path(__file__).resolve().parent / "static"
 MAGIC = 26100102       # tags orders placed from this page
@@ -337,6 +338,7 @@ class Hub:
         self.tick_ = None
         self.kronos = None
         self.boom = BoomTracker(self.spec.digits)
+        self.soon: SoonAlerts | None = None     # "setup likely soon" pushes to your phone (needs Kronos)
         self.bootstrap()
 
     # server clock -> UTC
@@ -447,7 +449,8 @@ class Hub:
                 "time": self.forming["time"]}
 
     def on_kronos(self, fc: dict) -> None:
-        """A Kronos forecast finished (worker thread): check it against the indicator for a Boom / Crash call."""
+        """A Kronos forecast finished (worker thread): check it against the indicator for a Boom / Crash call,
+        then for a setup it expects soon (a heads-up push to your phone)."""
         with self.lock:
             eng = self.engine
             if not eng or not len(eng.m1) or fc.get("t") != eng.m1.t[-1] or eng.ctx is None:
@@ -455,6 +458,10 @@ class Hub:
             sig = self.boom.on_forecast(fc, boom_setup(eng), self._quote(), self.sec)
             if sig:
                 self._event("boom", sig["text"], sig["side"])
+            if self.soon:
+                busy = {x["dir"] for x in (eng.cur, self.boom.active) if x}
+                for pr in self.soon.check(eng, fc, self.sec, busy):
+                    self._event("soon", f"{pr['title']}: watch {pr['area'][0]:.2f}-{pr['area'][1]:.2f}", pr["side"])
 
     # ------------------------------------------------------------ API payloads
     def state(self) -> dict:
@@ -489,6 +496,7 @@ class Hub:
                 "broker": self.src.broker() if hasattr(self.src, "broker") else {"connected": True, "message": None},
                 "kronos": self.kronos.state() if self.kronos else None,
                 "boom": self.boom.state(),
+                "alerts": self.soon.state() if self.soon else None,
                 "max_lots": min(self.max_lots, self.spec.max_lot),
             }
 
@@ -726,6 +734,9 @@ def main() -> None:
                     help="show Kronos forecasts (model size, default small); needs install_kronos.sh")
     ap.add_argument("--kronos-repo", help="folder with the Kronos code (default: ../Kronos)")
     ap.add_argument("--entry-tf", default="M5", choices=sorted(LADDER), help="timeframe the indicator enters on (default M5)")
+    ap.add_argument("--ntfy-topic", help="ntfy topic for 'setup likely soon' pushes (default: ~/.golddesk/ntfy_topic, "
+                                         "else your bots' NTFY_TOPIC)")
+    ap.add_argument("--no-alerts", action="store_true", help="never push 'setup likely soon' heads-ups to ntfy")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
@@ -753,9 +764,12 @@ def main() -> None:
     threading.Thread(target=poll_loop, daemon=True).start()
     if a.kronos:
         from kronos_signal import DEFAULT_REPO, HORIZON, KronosWorker
+        topic, where = find_topic(a.ntfy_topic)
+        HUB.soon = SoonAlerts(topic, where, ntfy_server(), push=src.kind != "demo" and not a.no_alerts)
         HUB.kronos = KronosWorker(HUB, repo=a.kronos_repo or DEFAULT_REPO, size=a.kronos,
                                   horizon=HORIZON.get(a.entry_tf, 15))
         print(f"Kronos-{a.kronos}: loading in the background (first run downloads it)")
+        print("Setup heads-ups: " + (f"pushed to ntfy ({where})" if HUB.soon.ntfy else "shown on the page only"))
     url = f"http://127.0.0.1:{a.port}"
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
     srv.daemon_threads = True

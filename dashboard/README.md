@@ -56,6 +56,8 @@ Like the [Kronos BTC demo](https://shiyu-coder.github.io/Kronos-demo/), Gold Des
 
 **Boom / Crash** (`boom.py`, `state.boom` on the page) are short scalp calls for when Kronos and the indicator agree: Kronos expects at least 0.6 ATR within 30 minutes on a clean path, and the H4 trend, the H1 structure or the indicator's own entry signal points the same way (trend and structure not both against). BOOM buys, CRASH sells, at the live price; stop 1 ATR, target 0.8 to 1.5 ATR, over after 30 minutes. One at a time. They are the same rules as the BOOM / CRASH box on the VPS Kronos chart. Every finished call is scored (spread included) and saved to `~/.golddesk/boom_calls.csv`. They are untested signals, not trades.
 
+**Setup heads-ups on your phone** (`soon.py`, `state.alerts`): after each M5 forecast Gold Desk looks 30 minutes ahead and pushes one ntfy notification when Kronos and the indicator expect a setup: price pulling back into a fresh M15 zone or sweeping the recent low / high with the H4 trend and H1 structure on its side, or a BOOM / CRASH-sized move about to start. The push says BUY or SELL, the price area to watch and roughly when. London and New York hours only, never twice for the same setup, one per side per hour, at most 8 a day, none while a trade or call on that side is open. They go to your trading bots' ntfy topic (`NTFY_TOPIC` in `/root/ict_sniper/.env`, never the shared ones); if there is none, the VPS setup makes a private topic in `~/.golddesk/ntfy_topic` and prints it so you can subscribe. `--ntfy-topic` overrides it, `--no-alerts` turns pushes off. A heads-up to look at the chart, not a signal, and untested like the rest.
+
 ```
 bash install_kronos.sh                                   # once: Kronos code + PyTorch
 python3 kronos_backtest.py --litefinance-days 30         # do Kronos and Boom / Crash beat a coin flip on gold?
@@ -92,5 +94,6 @@ A click reaches MT5 in a few milliseconds, because the page and the terminal are
 | `server.py` | Local web server and the MT5 connection |
 | `engine.py` | Signal rules and backtest (same rules as `mt5/XAU_M1_Scalper.mq5`), on M5 or M1 |
 | `boom.py` | Boom / Crash scalp calls (Kronos + indicator) and their live scoring |
+| `soon.py` | "Setup likely soon" heads-ups pushed to your phone with ntfy |
 | `static/` | The page, plus TradingView Lightweight Charts 4.2.3 (Apache 2.0) |
 | `start_dashboard.bat`, `start_demo.bat` | Double-click starters |

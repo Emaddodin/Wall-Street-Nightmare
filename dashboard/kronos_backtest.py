@@ -131,7 +131,7 @@ def main() -> None:
     ap.add_argument("--tf", default="M5", choices=sorted(LADDER), help="entry timeframe (default M5)")
     ap.add_argument("--last-days", type=float, default=30, help="test only the most recent N days of the data")
     ap.add_argument("--points", type=int, default=400, help="how many forecasts to test")
-    ap.add_argument("--horizon", type=int, default=0, help="bars ahead (default: 12 on M5, 15 on M1)")
+    ap.add_argument("--horizon", type=int, default=0, help="bars ahead (default: 24 on M5, 15 on M1)")
     ap.add_argument("--lookback", type=int, default=400)
     ap.add_argument("--samples", type=int, default=5)
     ap.add_argument("--min-atr", type=float, default=0.5)

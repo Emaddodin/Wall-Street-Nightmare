@@ -42,6 +42,7 @@ main() {
   if [ ! -f "$CONF/.chromium_ok" ]; then
     get_browser
   fi
+  alerts_topic
 
   # Kronos code: the copy already on the VPS, else a fresh clone
   local KREPO
@@ -137,6 +138,21 @@ get_browser() {
     touch "$CONF/.chromium_ok"
   else
     echo "No Chrome found on the VPS. Gold Desk's broker page can't start until one is installed."
+  fi
+}
+
+# "Setup likely soon" pushes (soon.py) go to the ntfy topic your trading bots already use (NTFY_TOPIC in
+# /root/ict_sniper/.env, never the shared ones). Only if there is none, Gold Desk makes a private topic of its own.
+alerts_topic() {
+  if [ ! -s "$CONF/ntfy_topic" ] && ! grep -qE '^NTFY_TOPIC=["'"'"']?[A-Za-z0-9_-]' /root/ict_sniper/.env 2>/dev/null; then
+    printf 'golddesk-%s\n' "$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')" > "$CONF/ntfy_topic"
+    chmod 600 "$CONF/ntfy_topic"
+    changed=1
+  fi
+  if [ -s "$CONF/ntfy_topic" ]; then
+    echo "Phone alerts for gold setups: in the ntfy app, subscribe to $(cat "$CONF/ntfy_topic")"
+  else
+    echo "Phone alerts for gold setups go to the same ntfy topic as your trading bots."
   fi
 }
 
