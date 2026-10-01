@@ -69,6 +69,8 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .chartwrap { position: relative; min-height: 0; }
 #chart { position: absolute; inset: 0; }
 .chartbar { position: absolute; top: 12px; left: 12px; z-index: 3; display: flex; gap: 8px; flex-wrap: wrap; }
+.smcread { position: absolute; top: 54px; left: 12px; z-index: 3; max-width: calc(100% - 140px); background: rgba(21,23,26,.92); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font: 500 13px var(--label); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.smcread b { font-weight: 700; letter-spacing: .06em; margin-right: 6px; }
 #zones { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
 .ovl { display: flex; gap: 2px; background: rgba(21,23,26,.92); padding: 3px; border-radius: 9px; border: 1px solid var(--line); }
 .ovl button { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border-radius: 6px; color: var(--dim); font: 600 13px var(--label); }
@@ -243,6 +245,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
         <div class="tfs" id="tfs"><button data-tf="M1">1m</button><button data-tf="M5">5m</button><button data-tf="M15">15m</button><button data-tf="H1">1h</button><button data-tf="H4">4h</button></div>
         <div class="ovl" id="ovl"><button data-o="kronos" title="Kronos forecast path and target"><i></i>Kronos</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button><button data-o="boom" title="Boom / Crash calls: arrows, entry, SL and TP"><i class="b"></i>Boom/Crash</button><button data-o="smc" title="Smart Money / ICT: structure (BOS, CHoCH), liquidity, FVG, order blocks, premium / discount, OTE, killzones, key levels"><i class="s"></i>SMC/ICT</button></div>
       </div>
+      <div class="smcread" id="smcRead" hidden></div>
       <div id="chart"></div>
       <canvas id="zones"></canvas>
     </div>

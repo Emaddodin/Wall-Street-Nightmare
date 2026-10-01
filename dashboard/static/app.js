@@ -219,14 +219,30 @@
   //  swings [{time, price, kind}]                         HH / HL / LH / LL labels
   //  levels [{price, label, time}]                        PDH / PDL / PWH / PWL / midnight open ...
   const KZ = { Asia: "120,110,230", London: "47,123,245", "NY AM": "214,173,82", "NY PM": "214,120,82", "NY Lunch": "142,138,128" };
+  // keep the chart readable: the newest few of each kind, open ones before used ones, nearest liquidity to price
+  function trimSmc(m) {
+    const px = last ? last.close : null;
+    const recent = (a, n) => (a || []).slice(-n);
+    const openFirst = (a, nOpen, nUsed) => [...(a || []).filter((z) => z.to_time).slice(-nUsed), ...(a || []).filter((z) => !z.to_time).slice(-nOpen)];
+    const liq = (m.liquidity || []);
+    const near = (side) => liq.filter((l) => !l.swept && px != null && (side > 0 ? l.price >= px : l.price < px))
+      .sort((a, b) => Math.abs(a.price - px) - Math.abs(b.price - px)).slice(0, 2);
+    return { ...m, killzones: recent(m.killzones, 4), fvg: openFirst(m.fvg, 4, 1), ob: openFirst(m.ob, 3, 1), structure: recent(m.structure, 2),
+      swings: recent(m.swings, 4), ote: recent(m.ote, 1), liquidity: px == null ? recent(liq, 4) : [...near(1), ...near(-1), ...liq.filter((l) => l.swept).slice(-1)] };
+  }
   function drawSmc(right, sec, ts) {
-    const m = S && S.smc;
+    const m = S && S.smc && trimSmc(S.smc);
     if (!m) return;
+    const lab = right - 118;                       // labels sit left of the order / signal tags at the right edge
     const y = (v) => series.priceToCoordinate(v);
     const X = (t) => (t == null ? right : Math.min(right, xOf(t, ts, sec) ?? right));
     const H = zc.getBoundingClientRect().height;
+    const taken = [];                              // drawn label boxes: a label that would overlap one is skipped
     const label = (txt, x, yy, col, align) => {
       zx.font = "600 10px JetBrains Mono, ui-monospace, monospace";
+      const w = zx.measureText(txt).width, x0 = align === "right" ? x - w : align === "center" ? x - w / 2 : x;
+      if (taken.some((r) => x0 < r[0] + r[2] + 4 && x0 + w + 4 > r[0] && yy - 10 < r[1] && yy > r[1] - 10)) return;
+      taken.push([x0, yy, w]);
       zx.textAlign = align || "left"; zx.fillStyle = col; zx.fillText(txt, x, yy); zx.textAlign = "left";
     };
     const hline = (x1, x2, yy, col, dash) => {
@@ -238,7 +254,7 @@
       if (x1 == null || y1 == null || y2 == null || x2 <= x1) return;
       zx.fillStyle = `rgba(${rgb},${a})`; zx.fillRect(x1, y1, x2 - x1, Math.max(1, y2 - y1));
       zx.strokeStyle = `rgba(${rgb},${a * 3})`; zx.strokeRect(x1 + .5, y1 + .5, x2 - x1 - 1, Math.max(1, y2 - y1) - 1);
-      if (txt && y2 - y1 >= 10) label(txt, x2 - 4, y1 + 10, `rgba(${rgb},.95)`, "right");
+      if (txt && y2 - y1 >= 10) label(txt, x1 + 4, y1 + 10, `rgba(${rgb},.95)`);
     };
     if (sec <= 900) for (const k of m.killzones || []) {            // sessions only make sense on 1m-15m
       const x1 = X(k.start), x2 = X(k.end), rgb = KZ[k.name] || "142,138,128";
@@ -254,9 +270,9 @@
         zx.fillStyle = "rgba(229,72,77,.05)"; zx.fillRect(x1, yh, right - x1, ye - yh);
         zx.fillStyle = "rgba(47,182,124,.05)"; zx.fillRect(x1, ye, right - x1, yl - ye);
         hline(x1, right, ye, "rgba(236,232,223,.35)", [6, 4]);
-        label("PREMIUM", right - 4, yh + 11, "rgba(229,72,77,.8)", "right");
-        label("EQ 50%", right - 4, ye - 3, "rgba(236,232,223,.6)", "right");
-        label("DISCOUNT", right - 4, yl - 4, "rgba(47,182,124,.8)", "right");
+        label("PREMIUM", x1 + 4, yh + 11, "rgba(229,72,77,.8)");
+        label("EQ 50%", x1 + 4, ye - 3, "rgba(236,232,223,.6)");
+        label("DISCOUNT", x1 + 4, yl - 4, "rgba(47,182,124,.8)");
       }
     }
     for (const o of m.ote || []) box(o, "214,173,82", .08, "OTE");
@@ -267,7 +283,7 @@
       if (yy == null) continue;
       const col = l.swept ? "rgba(142,138,128,.45)" : "rgba(232,178,58,.85)";
       hline(x1, x2, yy, col, [1, 3]);
-      label(`${l.kind || "LIQ"}${l.swept ? " ✕" : " $$$"}`, x2 - 4, yy + (/L$/.test(l.kind || "") ? 11 : -3), col, "right");
+      label(`${l.kind || "LIQ"}${l.swept ? " ✕" : " $$$"}`, Math.min(x2, lab) - 4, yy + (/L$/.test(l.kind || "") ? 11 : -3), col, "right");
     }
     for (const b of m.structure || []) {
       const x1 = X(b.from_time), x2 = X(b.time), yy = y(b.price);
@@ -285,7 +301,7 @@
       const x1 = l.time ? X(l.time) : 0, yy = y(l.price);
       if (yy == null) continue;
       hline(x1, right, yy, "rgba(236,232,223,.4)", [8, 4]);
-      label(`${l.label} ${fmt(l.price)}`, right - 4, yy - 3, "rgba(236,232,223,.75)", "right");
+      label(`${l.label} ${fmt(l.price)}`, lab - 4, yy - 3, "rgba(236,232,223,.75)", "right");
     }
   }
 
@@ -338,7 +354,7 @@
       ovl[b.dataset.o] = !ovl[b.dataset.o]; store.set("ovl2", ovl);
       b.classList.toggle("on", ovl[b.dataset.o]);
       markerKey = ""; fcKey = "x";
-      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); }
+      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); renderSmcRead(); }
     });
   });
 
@@ -616,6 +632,13 @@
       ${h.why && h.why.length ? `<span class="ht dim">${esc(h.why.join(", "))}</span>` : ""}
       <span class="hp">${push} · a heads-up, not a trade signal</span>`;
   }
+  function renderSmcRead() {
+    const m = S.smc, el = $("smcRead");
+    el.hidden = !ovl.smc || !m || !m.summary;
+    if (el.hidden) return;
+    const b = m.bias;
+    el.innerHTML = `<b class="${b > 0 ? "up" : b < 0 ? "down" : ""}">${b > 0 ? "▲" : b < 0 ? "▼" : "•"} SMC ${esc((m.tf || "").replace(/^M(\d+)$/, "$1m").replace(/^H(\d+)$/, "$1h"))}</b> ${esc(m.summary)}`;
+  }
   function renderScalper() {
     const s = S.active;
     $("scalper").innerHTML = s
@@ -684,6 +707,7 @@
     renderScalper();
     renderBoom();
     renderHeadsUp();
+    renderSmcRead();
     drawMarkers();
     drawLines();
     drawForecast();
