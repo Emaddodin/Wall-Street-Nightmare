@@ -1,8 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr" translate="no" class="notranslate">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="google" content="notranslate">
 <meta name="dash-token" content="__DASH_TOKEN__">
 <title>Gold Desk</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,7 +32,8 @@
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { height: 100%; margin: 0; }
+html, body { height: 100%; margin: 0; direction: ltr !important; unicode-bidi: isolate; }
+body * { direction: ltr; }
 body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--ui); display: flex; flex-direction: column; overflow: hidden; }
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
@@ -178,7 +180,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 }
 </style>
 </head>
-<body>
+<body dir="ltr">
 <header>
   <div class="brand"><b>GOLD DESK</b><span id="sym">XAUUSD</span></div>
   <span class="pill unknown" id="badge">…</span>
