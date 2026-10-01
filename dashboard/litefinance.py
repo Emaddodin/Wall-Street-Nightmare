@@ -13,6 +13,7 @@ browser and every call is queued to it.
 """
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import queue
@@ -64,9 +65,9 @@ ORDER_JS = """async ({sel, side, lots, sl, tp, dry}) => {
     return el.value;
   };
   const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  const findBtn = () => Array.from(document.querySelectorAll(sel.submit)).find(b => visible(b) && !b.disabled);
   if (q(sel.market)) pick(sel.market);
   if (!pick(side === 'BUY' ? sel.buy : sel.sell)) return {ok: false, message: 'Could not pick ' + side + ' on the LiteFinance ticket'};
-  await wait(60);
   const vol = setVal(sel.volume, String(lots));
   if (vol === 'missing' || vol === 'locked') return {ok: false, message: 'LiteFinance lot box is ' + vol};
   if (Math.abs(parseFloat(String(vol).replace(',', '.')) - lots) > 1e-9) return {ok: false, message: 'LiteFinance lot box shows ' + vol + ', not ' + lots + '. Nothing sent.'};
@@ -74,18 +75,46 @@ ORDER_JS = """async ({sel, side, lots, sl, tp, dry}) => {
     const got = setVal(sel[k], v ? String(v) : '');
     if (v && (got === 'missing' || got === 'locked')) return {ok: false, message: 'LiteFinance ' + (k === 'sl' ? 'stop loss' : 'take profit') + ' box is ' + got + '. Nothing sent.'};
   }
-  await wait(60);
-  const btn = Array.from(document.querySelectorAll(sel.submit)).find(b => visible(b) && !b.disabled);
+  let btn = findBtn(), label = btn ? (btn.innerText || '').toUpperCase() : '';
+  for (let i = 0; i < 20 && !(btn && label.includes(side)); i++) {   // the button relabels a moment after the side switch
+    await wait(5); btn = findBtn(); label = btn ? (btn.innerText || '').toUpperCase() : '';
+  }
   if (!btn) return {ok: false, message: 'LiteFinance order button not found. Nothing sent.'};
-  const label = (btn.innerText || '').toUpperCase();
   if (!label.includes(side)) return {ok: false, message: 'LiteFinance button says "' + label.trim() + '", expected ' + side + '. Nothing sent.'};
   if (dry) return {ok: true, message: 'dry run: ticket filled, button not pressed', button: label.trim()};
   const clickedAt = performance.now();
   btn.click();
-  await wait(400);
-  const notes = Array.from(document.querySelectorAll('[class*="notif"], [class*="toast"], [class*="alert"], [class*="error"], .popup'))
-    .filter(visible).map(e => e.innerText.trim()).filter(Boolean).slice(-3);
-  return {ok: true, message: notes.join(' | ') || 'Sent to LiteFinance', button: label.trim(), click_ms: clickedAt - t0};
+  return {ok: true, message: 'Sent to LiteFinance', button: label.trim(), click_ms: clickedAt - t0};
+}"""
+
+NOTES_JS = """() => {
+  const visible = (el) => !!el && el.offsetParent !== null;
+  return Array.from(document.querySelectorAll('[class*="notif"], [class*="toast"], [class*="alert"], [class*="error"]'))
+    .filter(visible).map(e => e.innerText.trim()).filter(Boolean).slice(-2).join(' | ');
+}"""
+
+# Open trades as LiteFinance prints them: the smallest rows that mention XAUUSD and Buy/Sell.
+# Shown as plain text until the panel's columns are mapped; never clicked.
+ROWS_JS = """() => {
+  const isRow = (t) => /XAUUSD/i.test(t) && /\\b(buy|sell)\\b/i.test(t) && t.length < 400;
+  const out = [], seen = new Set();
+  for (const el of document.querySelectorAll('tr, li, [class*="row"], [class*="item"], [class*="trade"], [class*="position"]')) {
+    if (el.offsetParent === null || el.closest('.js_trade_form, form')) continue;
+    const t = (el.innerText || '').replace(/\\s+/g, ' ').trim();
+    if (!isRow(t)) continue;
+    if (Array.from(el.children).some(c => isRow((c.innerText || '').replace(/\\s+/g, ' ')))) continue;
+    if (seen.has(t)) continue;
+    seen.add(t); out.push({text: t, html: el.parentElement ? el.parentElement.outerHTML.slice(0, 20000) : ''});
+    if (out.length >= 30) break;
+  }
+  return out;
+}"""
+
+OPEN_PORTFOLIO_JS = """() => {
+  const el = Array.from(document.querySelectorAll('a, button, span, div'))
+    .find(e => e.children.length === 0 && /^portfolio$/i.test((e.innerText || '').trim()));
+  if (el) el.click();
+  return !!el;
 }"""
 
 QUOTE_JS = """(sel) => {
@@ -167,6 +196,12 @@ class LiteFinanceSource:
         self.spread = 0.22
         self._acct = {"at": 0.0}
         self._fresh_at: dict = {}
+        self.data_lock = threading.Lock()
+        self.http_lock = threading.Lock()
+        self._conn = None
+        self.note = ""          # last message LiteFinance showed after an order
+        self.rows: list = []    # open trades as LiteFinance prints them
+        self._note_at = 0.0
         ready = threading.Event()
         self._boot_err = None
         threading.Thread(target=self._worker, args=(ready,), daemon=True).start()
@@ -204,14 +239,65 @@ class LiteFinanceSource:
                               "python3 server.py --litefinance-login")
             ready.set()
             return
+        self._read_quote()
+        self._read_account()
+        try:
+            before = self.page.url
+            self.page.evaluate(OPEN_PORTFOLIO_JS)      # show the open-trades panel (a tab, not a trade button)
+            self.page.wait_for_timeout(300)
+            if self.page.url != before:                # it was a link to another page: back to the chart
+                self.page.goto(self.url, wait_until="domcontentloaded", timeout=45000)
+                self.page.wait_for_selector(SEL["bid"], timeout=40000)
+        except Exception:
+            pass
         ready.set()
-        while True:
-            fn, box, done = self.jobs.get()
+        acct_at = rows_at = time.time()
+        while True:                                # orders first; between them, keep the quote fresh
+            try:
+                fn, box, done = self.jobs.get(timeout=0.04)
+            except queue.Empty:
+                try:
+                    self._read_quote()
+                    if self._note_at and time.time() > self._note_at:
+                        self._note_at = 0.0
+                        self.note = self.page.evaluate(NOTES_JS) or ""
+                    if time.time() - acct_at > 3:
+                        acct_at = time.time()
+                        self._read_account()
+                    if time.time() - rows_at > 1:
+                        rows_at = time.time()
+                        self._read_rows()
+                except Exception:
+                    pass
+                continue
             try:
                 box["v"] = fn(self.page)
             except Exception as e:
                 box["e"] = e
             done.set()
+
+    def _read_quote(self) -> None:
+        q = self.page.evaluate(QUOTE_JS, SEL)
+        if q["bid"] > 0 and q["ask"] > 0:
+            self.spread = round(q["ask"] - q["bid"], 2)
+            self.last_quote = {"bid": q["bid"], "ask": q["ask"], "time": int(time.time())}
+
+    def _read_rows(self) -> None:
+        rows = self.page.evaluate(ROWS_JS)
+        self.rows = [r["text"] for r in rows]
+        if rows and not getattr(self, "_dumped", False):       # one local copy, so the columns can be mapped
+            self._dumped = True
+            try:
+                HOME.mkdir(parents=True, exist_ok=True)
+                (HOME / "lf_positions_dump.html").write_text(rows[0]["html"])
+            except OSError:
+                pass
+
+    def _read_account(self) -> None:
+        r = self.page.evaluate(ACCOUNT_JS)
+        a = self._acct
+        a.update({"balance": r.get("balance") or a.get("balance") or 0.0,
+                  "equity": r.get("equity") or r.get("balance") or a.get("equity") or 0.0, "at": time.time()})
 
     def _call(self, fn, timeout: float = 30.0):
         box, done = {}, threading.Event()
@@ -231,17 +317,43 @@ class LiteFinanceSource:
 
     # ------------------------------------------------------------ market data
     def _fetch(self, tf: str, t_from: int, t_to: int) -> list:
-        u = f"{self.base}/chart/get-history?" + urlencode(
+        path = "/chart/get-history?" + urlencode(
             {"symbol": self.symbol, "resolution": RES[tf], "from": int(t_from), "to": int(t_to)})
-        r = self._call(lambda p: p.evaluate(FETCH_JS, u))
+        text = self._get(path)
+        if text is not None:
+            return parse_history(text)
+        r = self._call(lambda p: p.evaluate(FETCH_JS, self.base + path))
         if r["status"] != 200:
             raise RuntimeError(f"LiteFinance history returned HTTP {r['status']}")
         return parse_history(r["text"])
 
+    def _get(self, path: str) -> str | None:
+        """Candle history is public, so fetch it straight from Python on a kept-alive connection
+        instead of queueing behind orders in the browser."""
+        if not self.base.startswith("https://"):
+            return None
+        with self.http_lock:
+            for _ in range(2):
+                try:
+                    if self._conn is None:
+                        self._conn = http.client.HTTPSConnection(self.base[8:], timeout=8)
+                    self._conn.request("GET", path, headers={"User-Agent": "Mozilla/5.0 GoldDesk",
+                                                             "Accept": "application/json"})
+                    r = self._conn.getresponse()
+                    body = r.read().decode("utf-8", "replace")
+                    return body if r.status == 200 else None
+                except (OSError, http.client.HTTPException):
+                    self._conn = None
+            return None
+
     def _load(self, tf: str, count: int) -> list:
+        with self.data_lock:
+            return self._load_locked(tf, count)
+
+    def _load_locked(self, tf: str, count: int) -> list:
         sec, now = SEC[tf], int(time.time())
         rows = self.cache[tf]
-        if rows and time.time() - self._fresh_at.get(tf, 0) < 1.0 and len(rows) >= count:
+        if rows and time.time() - self._fresh_at.get(tf, 0) < (1.0 if tf == "M1" else 4.0) and len(rows) >= count:
             return rows[-count:]
         self._fresh_at[tf] = time.time()
         if rows:                                   # refresh the tail (the last bar may still be forming)
@@ -263,18 +375,13 @@ class LiteFinanceSource:
         return rows[-count:]
 
     def tick(self) -> dict | None:
-        q = self._call(lambda p: p.evaluate(QUOTE_JS, SEL))
-        if not (q["bid"] > 0 and q["ask"] > 0):
-            return self.last_quote
-        self.spread = round(q["ask"] - q["bid"], 2)
-        self.last_quote = {"bid": q["bid"], "ask": q["ask"], "time": int(time.time())}
-        return self.last_quote
+        return self.last_quote             # refreshed by the browser thread every ~40 ms
 
     def rates(self, tf: str, count: int) -> Bars:
         rows = [list(r) for r in self._load(tf, int(count))]
         sec, now = SEC[tf], int(time.time())
         start = now - now % sec
-        tk = self.last_quote or self.tick()
+        tk = self.last_quote
         if tk:                                     # keep the forming bar current with the live bid
             bid = tk["bid"]
             if rows and rows[-1][0] == start:
@@ -298,19 +405,11 @@ class LiteFinanceSource:
         return Spec(point=0.01, digits=2, vpu=100.0, min_lot=0.01, lot_step=0.01, max_lot=100.0)
 
     def account(self) -> dict:
-        a = self._acct
-        if time.time() - a["at"] > 3:
-            try:
-                r = self._call(lambda p: p.evaluate(ACCOUNT_JS))
-                mode = self.account_type or "unknown"   # never guessed: a wrong "demo" badge is worse than none
-                a.update({"balance": r.get("balance") or a.get("balance") or 0.0,
-                          "equity": r.get("equity") or r.get("balance") or a.get("equity") or 0.0,
-                          "mode": mode, "at": time.time()})
-            except Exception:
-                a["at"] = time.time()
+        a = self._acct                     # refreshed by the browser thread every 3 s
         return {"balance": a.get("balance", 0.0), "equity": a.get("equity", 0.0), "currency": "USD",
-                "server": "LiteFinance web", "company": "LiteFinance", "mode": a.get("mode", "unknown"),
-                "trade_allowed": True, "ping_ms": None}
+                "server": "LiteFinance web", "company": "LiteFinance",
+                "mode": self.account_type or "unknown",   # never guessed: a wrong "demo" badge is worse than none
+                "trade_allowed": True, "ping_ms": None, "note": self.note}
 
     # ------------------------------------------------------------ manual trading (only on your clicks)
     def positions(self) -> list:
@@ -325,6 +424,8 @@ class LiteFinanceSource:
         # time until LiteFinance's own button was pressed (the page then sends it to the broker)
         res["ms"] = round(res.pop("click_ms"), 1) if "click_ms" in res else round(total, 1)
         res["price"] = (self.last_quote or {}).get("ask" if side == "BUY" else "bid")
+        if res.get("ok"):
+            self.note, self._note_at = "", time.time() + 0.8   # read LiteFinance's reply a moment later
         return res
 
     def _not_yet(self, what: str) -> dict:

@@ -5,279 +5,148 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="dash-token" content="__DASH_TOKEN__">
 <title>Gold Desk</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: a trading desk. Chart owns the left, the order ticket and the read-outs stack on the right. */
 :root {
-  --bg: #0e1115;
-  --panel: #151a20;
-  --panel-2: #1b2129;
-  --line: #262e38;
-  --fg: #dde2e8;
-  --dim: #8a94a3;
-  --brass: #c8a24a;
-  --buy: #3d8bfd;
-  --sell: #f0603c;
-  --good: #3fb68b;
-  --warn: #e5b33b;
+  --bg: #0d1014;
+  --panel: #141920;
+  --line: #242c36;
+  --fg: #e6eaef;
+  --dim: #8792a1;
+  --buy: #2f7df6;
+  --sell: #e8553a;
+  --good: #34b37e;
   --bad: #e5484d;
-  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --warn: #e5b33b;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { height: 100%; }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.45 var(--sans); display: flex; flex-direction: column; }
-button, input, select { font: inherit; color: inherit; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.4 var(--sans); display: flex; flex-direction: column; }
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.dim { color: var(--dim); }
-.buy { color: var(--buy); } .sell { color: var(--sell); }
-.good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; }
+input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; width: 100%; }
+input:focus { outline: 2px solid #3a4a5e; outline-offset: -1px; }
 
-/* header */
-header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
-.brand { font-weight: 600; letter-spacing: .02em; display: flex; align-items: baseline; gap: 8px; }
-.brand b { color: var(--brass); font-size: 15px; }
-.badge { padding: 3px 9px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; border: 1px solid currentColor; }
-.badge.real { color: #fff; background: var(--bad); border-color: var(--bad); }
-.badge.demo { color: var(--good); }
-.badge.paper { color: var(--dim); }
-.quote { display: flex; gap: 14px; align-items: baseline; }
-.quote .px { font-size: 17px; font-weight: 600; }
-.hitem { display: flex; flex-direction: column; line-height: 1.2; }
-.hitem small { color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
-.spacer { flex: 1; }
-.tabs { display: flex; gap: 2px; background: var(--bg); padding: 3px; border-radius: 6px; }
-.tabs button { background: none; border: 0; padding: 5px 12px; border-radius: 4px; cursor: pointer; color: var(--dim); }
-.tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--fg); }
-.pill { padding: 2px 8px; border-radius: 10px; font-size: 11px; background: var(--panel-2); }
-.pill.on { color: var(--good); } .pill.off { color: var(--warn); }
+/* top bar */
+header { display: flex; align-items: center; gap: 18px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { font-weight: 700; letter-spacing: .04em; }
+.brand span { color: var(--dim); font-weight: 500; margin-left: 6px; }
+.badge { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; letter-spacing: .04em; }
+.badge.demo { background: rgba(52,179,126,.16); color: var(--good); }
+.badge.real { background: rgba(229,72,77,.18); color: var(--bad); }
+.live { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 13px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+.dot.on { background: var(--good); box-shadow: 0 0 0 3px rgba(52,179,126,.18); }
+.money { margin-left: auto; display: flex; gap: 18px; font-size: 13px; color: var(--dim); }
+.money b { color: var(--fg); font-weight: 600; margin-left: 6px; }
 
-.banner { padding: 8px 16px; background: #3a2a10; color: var(--warn); border-bottom: 1px solid #5a4318; }
-.banner[hidden] { display: none; }
-
-/* live layout */
-main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; flex: 1; min-height: 0; }
-.left { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--line); }
-.chartbar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); }
-.chartwrap { position: relative; flex: 1; min-height: 340px; }
+/* main */
+main { flex: 1; min-height: 0; display: flex; }
+.chartwrap { flex: 1; min-width: 0; position: relative; }
 #chart { position: absolute; inset: 0; }
-#zones { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 2; }
-.legend { position: absolute; left: 12px; top: 8px; z-index: 3; font-size: 11px; color: var(--dim); pointer-events: none; }
-.right { overflow-y: auto; background: var(--panel); }
-section.card { padding: 14px 16px; border-bottom: 1px solid var(--line); }
-section.card h2 { margin: 0 0 10px; font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tfs { position: absolute; top: 10px; left: 10px; z-index: 3; display: flex; gap: 4px; background: rgba(20,25,32,.9); padding: 3px; border-radius: 8px; border: 1px solid var(--line); }
+.tfs button { background: none; padding: 4px 10px; border-radius: 6px; color: var(--dim); font-size: 13px; }
+.tfs button.on { background: #263040; color: var(--fg); }
 
-/* order ticket */
-.vol { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
-.vol label { color: var(--dim); font-size: 12px; margin-right: auto; }
-.vol input { width: 90px; text-align: center; background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 7px 6px; font-size: 15px; font-weight: 600; }
-.vol .step { width: 34px; height: 34px; padding: 0; font-size: 16px; }
-.vol #volNote { min-width: 64px; font-size: 11px; }
-.trade-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.tbtn { border: 0; border-radius: 6px; padding: 10px 8px 9px; cursor: pointer; text-align: center; color: #fff; transition: filter .1s, transform .05s; }
-.tbtn:hover { filter: brightness(1.12); } .tbtn:active { transform: translateY(1px); }
-.tbtn:disabled { opacity: .45; cursor: not-allowed; }
-.tbtn.sell { background: var(--sell); } .tbtn.buy { background: var(--buy); }
-.tbtn .lbl { display: block; font-size: 11px; letter-spacing: .12em; font-weight: 600; }
-.tbtn .px { display: block; font-family: var(--mono); font-size: 18px; font-weight: 600; }
-.plan { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; font-size: 11px; }
-.plan div { background: var(--panel-2); border-radius: 5px; padding: 6px 8px; }
-.plan .src { color: var(--dim); }
-.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-top: 12px; }
-.field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.field label { font-size: 11px; color: var(--dim); }
-.field input, .field select { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; width: 100%; min-width: 0; }
-.field input:focus-visible, .field select:focus-visible, button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
-.row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
-.row > span:first-child { color: var(--dim); }
-.check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); margin-top: 10px; cursor: pointer; }
-.ghost { background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
-.ghost:hover { border-color: var(--dim); }
-.ghost.danger { color: var(--bad); }
-.latency { font-size: 11px; color: var(--dim); margin-top: 8px; }
+aside { width: 340px; flex: none; border-left: 1px solid var(--line); background: var(--panel); padding: 16px; display: flex; flex-direction: column; gap: 16px; overflow: auto; }
 
-/* signal */
-.signal { border-left: 3px solid var(--line); padding-left: 10px; }
-.signal.long { border-color: var(--buy); } .signal.short { border-color: var(--sell); }
-.signal .head { font-size: 15px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
-.lv { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; margin-top: 6px; }
-.lv span:nth-child(3n+1) { color: var(--dim); }
-.lv span:nth-child(3n) { text-align: right; color: var(--dim); }
+/* buy / sell */
+.trade { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; position: relative; }
+.big { border-radius: 12px; padding: 14px 8px 12px; text-align: center; color: #fff; transition: transform .06s, filter .1s; user-select: none; }
+.big:active { transform: scale(.97); }
+.big:disabled { filter: grayscale(.7) brightness(.7); cursor: default; }
+.big small { display: block; font-size: 13px; font-weight: 700; letter-spacing: .1em; opacity: .9; }
+.big .px { display: block; font: 700 24px var(--mono); margin-top: 2px; }
+.sell { background: var(--sell); }
+.buy { background: var(--buy); }
+.big.flash { filter: brightness(1.35); }
+.spread { position: absolute; left: 50%; top: -9px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; font-size: 11px; color: var(--dim); }
 
-/* confluence */
-.conf { display: grid; grid-template-columns: 34px 1fr auto; gap: 5px 8px; align-items: center; }
-.tf { font-family: var(--mono); font-size: 11px; color: var(--dim); }
-.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 3px; background: var(--panel-2); }
-.chip.long { color: var(--buy); } .chip.short { color: var(--sell); } .chip.flat { color: var(--dim); } .chip.alert { color: var(--warn); }
-.verdict { margin-top: 10px; padding: 8px 10px; border-radius: 5px; background: var(--panel-2); font-weight: 600; display: flex; justify-content: space-between; }
+.label { font-size: 12px; color: var(--dim); margin-bottom: 6px; }
+.lots { display: grid; grid-template-columns: 44px 1fr 44px; gap: 8px; }
+.lots button { background: #222a35; border-radius: 8px; font-size: 20px; }
+.lots input { text-align: center; font: 700 20px var(--mono); }
+.chips { display: flex; gap: 6px; margin-top: 8px; }
+.chips button { flex: 1; background: #1c232d; border: 1px solid var(--line); border-radius: 8px; padding: 6px 0; font: 12px var(--mono); color: var(--dim); }
+.chips button.on { border-color: var(--fg); color: var(--fg); }
+.sltp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
-/* positions */
-.positions { border-top: 1px solid var(--line); max-height: 34%; overflow: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-th { text-align: left; font-weight: 500; color: var(--dim); font-size: 11px; padding: 6px 10px; position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line); }
-td { padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-td.acts { display: flex; gap: 4px; }
-.empty { padding: 12px; color: var(--dim); }
+/* result line */
+.status { border-radius: 10px; padding: 12px; background: #10151b; border: 1px solid var(--line); min-height: 64px; }
+.status .what { font-weight: 600; font-size: 15px; }
+.status .sub { color: var(--dim); font-size: 12px; margin-top: 3px; }
+.status.ok { border-color: rgba(52,179,126,.5); }
+.status.ok .what { color: var(--good); }
+.status.bad { border-color: rgba(229,72,77,.6); }
+.status.bad .what { color: var(--bad); }
+.status.wait .what { color: var(--warn); }
 
-/* alerts */
-.feed { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
-.ev { font-size: 12px; padding: 6px 8px; border-radius: 5px; background: var(--panel-2); border-left: 3px solid var(--line); }
-.ev.radar { border-color: var(--warn); } .ev.execute { border-color: var(--brass); } .ev.order { border-color: var(--good); } .ev.reject { border-color: var(--bad); }
-.ev time { color: var(--dim); font-family: var(--mono); font-size: 11px; margin-right: 6px; }
+.closeall { background: none; border: 1.5px solid var(--bad); color: var(--bad); border-radius: 10px; padding: 11px; font-weight: 700; letter-spacing: .04em; }
+.closeall:disabled { border-color: var(--line); color: var(--dim); cursor: default; }
 
-/* toast + modal */
-#toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 50; max-width: 380px; }
-.toast { background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--brass); padding: 10px 12px; border-radius: 6px; box-shadow: 0 6px 20px #0008; }
-.modal { position: fixed; inset: 0; background: #000a; display: grid; place-items: center; z-index: 60; padding: 16px; }
-.modal[hidden] { display: none; }
-.dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; width: min(380px, 100%); }
-.dialog h3 { margin: 0 0 10px; font-size: 16px; }
-.dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.pos { display: flex; flex-direction: column; gap: 6px; }
+.prow { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; background: #10151b; border-radius: 8px; padding: 7px 8px; font-size: 13px; }
+.prow.raw { display: block; font: 12px var(--mono); color: var(--fg); }
+.prow .x { background: #2a1d1f; color: var(--bad); border-radius: 6px; padding: 3px 9px; font-weight: 600; }
+.tag { font-weight: 700; font-size: 12px; }
+.tag.b { color: var(--buy); } .tag.s { color: var(--sell); }
+.good { color: var(--good); } .bad { color: var(--bad); } .dim { color: var(--dim); }
 
-/* backtest */
-#bt { padding: 16px; overflow-y: auto; flex: 1; min-height: 0; }
-.btform { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
-.btform .field { width: 130px; }
-.primary { background: var(--brass); color: #1a1406; border: 0; border-radius: 5px; padding: 7px 16px; font-weight: 600; cursor: pointer; }
-.primary:disabled { opacity: .5; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
-.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
-.tile small { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
-.tile div { font-family: var(--mono); font-size: 20px; font-weight: 600; margin-top: 2px; }
-#eqchart { height: 260px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
-.tablewrap { overflow-x: auto; margin-top: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; max-height: 420px; }
-.note { color: var(--dim); font-size: 12px; max-width: 75ch; }
+.signal { font-size: 13px; border-top: 1px solid var(--line); padding-top: 12px; }
+.signal .use { background: #222a35; border-radius: 6px; padding: 3px 9px; font-size: 12px; margin-left: 6px; }
 
-@media (max-width: 900px) {
-  html, body { height: auto; }
-  main { grid-template-columns: 1fr; }
-  .chartwrap { height: 60vh; flex: none; }
-  .left { border-right: 0; }
+.banner { background: rgba(229,72,77,.14); color: #ffb3b5; padding: 8px 16px; font-size: 13px; border-bottom: 1px solid var(--line); }
+
+@media (max-width: 820px) {
+  main { flex-direction: column; }
+  .chartwrap { min-height: 52vh; }
+  aside { width: auto; border-left: 0; border-top: 1px solid var(--line); }
+  .money { margin-left: 0; width: 100%; }
 }
 </style>
 </head>
 <body>
 <header>
-  <div class="brand"><b>Gold Desk</b><span id="sym" class="dim">XAUUSD</span></div>
-  <span id="acctBadge" class="badge paper">Connecting</span>
-  <div class="quote"><div class="hitem"><small>Bid</small><span id="bid" class="px num sell">-</span></div><div class="hitem"><small>Ask</small><span id="ask" class="px num buy">-</span></div><div class="hitem"><small>Spread</small><span id="spr" class="num">-</span></div></div>
-  <div class="hitem"><small>Balance / equity</small><span class="num" id="bal">-</span></div>
-  <div class="hitem"><small>Server</small><span id="srv">-</span></div>
-  <div class="hitem"><small>Clock</small><span><span id="utc" class="num">--:--</span> UTC <span id="sess" class="pill">-</span></span></div>
-  <div class="spacer"></div>
-  <div class="tabs" role="tablist">
-    <button id="tabLive" role="tab" aria-selected="true">Live</button>
-    <button id="tabBt" role="tab" aria-selected="false">Backtest</button>
-  </div>
+  <div class="brand">GOLD DESK<span>XAUUSD</span></div>
+  <span class="badge real" id="badge">…</span>
+  <div class="live"><span class="dot" id="dot"></span><span id="liveTxt">Connecting</span></div>
+  <div class="money"><span>Balance<b class="num" id="bal">-</b></span><span>Equity<b class="num" id="eq">-</b></span></div>
 </header>
-<div id="banner" class="banner" hidden></div>
-
-<main id="live">
-  <div class="left">
-    <div class="chartbar">
-      <div class="tabs" id="tfTabs">
-        <button data-tf="M1" aria-selected="true">M1</button><button data-tf="M5" aria-selected="false">M5</button><button data-tf="M15" aria-selected="false">M15</button><button data-tf="H1" aria-selected="false">H1</button>
-      </div>
-      <span class="dim" style="font-size:12px">Arrows print only after the candle closes. Boxes are live M5 fair value gaps and order blocks.</span>
-    </div>
-    <div class="chartwrap">
-      <div id="chart"></div>
-      <canvas id="zones"></canvas>
-      <div class="legend" id="legend"></div>
-    </div>
-    <div class="positions">
-      <table>
-        <thead><tr><th>Ticket</th><th>Side</th><th>Lots</th><th>Open</th><th>SL</th><th>TP</th><th>Price</th><th>P/L</th><th></th></tr></thead>
-        <tbody id="posBody"><tr><td colspan="9" class="empty">No open gold positions.</td></tr></tbody>
-      </table>
-    </div>
+<div class="banner" id="banner" hidden></div>
+<main>
+  <div class="chartwrap">
+    <div class="tfs" id="tfs"><button data-tf="M1" class="on">1m</button><button data-tf="M5">5m</button><button data-tf="M15">15m</button><button data-tf="H1">1h</button></div>
+    <div id="chart"></div>
   </div>
+  <aside>
+    <div class="trade">
+      <button class="big sell" id="sell"><small>SELL</small><span class="px" id="bid">-</span></button>
+      <button class="big buy" id="buy"><small>BUY</small><span class="px" id="ask">-</span></button>
+      <span class="spread num" id="spr">-</span>
+    </div>
 
-  <div class="right">
-    <section class="card">
-      <h2>Order ticket <button class="ghost danger" id="closeAll">Close all</button></h2>
-      <div class="vol">
-        <label for="fixedLots">Volume</label>
-        <button class="ghost step" id="volDown" aria-label="Decrease lots">&minus;</button>
-        <input id="fixedLots" class="num" type="number" min="0.01" step="0.01" value="0.01">
-        <button class="ghost step" id="volUp" aria-label="Increase lots">+</button>
-        <span id="volNote" class="dim">lots</span>
-      </div>
-      <div class="trade-btns">
-        <button class="tbtn sell" id="btnSell"><span class="lbl">SELL</span><span class="px" id="sellPx">-</span></button>
-        <button class="tbtn buy" id="btnBuy"><span class="lbl">BUY</span><span class="px" id="buyPx">-</span></button>
-      </div>
-      <div class="plan num">
-        <div id="planSell">-</div>
-        <div id="planBuy">-</div>
-      </div>
-      <div class="fields">
-        <div class="field"><label for="riskPct">Risk per trade %</label><input id="riskPct" type="number" min="0.1" step="0.1" value="1"></div>
-        <div class="field"><label for="lotMode">Lot size</label><select id="lotMode"><option value="fixed">Volume box</option><option value="auto">From risk %</option></select></div>
-        <div class="field"><label for="target">Take profit</label><select id="target"><option value="tp2">TP2 (runner)</option><option value="tp1">TP1</option><option value="none">None</option></select></div>
-        <div class="field"><label for="slMode">Stop loss</label><select id="slMode"><option value="auto">Signal or 1.5 ATR</option><option value="manual">Manual</option><option value="none">None</option></select></div>
-        <div class="field"><label for="manualSl">Manual SL / TP</label><div style="display:flex;gap:4px"><input id="manualSl" type="number" step="0.01" placeholder="SL"><input id="manualTp" type="number" step="0.01" placeholder="TP"></div></div>
-      </div>
-      <label class="check"><input type="checkbox" id="confirmToggle" checked> Ask me to confirm each order</label>
-      <div class="latency" id="latency">Orders go to your MT5 terminal on this PC.</div>
-    </section>
+    <div>
+      <div class="label">Lots</div>
+      <div class="lots"><button id="lotDown" aria-label="Fewer lots">−</button><input id="lots" class="num" inputmode="decimal" value="0.01"><button id="lotUp" aria-label="More lots">+</button></div>
+      <div class="chips" id="chips"><button>0.01</button><button>0.05</button><button>0.10</button><button>0.50</button><button>1.00</button></div>
+    </div>
 
-    <section class="card">
-      <h2>Signal <span id="sigTime" class="num dim"></span></h2>
-      <div id="signal" class="signal"><div class="dim">Waiting for the first signal.</div></div>
-    </section>
+    <div>
+      <div class="label">Stop loss / Take profit (optional, price)</div>
+      <div class="sltp"><input id="sl" class="num" inputmode="decimal" placeholder="SL none"><input id="tp" class="num" inputmode="decimal" placeholder="TP none"></div>
+    </div>
 
-    <section class="card">
-      <h2>Confluence <span class="dim" style="text-transform:none;letter-spacing:0">closed bars only</span></h2>
-      <div class="conf" id="conf"></div>
-      <div class="verdict" id="verdict"><span>Bias</span><span>-</span></div>
-    </section>
+    <div class="status" id="status"><div class="what">Ready</div><div class="sub">Click BUY or SELL. Orders go out instantly, no confirm box.</div></div>
 
-    <section class="card">
-      <h2>Alerts <button class="ghost" id="alertsBtn">Turn on sound + popups</button></h2>
-      <div class="feed" id="feed"><div class="dim">Radar and execute alerts appear here.</div></div>
-    </section>
+    <button class="closeall" id="closeAll">CLOSE ALL</button>
+    <div class="pos" id="pos"></div>
 
-    <section class="card">
-      <h2>Last 3000 bars</h2>
-      <div id="miniStats"></div>
-    </section>
-  </div>
+    <div class="signal" id="signal"></div>
+  </aside>
 </main>
-
-<div id="bt" hidden>
-  <div class="btform">
-    <div class="field"><label for="btDays">Days of history</label><input id="btDays" type="number" min="1" max="90" value="20"></div>
-    <div class="field"><label for="btRisk">Risk %</label><input id="btRisk" type="number" min="0.1" step="0.1" value="1"></div>
-    <div class="field"><label for="btBal">Start balance</label><input id="btBal" type="number" min="1" step="1" placeholder="your balance"></div>
-    <div class="field"><label for="btMode">Signal mode</label><select id="btMode"><option value="strict">Strict</option><option value="balanced">Balanced</option></select></div>
-    <div class="field"><label for="btSess">Sessions</label><select id="btSess"><option value="true">London + NY only</option><option value="false">All day</option></select></div>
-    <button class="primary" id="btRun">Run backtest</button>
-    <span id="btStatus" class="dim"></span>
-  </div>
-  <div class="tiles" id="btTiles"></div>
-  <div id="eqchart"></div>
-  <div class="tablewrap">
-    <table>
-      <thead><tr><th>Opened</th><th>Side</th><th>Trigger</th><th>Entry</th><th>SL</th><th>TP1</th><th>TP2</th><th>Exit</th><th>Lots</th><th>R</th><th>P/L</th></tr></thead>
-      <tbody id="btBody"><tr><td colspan="11" class="empty">Run a backtest to see every trade.</td></tr></tbody>
-    </table>
-  </div>
-  <p class="note">Uses your terminal's own M1 history and the spread your broker recorded on each bar, with commission $7 per lot and 1 point slippage. When a candle reaches both the stop and a target, it assumes the order a candle usually takes (open, low, high, close for green candles), so treat results as an estimate, not a promise.</p>
-</div>
-
-<div id="toasts"></div>
-<div class="modal" id="modal" hidden>
-  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="mTitle">
-    <h3 id="mTitle">Confirm order</h3>
-    <div id="mBody"></div>
-    <div class="acts"><button class="ghost" id="mCancel">Cancel</button><button class="primary" id="mOk">Send order</button></div>
-  </div>
-</div>
-
 <script src="lightweight-charts.standalone.production.js"></script>
 <script src="app.js"></script>
 </body>

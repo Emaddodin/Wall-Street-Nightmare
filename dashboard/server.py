@@ -455,6 +455,7 @@ class Hub:
                 "atr_m1": eng.atr[-1] if eng.atr else None,
                 "events": self.events[-30:], "error": self.error,
                 "positions": self.src.positions(), "caps": getattr(self.src, "caps", {"positions": True}),
+                "broker_rows": getattr(self.src, "rows", []),
                 "max_lots": min(self.max_lots, self.spec.max_lot),
             }
 
@@ -607,10 +608,35 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             return self._json({"ok": False, "message": str(e)}, 500)
 
+    def _live(self) -> None:
+        """Server-sent events: every bid/ask change, pushed as it happens."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        last, beat = None, time.time()
+        try:
+            while True:
+                tk = HUB.src.tick()
+                if tk and (tk["bid"], tk["ask"]) != last:
+                    last = (tk["bid"], tk["ask"])
+                    self.wfile.write(f"data: {json.dumps({'bid': tk['bid'], 'ask': tk['ask'], 't': time.time()})}\n\n".encode())
+                    self.wfile.flush()
+                    beat = time.time()
+                elif time.time() - beat > 10:
+                    self.wfile.write(b": ping\n\n")
+                    self.wfile.flush()
+                    beat = time.time()
+                time.sleep(0.03)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
+
     def do_GET(self):
         if not self._host_ok():
             return self._send(403, b"forbidden", "text/plain")
         u = urlparse(self.path)
+        if u.path == "/api/live":
+            return self._live()
         q = {k: v[-1] for k, v in parse_qs(u.query).items()}
         try:
             if u.path == "/api/state":
@@ -646,7 +672,7 @@ def poll_loop() -> None:
         except Exception as e:
             HUB.error = str(e)
             traceback.print_exc()
-        time.sleep(0.5)
+        time.sleep(0.25)
 
 
 def main() -> None:
@@ -690,6 +716,7 @@ def main() -> None:
     threading.Thread(target=poll_loop, daemon=True).start()
     url = f"http://127.0.0.1:{a.port}"
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
+    srv.daemon_threads = True
     print(f"Dashboard running at {url}  (Ctrl+C to stop)")
     if not a.no_browser:
         webbrowser.open(url)

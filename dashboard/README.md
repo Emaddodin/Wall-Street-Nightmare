@@ -40,13 +40,13 @@ python3 server.py --litefinance --account demo
 
 ## Using the page
 
-- **Header**: account badge (red **Real money**, green **Demo account**), bid, ask, spread, balance, server with ping, and the UTC session clock.
-- **Chart**: M1 / M5 / M15 / H1 tabs. Arrows print only after an M1 candle closes and never move. Exit circles show each past signal's result in R. Shaded boxes are live M5 fair value gaps (dotted) and order blocks (dashed). The active signal's entry, SL, TP1 and TP2 and your open positions are drawn as lines.
-- **Order ticket**: SELL and BUY buttons show the price you'll get. Under each button is the exact plan: stop, target, lots and dollar risk. With a signal on the chart it uses the signal's levels; without one it uses a 1.5 ATR stop. Lots come from your risk % and your broker's tick value. You can switch to fixed lots or manual levels.
-- **Confirm step**: on by default. Untick "Ask me to confirm each order" for one-click trading.
-- **Positions**: every open gold position on the account, with **BE** (stop to entry), **½** (close half) and **Close**. **Close all** is next to the ticket.
-- **Alerts**: press "Turn on sound + popups" once. A **Radar** alert fires while the candle is still open, when all three higher timeframes agree and price touches a zone. An **Execute** alert fires on the candle close with the full levels.
-- **Backtest tab**: pick how many days, risk %, start balance and mode, then run. It replays your terminal's M1 history through the same engine and shows trades, win rate, profit factor, max drawdown, net P/L and R, the equity curve, and every trade. If it returns fewer bars than you asked for, raise *Max bars in chart* in MT5 under Tools > Options > Charts.
+- **Top bar**: DEMO / REAL MONEY badge, a green dot while prices are streaming, balance and equity.
+- **Chart**: 1m / 5m / 15m / 1h. The last candle moves with every price. Signal arrows print only after a candle closes.
+- **SELL / BUY**: one click sends the order straight away, no confirm box. The box under them says what happened and how long it took.
+- **Lots**: type it, use − / +, or tap 0.01 / 0.05 / 0.10 / 0.50 / 1.00.
+- **Stop loss / Take profit**: optional prices. Leave empty for none. "Use levels" copies the current signal's levels in.
+- **CLOSE ALL** and each trade's **Close** (MT5 and practice mode). On LiteFinance the page lists your open trades as LiteFinance prints them; close them in the LiteFinance window for now.
+- The backtest still runs from `/api/backtest?days=30`.
 
 ## Speed
 
@@ -55,7 +55,7 @@ A click reaches MT5 in a few milliseconds, because the page and the terminal are
 ## Safety
 
 - The server only listens on `127.0.0.1`, so nothing else on your network can reach it. Orders also need a secret key that only the page has, so other websites open in your browser can't send them.
-- Nothing trades on its own. Signals and alerts never place orders.
+- Nothing trades on its own. Signals never place orders; only your BUY / SELL / Close clicks do.
 - Orders above the lot cap, stops on the wrong side of the price, and lots below your broker's minimum are refused before they reach MT5.
 - Try it on a demo account first. The badge in the header always shows which kind of account is connected.
 
