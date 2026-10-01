@@ -26,5 +26,7 @@ as a study.
 
 `pine_feed.py` runs next to the VPS Kronos chart service (it only reads that service's latest
 forecast; it never runs Kronos) and serves the recent forecasts as paste lines at
-`http://<vps>:8791/?k=<chart token>`. Open that link, copy everything, paste it into the
-indicator's Kronos box. Install with `kronos-pine-feed.service` after setting `SOURCE`.
+`http://<vps>:8791/?k=<chart token>` (your chart link with 8790 changed to 8791). Open that link,
+copy everything, paste it into the indicator's Kronos box. It finds the chart's forecast JSON by itself
+(Gold Desk's own forecast is the fallback) and writes M5 lines (`...|300`). The Gold Desk icon installs
+it on the VPS (`vps/setup.sh` copies it to /root/kronos/pine and enables `kronos-pine-feed.service`).
