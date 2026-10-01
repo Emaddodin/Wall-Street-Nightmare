@@ -23,6 +23,21 @@ Options (add them after `start_dashboard.bat` in a terminal, or after `server.py
 | `--terminal "C:\...\terminal64.exe"` | Pick one MT5 install when you have several |
 | `--utc-offset 3` | Your broker's server clock if session times look wrong |
 
+## On a Mac: LiteFinance
+
+No MT5 needed. Gold Desk opens the LiteFinance web terminal in its own Chromium window and works through it: candles come from the same history feed the LiteFinance chart uses, bid and ask are read from its order ticket, and Buy / Sell fill that ticket (side, lots, stop loss, take profit) and press its button.
+
+```
+python3 -m pip install playwright && python3 -m playwright install chromium
+python3 server.py --litefinance-login        # once: log in in the window that opens; it saves by itself
+python3 server.py --litefinance --account demo
+```
+
+- `--account demo` or `--account real` sets the badge. Without it the badge says "Demo or real? Check".
+- `--lf-dry-run` fills the LiteFinance ticket but never presses its button. Use it to watch what an order would do.
+- `--lf-headless` hides the LiteFinance window. Leave it visible for now: open positions, closing and moving stops are still done in that window.
+- Your login is saved in `~/.golddesk/lf_session.json`, readable only by your Mac user. Gold Desk never sees your password.
+
 ## Using the page
 
 - **Header**: account badge (red **Real money**, green **Demo account**), bid, ask, spread, balance, server with ping, and the UTC session clock.

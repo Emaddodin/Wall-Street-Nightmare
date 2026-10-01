@@ -2,10 +2,12 @@
 
 Reads candles, ticks, balance and contract specs straight from the MetaTrader 5
 terminal running on this PC (MetaTrader5 Python package), so every price on the
-page is your broker's own quote. Display only: it never sends an order.
+page is your broker's own quote. Orders go out only when you click Buy, Sell or Close.
 
     python server.py            # live, from your open MT5 terminal
     python server.py --demo     # synthetic gold data, no MT5 needed
+    python server.py --litefinance-login   # Mac: save your LiteFinance login once
+    python server.py --litefinance         # Mac: LiteFinance chart + orders
 """
 from __future__ import annotations
 
@@ -452,7 +454,8 @@ class Hub:
                 "trades": closed, "stats": eng.stats(),
                 "atr_m1": eng.atr[-1] if eng.atr else None,
                 "events": self.events[-30:], "error": self.error,
-                "positions": self.src.positions(), "max_lots": min(self.max_lots, self.spec.max_lot),
+                "positions": self.src.positions(), "caps": getattr(self.src, "caps", {"positions": True}),
+                "max_lots": min(self.max_lots, self.spec.max_lot),
             }
 
     # ------------------------------------------------------------ manual orders (your clicks only)
@@ -476,7 +479,7 @@ class Hub:
             return {"ok": False, "message": f"Lot size {lots} is above the {cap} lot cap. Raise --max-lots to allow it."}
         tk = self.src.tick()
         if not tk:
-            return {"ok": False, "message": "No live price from MT5 right now"}
+            return {"ok": False, "message": "No live price from the broker right now"}
         sl, tp = self._round(body.get("sl")), self._round(body.get("tp"))
         if side == "BUY" and ((sl and sl >= tk["bid"]) or (tp and tp <= tk["ask"])):
             return {"ok": False, "message": "For a BUY the stop must be below the bid and the target above the ask"}
@@ -654,12 +657,28 @@ def main() -> None:
     ap.add_argument("--terminal", help="path to terminal64.exe if you run several MT5 installs")
     ap.add_argument("--utc-offset", type=float, help="broker server UTC offset in hours (auto by default)")
     ap.add_argument("--max-lots", type=float, default=1.0, help="largest order the page may send (default 1.0)")
+    ap.add_argument("--litefinance", action="store_true", help="use the LiteFinance web terminal (Mac or Windows)")
+    ap.add_argument("--litefinance-login", action="store_true", help="open a window to log in to LiteFinance and save it")
+    ap.add_argument("--lf-headless", action="store_true", help="hide the LiteFinance browser window")
+    ap.add_argument("--lf-dry-run", action="store_true", help="fill the LiteFinance ticket but never press its button")
+    ap.add_argument("--lf-url", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--account", choices=["demo", "real"], help="label the LiteFinance account (auto by default)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
 
+    if a.litefinance_login:
+        from litefinance import login
+        return login()
     if a.demo:
         src = DemoSource()
+    elif a.litefinance:
+        from litefinance import CHART, LiteFinanceSource
+        print("Opening LiteFinance...")
+        src = LiteFinanceSource(headless=a.lf_headless, account_type=a.account, url=a.lf_url or CHART,
+                                dry_run=a.lf_dry_run)
+        if a.utc_offset is None:
+            a.utc_offset = 0.0            # LiteFinance history is in UTC
     else:
         try:
             src = MT5Source(a.symbol, a.terminal)

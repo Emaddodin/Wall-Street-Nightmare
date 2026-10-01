@@ -263,7 +263,7 @@
     const msg = `${label}: ${res.ok ? "done" : "refused"}${res.price ? " @ " + fmt(res.price) : ""}. ${res.message || ""}`;
     toast(msg, res.ok ? "order" : "reject");
     $("latency").textContent = res.ms != null
-      ? `Last request: ${res.ms} ms for MT5 to answer, ${rt} ms round trip from this page.`
+      ? (S.source === "litefinance" ? `Last request: LiteFinance's button pressed after ${res.ms} ms, ${rt} ms round trip from this page.` : `Last request: ${res.ms} ms for MT5 to answer, ${rt} ms round trip from this page.`)
       : `Last request: ${rt} ms round trip from this page.`;
     pollState(true);
   }
@@ -283,6 +283,7 @@
   $("btnBuy").addEventListener("click", () => order("BUY"));
   $("btnSell").addEventListener("click", () => order("SELL"));
   $("closeAll").addEventListener("click", () => {
+    if (S && S.caps && S.caps.positions === false) return toast("Close all from the LiteFinance window for now. Gold Desk can't see LiteFinance positions yet.", "reject");
     if (!S || !(S.positions || []).length) return toast("No open gold positions.", "reject");
     confirmThen("Close all gold positions", `<p>${S.positions.length} position(s) will be closed at market.</p>`,
       () => send("/api/close_all", {}, "Close all"));
@@ -311,7 +312,9 @@
     const badge = $("acctBadge");
     const mode = a.mode || "unknown";
     badge.className = "badge " + (mode === "real" ? "real" : mode === "demo" || mode === "contest" ? "demo" : "paper");
-    badge.textContent = mode === "real" ? "Real money" : mode === "demo" ? "Demo account" : mode === "contest" ? "Contest account" : "Demo data, paper fills";
+    badge.textContent = mode === "real" ? "Real money" : mode === "demo" ? "Demo account" : mode === "contest" ? "Contest account"
+      : S.source === "demo" ? "Demo data, paper fills" : "Demo or real? Check";
+    if (mode === "unknown" && S.source !== "demo") badge.className = "badge real";
     $("bid").textContent = tk ? fmt(tk.bid) : "-";
     $("ask").textContent = tk ? fmt(tk.ask) : "-";
     $("spr").textContent = tk ? fmt(tk.ask - tk.bid) : "-";
@@ -322,8 +325,10 @@
     sp.textContent = S.clock.session + (S.clock.session_ok ? "" : " · no signals");
     sp.className = "pill " + (S.clock.session_ok ? "on" : "off");
     const issues = [];
-    if (S.error) issues.push("MT5: " + S.error);
+    if (S.error) issues.push((S.source === "litefinance" ? "LiteFinance: " : "MT5: ") + S.error);
     if (S.source === "mt5" && !a.trade_allowed) issues.push("Orders are blocked: turn on the Algo Trading button in MT5 (and allow algo trading in Tools > Options > Expert Advisors).");
+    if (S.source === "litefinance" && $("latency").textContent.startsWith("Orders go to your MT5"))
+      $("latency").textContent = "Orders fill the LiteFinance ticket in the window Gold Desk opened, and press its button.";
     if (S.source === "demo") issues.push("Demo data: prices are synthetic and orders are paper fills. Start without --demo to use your MT5 terminal.");
     $("banner").hidden = !issues.length;
     $("banner").textContent = issues.join("  ");
@@ -382,7 +387,9 @@
       <td class="num">${fmt(p.open)}</td><td class="num">${p.sl ? fmt(p.sl) : "-"}</td><td class="num">${p.tp ? fmt(p.tp) : "-"}</td>
       <td class="num">${fmt(p.price)}</td><td class="num ${p.profit >= 0 ? "good" : "bad"}">${money(p.profit)}</td>
       <td class="acts"><button class="ghost" data-act="be" data-t="${p.ticket}" title="Move stop to entry">BE</button><button class="ghost" data-act="half" data-t="${p.ticket}" title="Close half">½</button><button class="ghost danger" data-act="close" data-t="${p.ticket}">Close</button></td></tr>`).join("")
-      : `<tr><td colspan="9" class="empty">No open gold positions.</td></tr>`;
+      : `<tr><td colspan="9" class="empty">${S.caps && S.caps.positions === false
+        ? "Your LiteFinance positions show in the LiteFinance window. Closing them from here comes next."
+        : "No open gold positions."}</td></tr>`;
   }
 
   function renderFeed() {
@@ -481,13 +488,13 @@
     const q = new URLSearchParams({ days: $("btDays").value, risk_pct: $("btRisk").value, mode: $("btMode").value, session_filter: $("btSess").value });
     if ($("btBal").value) q.set("balance", $("btBal").value);
     $("btRun").disabled = true;
-    $("btStatus").textContent = "Replaying your MT5 history...";
+    $("btStatus").textContent = S.source === "litefinance" ? "Replaying LiteFinance history..." : "Replaying your MT5 history...";
     try {
       const r = await api("/api/backtest?" + q);
       if (r.error) throw new Error(r.error);
       renderBacktest(r);
       $("btStatus").textContent = `${r.stats.bars.toLocaleString()} M1 bars from ${hhmm(r.stats.from) && new Date(r.stats.from * 1000).toISOString().slice(0, 16).replace("T", " ")} to ${new Date(r.stats.to * 1000).toISOString().slice(0, 16).replace("T", " ")} (server time) in ${r.seconds}s` +
-        (r.bars_loaded < r.days_requested * 1440 * 0.6 ? ". Your terminal returned less history than asked: raise Max bars in chart in MT5 options." : "");
+        (r.source === "mt5" && r.bars_loaded < r.days_requested * 1440 * 0.6 ? ". Your terminal returned less history than asked: raise Max bars in chart in MT5 options." : "");
     } catch (e) {
       $("btStatus").textContent = "Backtest failed: " + e.message;
     }
