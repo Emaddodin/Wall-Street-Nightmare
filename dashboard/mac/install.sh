@@ -24,13 +24,20 @@ main() {
   chmod +x "$APP/dashboard/mac/"*.sh
 
   say "2/5  Installing the LiteFinance browser driver"
-  python3 -m pip install -q --user --upgrade playwright
-  python3 -m playwright install chromium   # shows its own download progress
+  if python3 -c "import playwright" 2>/dev/null; then
+    echo "Already installed."
+  else
+    python3 -m pip install --user --timeout 30 --retries 3 playwright
+  fi
+  python3 -m playwright install chromium   # quick when it's already there
 
   say "3/5  Installing Kronos (forecast model). This one is big, give it a few minutes."
   [ -d "$APP/Kronos/.git" ] || git clone -q --depth 1 https://github.com/shiyu-coder/Kronos.git "$APP/Kronos"
   mkdir -p "$CONF"
-  if python3 -m pip install --user --progress-bar on torch "einops==0.8.1" huggingface_hub safetensors pandas tqdm; then
+  if python3 -c "import torch, einops, huggingface_hub, safetensors, pandas, tqdm" 2>/dev/null; then
+    echo "Already installed."
+    kronos=small
+  elif python3 -m pip install --user --timeout 30 --retries 3 torch "einops==0.8.1" huggingface_hub safetensors pandas tqdm; then
     kronos=small
   else
     echo "Kronos could not be installed. Gold Desk will run without it."
