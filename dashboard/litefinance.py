@@ -112,6 +112,8 @@ def parse_history(text: str) -> list:
         d = json.loads(text)
     except ValueError:
         return []
+    if isinstance(d, dict) and isinstance(d.get("data"), dict):       # LiteFinance: {"status":"success","data":{o,h,l,c,v,t}}
+        d = d["data"]
     rows = []
     if isinstance(d, dict) and isinstance(d.get("t"), list):              # TradingView UDF
         n = len(d["t"])
@@ -246,7 +248,7 @@ class LiteFinanceSource:
             fresh = self._fetch(tf, rows[-1][0] - 2 * sec, now + sec)
             keep = [r for r in rows if r[0] < (fresh[0][0] if fresh else now + sec)]
             rows = keep + fresh
-        chunk = 1500 * sec
+        chunk = 5000 * sec                          # LiteFinance answers up to about a week of M1 per call
         to = rows[0][0] if rows else now + sec
         empty = 0
         while len(rows) < count and empty < 5:     # walk back through weekends and holidays
