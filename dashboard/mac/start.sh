@@ -66,9 +66,11 @@ vps_mode() {
     ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
         -L "$PORT:127.0.0.1:8765" "$VPS" &
     local tunnel=$! i
-    for i in $(seq 1 120); do                       # the VPS page needs a moment after a restart
+    for i in $(seq 1 900); do                       # after a restart the VPS page needs a moment; the first start minutes
       curl -fs -m 2 -o /dev/null "$url/api/state" && break
       kill -0 $tunnel 2>/dev/null || break
+      [ $((i % 30)) = 0 ] && echo "Gold Desk is still starting on the VPS (the very first start takes a few minutes)..."
+      [ "$i" = 180 ] && ssh -o BatchMode=yes "$VPS" 'journalctl -u golddesk -n 8 --no-pager -o cat' 2>/dev/null
       sleep 1
     done
     if [ $opened = 0 ] && curl -fs -m 2 -o /dev/null "$url/api/state"; then

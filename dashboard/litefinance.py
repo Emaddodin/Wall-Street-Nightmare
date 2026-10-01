@@ -17,6 +17,7 @@ import http.client
 import json
 import os
 import queue
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -176,6 +177,34 @@ def parse_history(text: str) -> list:
     return out
 
 
+def find_browsers() -> list:
+    """Chrome / Chromium builds already on this machine (other Playwright, Puppeteer or Selenium downloads,
+    system installs), for when Playwright's own download is missing. Newest first within each kind."""
+    caches = [Path.home() / ".cache", Path("/root/.cache"), Path.home() / "Library" / "Caches"]
+    pw_dirs = [c / "ms-playwright" for c in caches]
+    if os.environ.get("PLAYWRIGHT_BROWSERS_PATH"):
+        pw_dirs.insert(0, Path(os.environ["PLAYWRIGHT_BROWSERS_PATH"]))
+    globs = [(d, pat) for d in pw_dirs for pat in (
+        "chromium-*/chrome-linux*/chrome", "chromium-*/chrome-mac*/*.app/Contents/MacOS/*",
+        "chromium_headless_shell-*/chrome-*/headless_shell", "chromium_headless_shell-*/chrome-*/chrome-headless-shell")]
+    globs += [(c, pat) for c in caches for pat in (
+        "puppeteer/chrome/*/chrome-linux64/chrome",
+        "puppeteer/chrome-headless-shell/*/chrome-headless-shell-linux64/chrome-headless-shell",
+        "selenium/chrome/*/*/chrome")]
+    found: list = []
+    for root, pat in globs:
+        found += sorted((str(x) for x in root.glob(pat)), reverse=True)
+    for name in ("google-chrome-stable", "google-chrome", "chromium", "chromium-browser"):
+        if shutil.which(name):
+            found.append(shutil.which(name))
+    found += ["/opt/google/chrome/chrome", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
+    out: list = []
+    for x in found:
+        if x not in out and os.path.isfile(x) and os.access(x, os.X_OK):
+            out.append(x)
+    return out
+
+
 class LiteFinanceSource:
     kind = "litefinance"
     caps = {"positions": False}
@@ -225,9 +254,17 @@ class LiteFinanceSource:
                                                       "--disable-renderer-backgrounding",
                                                       "--disable-backgrounding-occluded-windows"]}
             exe = self.chrome or os.environ.get("GOLDDESK_CHROME")
-            if exe:
-                kw["executable_path"] = exe
-            self.browser = pw.chromium.launch(**kw)
+            self.browser, errors = None, []
+            for cand in ([exe] if exe else []) + [None] + find_browsers():   # None = Playwright's own download
+                try:
+                    self.browser = pw.chromium.launch(**kw, **({"executable_path": cand} if cand else {}))
+                    if cand:
+                        print(f"Browser for LiteFinance: {cand}", flush=True)
+                    break
+                except Exception as e:
+                    errors.append(f"{cand or 'Playwright chromium'}: {str(e).splitlines()[0]}")
+            if self.browser is None:
+                raise RuntimeError("No browser could start for LiteFinance. " + " | ".join(errors[:4]))
             self.ctx = self.browser.new_context(storage_state=str(self.session), viewport={"width": 1366, "height": 850})
             self.page = self.ctx.new_page()
             self.page.goto(self.url, wait_until="domcontentloaded", timeout=45000)

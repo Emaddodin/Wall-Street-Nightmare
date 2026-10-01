@@ -40,7 +40,11 @@ main() {
     changed=1
   fi
   if [ ! -f "$CONF/.chromium_ok" ]; then
-    "$PY" -m playwright install --with-deps chromium && touch "$CONF/.chromium_ok"
+    if "$PY" -m playwright install --with-deps chromium; then
+      touch "$CONF/.chromium_ok"
+    else
+      use_local_browser
+    fi
   fi
 
   # Kronos code: the copy already on the VPS, else a fresh clone
@@ -63,7 +67,7 @@ Wants=network-online.target
 
 [Service]
 WorkingDirectory=$APP/dashboard
-Environment=HOME=/root PYTHONUNBUFFERED=1
+Environment=HOME=/root PYTHONUNBUFFERED=1$( [ -s "$CONF/chrome_path" ] && printf ' GOLDDESK_CHROME=%s' "$(cat "$CONF/chrome_path")")
 ExecStart=$PY server.py --litefinance --lf-headless --account $ACCOUNT --entry-tf M5 $kronos_args --no-browser --port 8765
 Restart=always
 RestartSec=5
@@ -98,6 +102,33 @@ UNIT
       && echo "Testing Kronos and Boom/Crash on the last 30 days of gold in the background (results show on the page)."
   fi
 }
+# Playwright's browser download fails on this VPS: use a Chrome that is already here instead
+# (install the Chrome .deb lying in /root if nothing is installed). Adds, never removes.
+use_local_browser() {
+  echo "The browser download failed. Looking for a Chrome already on the VPS..."
+  local found
+  found=$(cd "$APP/dashboard" && "$PY" -c 'import litefinance as l; b = l.find_browsers(); print(b[0] if b else "")' 2>/dev/null || true)
+  if [ -z "$found" ]; then
+    local deb
+    deb=$(ls -t /root/*chrome*.deb /root/*/*chrome*.deb 2>/dev/null | head -1)
+    if [ -n "$deb" ] && DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$deb" >/dev/null 2>&1; then
+      echo "Installed Chrome from $deb."
+      found=$(command -v google-chrome-stable || command -v google-chrome || true)
+    fi
+  fi
+  if [ -z "$found" ]; then
+    found=$(find /root /opt /usr/local -maxdepth 9 -type f -perm -u+x \( -name chrome -o -name headless_shell \
+            -o -name chrome-headless-shell -o -name chromium \) 2>/dev/null | head -1)
+  fi
+  if [ -n "$found" ]; then
+    echo "Gold Desk will use the browser at $found."
+    printf '%s\n' "$found" > "$CONF/chrome_path"
+    touch "$CONF/.chromium_ok"
+  else
+    echo "No Chrome found on the VPS. Gold Desk's broker page can't start until one is installed."
+  fi
+}
+
 # Kronos paste lines for the TradingView indicator on port 8791, locked with the Kronos chart's key.
 # Emad asked for this in writing on 2026-10-01. Read-only: it serves forecasts, nothing else.
 pine_feed() {
