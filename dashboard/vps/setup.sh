@@ -62,7 +62,7 @@ Wants=network-online.target
 [Service]
 WorkingDirectory=$APP/dashboard
 Environment=HOME=/root PYTHONUNBUFFERED=1
-ExecStart=$PY server.py --litefinance --lf-headless --account $ACCOUNT $kronos_args --no-browser --port 8765
+ExecStart=$PY server.py --litefinance --lf-headless --account $ACCOUNT --entry-tf M5 $kronos_args --no-browser --port 8765
 Restart=always
 RestartSec=5
 MemoryMax=1800M
@@ -83,6 +83,17 @@ UNIT
     echo "Gold Desk on the VPS (re)started on the latest version."
   else
     echo "Gold Desk on the VPS is running and up to date."
+  fi
+
+  # Once: do Kronos and the Boom / Crash calls beat a coin flip on the last 30 days of M5 gold?
+  # Low priority, one core at most; the result shows on the page.
+  local BT="$CONF/kronos_backtest_M5.txt"
+  if [ "$KRONOS" != off ] && [ ! -s "$BT" ] && ! systemctl is-active -q golddesk-backtest; then
+    systemd-run -q --unit golddesk-backtest --collect -p Nice=19 -p CPUQuota=100% -p MemoryMax=1200M \
+      -p WorkingDirectory="$APP/dashboard" --setenv=HOME=/root \
+      /bin/sh -c "exec $PY kronos_backtest.py --tf M5 --litefinance-days 30 --size $KRONOS --repo $KREPO \
+                  --out $CONF/kronos_backtest_M5_trades.csv > $BT 2>&1" \
+      && echo "Testing Kronos and Boom/Crash on the last 30 days of gold in the background (results show on the page)."
   fi
 }
 main "$@"

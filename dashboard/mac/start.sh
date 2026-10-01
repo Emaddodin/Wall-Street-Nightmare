@@ -37,13 +37,13 @@ main() {
     echo "Couldn't reach your VPS ($VPS). Starting Gold Desk on this Mac instead."
   fi
 
-  local args=(--litefinance --account "$ACCOUNT" --port "$PORT")
+  local args=(--litefinance --account "$ACCOUNT" --entry-tf M5 --port "$PORT")
   if [ "$KRONOS" != off ] && python3 -c "import torch" 2>/dev/null; then
     args+=(--kronos "$KRONOS")
-    if [ ! -s "$CONF/kronos_backtest.txt" ]; then      # once: does Kronos beat a coin flip on gold?
-      echo "Testing Kronos on the last 20 days of gold in the background (results show on the page)."
-      (nice -n 15 python3 kronos_backtest.py --litefinance-days 20 --size "$KRONOS" \
-         --out "$CONF/kronos_backtest_trades.csv" > "$CONF/kronos_backtest.txt" 2>&1 &)
+    if [ ! -s "$CONF/kronos_backtest_M5.txt" ]; then   # once: do Kronos and Boom/Crash beat a coin flip on gold?
+      echo "Testing Kronos and Boom/Crash on the last 30 days of gold in the background (results show on the page)."
+      (nice -n 15 python3 kronos_backtest.py --tf M5 --litefinance-days 30 --size "$KRONOS" \
+         --out "$CONF/kronos_backtest_M5_trades.csv" > "$CONF/kronos_backtest_M5.txt" 2>&1 &)
     fi
   fi
 

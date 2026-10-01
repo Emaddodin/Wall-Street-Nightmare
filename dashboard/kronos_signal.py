@@ -1,6 +1,7 @@
 """Kronos forecast for Gold Desk: a pretrained candlestick model (github.com/shiyu-coder/Kronos, MIT)
-reads the last few hundred M1 bars and samples the next ones. Gold Desk turns the average of those
-samples into a plain UP / DOWN / FLAT call and draws the forecast path on the chart.
+reads the last few hundred bars of the entry timeframe (M5 by default) and samples the next ones. Gold Desk
+turns the average of those samples into a plain UP / DOWN / FLAT call, draws the forecast path on the chart
+and hands it to the Boom / Crash check (boom.py).
 
 It runs in its own thread, so a forecast never delays a BUY / SELL click.
 """
@@ -19,6 +20,7 @@ MODELS = {   # name -> (model, tokenizer, max context)
     "small": ("NeoQuasar/Kronos-small", "NeoQuasar/Kronos-Tokenizer-base", 512),
     "base": ("NeoQuasar/Kronos-base", "NeoQuasar/Kronos-Tokenizer-base", 512),
 }
+HORIZON = {"M1": 15, "M5": 24}   # bars forecast ahead: 15 min on M1, 2 hours on M5
 
 
 def atr(rows: list, n: int = 14) -> float:
@@ -88,7 +90,7 @@ class Kronos:
 
 
 class KronosWorker:
-    """Loads the model in the background, then re-forecasts after every closed M1 bar, off the order path."""
+    """Loads the model in the background, then re-forecasts after every closed entry bar, off the order path."""
 
     def __init__(self, hub, **kw):
         self.hub, self.kw = hub, kw
@@ -113,15 +115,17 @@ class KronosWorker:
                 last_closed = eng.m1.t[-1] if eng and len(eng.m1) else 0
                 if last_closed and last_closed != done_t:
                     with self.hub.lock:
-                        b = self.hub.src.rates("M1", self.model.lookback + 1)
+                        b = self.hub.src.rates(self.hub.tf, self.model.lookback + 1)
                     rows = [[b.t[i], b.o[i], b.h[i], b.l[i], b.c[i], b.v[i]] for i in range(len(b) - 1)]  # closed bars only
                     if len(rows) >= 100:
                         self.status = "forecasting"
                         t0 = time.time()
-                        res = self.model.forecast(rows)
+                        res = self.model.forecast(rows, step=self.hub.sec)
                         res["seconds"] = round(time.time() - t0, 1)
                         res["model"] = f"Kronos-{self.model.size}"
+                        res["tf"] = self.hub.tf
                         self.latest, self.error = res, None
+                        self.hub.on_kronos(res)
                     done_t = last_closed
                     self.status = "ready"
             except Exception as e:
@@ -131,24 +135,31 @@ class KronosWorker:
             time.sleep(1)
 
     def state(self) -> dict:
-        return {**(self.latest or {}), "status": self.status, "error": self.error, "backtest": backtest_summary()}
+        return {**(self.latest or {}), "status": self.status, "error": self.error,
+                "backtest": backtest_summary(self.hub.tf)}
 
 
-BACKTEST_FILE = Path.home() / ".golddesk" / "kronos_backtest.txt"
+def backtest_file(tf: str = "M5") -> Path:
+    """Where the launchers write the gold backtest for this entry timeframe."""
+    return Path.home() / ".golddesk" / ("kronos_backtest.txt" if tf == "M1" else f"kronos_backtest_{tf}.txt")
+
+
 _bt_cache: dict = {}
 
 
-def backtest_summary() -> dict | None:
+def backtest_summary(tf: str = "M5") -> dict | None:
     """The last gold backtest the launcher ran: {status: running|done, lines: [...result lines]}."""
+    f = backtest_file(tf)
     try:
-        st = BACKTEST_FILE.stat()
+        st = f.stat()
     except OSError:
         return None
-    if _bt_cache.get("mtime") != st.st_mtime:
-        text = BACKTEST_FILE.read_text(errors="replace")
-        keep = [ln.strip() for ln in text.splitlines() if ln.startswith(("Direction right", "Trades", "Verdict"))]
+    if _bt_cache.get("mtime") != (f, st.st_mtime):
+        text = f.read_text(errors="replace")
+        keep = [ln.strip() for ln in text.splitlines()
+                if ln.startswith(("Direction right", "Trades", "Boom/Crash", "Verdict"))]
         prog = text.replace("\r", "\n").strip().splitlines()
-        _bt_cache.update(mtime=st.st_mtime, value={
+        _bt_cache.update(mtime=(f, st.st_mtime), value={
             "status": "done" if any(ln.startswith("Verdict") for ln in keep) else "running",
             "lines": keep, "progress": prog[-1].strip() if prog and not keep else None})
     return _bt_cache["value"]

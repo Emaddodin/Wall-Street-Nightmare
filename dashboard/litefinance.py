@@ -28,8 +28,8 @@ HOME = Path.home() / ".golddesk"
 SESSION = HOME / "lf_session.json"
 BASE = "https://my.litefinance.org"
 CHART = BASE + "/trading/chart?symbol=XAUUSD"
-RES = {"M1": "1", "M5": "5", "M15": "15", "H1": "60"}
-SEC = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600}
+RES = {"M1": "1", "M5": "5", "M15": "15", "H1": "60", "H4": "240"}
+SEC = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400}
 
 # Order ticket, mapped from the logged-in page on 2026-10-01.
 SEL = {
@@ -353,7 +353,7 @@ class LiteFinanceSource:
     def _load_locked(self, tf: str, count: int) -> list:
         sec, now = SEC[tf], int(time.time())
         rows = self.cache[tf]
-        if rows and time.time() - self._fresh_at.get(tf, 0) < (1.0 if tf == "M1" else 4.0) and len(rows) >= count:
+        if rows and time.time() - self._fresh_at.get(tf, 0) < (1.0 if sec <= 300 else 4.0) and len(rows) >= count:
             return rows[-count:]
         self._fresh_at[tf] = time.time()
         if rows:                                   # refresh the tail (the last bar may still be forming)

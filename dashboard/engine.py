@@ -1,11 +1,12 @@
-"""Gold M1 scalping engine (same rules as mt5/XAU_M1_Scalper.mq5).
+"""Gold scalping engine (same rules as mt5/XAU_M1_Scalper.mq5), on any entry timeframe.
 
-H1  : EMA 50/200 regime + ATR velocity-shock guard
-M15 : BOS / CHoCH market structure + EMA 21/55 channel
-M5  : fair value gaps, order blocks, RSI(14) with standard-deviation bands
-M1  : liquidity sweeps, engulfing (+volume), rejection pins, inside-bar breaks
+                     M1 entry   M5 entry (Gold Desk default)
+macro  regime/shock  H1         H4     EMA 50/200 regime + ATR velocity-shock guard
+struct structure     M15        H1     BOS / CHoCH market structure + EMA 21/55 channel
+zone   zones/RSI     M5         M15    fair value gaps, order blocks, RSI(14) with standard-deviation bands
+entry  trigger       M1         M5     liquidity sweeps, engulfing (+volume), rejection pins, inside-bar breaks
 
-Zero repaint: each M1 bar is evaluated once, after it closed, using only
+Zero repaint: each entry bar is evaluated once, after it closed, using only
 higher-timeframe bars that had closed by then. All times are the broker's
 server time in epoch seconds, exactly as MetaTrader 5 returns them.
 """
@@ -344,14 +345,20 @@ def touch(zones: List[dict], d: int, lo: float, hi: float) -> bool:
 
 
 # ---------------------------------------------------------------- engine
+# entry timeframe -> (macro, struct, zone) timeframes
+LADDER = {"M1": ("H1", "M15", "M5"), "M5": ("H4", "H1", "M15")}
+
+
 class Engine:
-    """Feeds closed M1 bars one at a time and simulates the trade lifecycle."""
+    """Feeds closed entry-timeframe bars one at a time and simulates the trade lifecycle.
+    (The series is still called m1 for the API; its bar length is `sec`.)"""
 
     WHY = {1: "Engulfing", 2: "Rejection pin", 3: "Inside-bar break", 4: "Liquidity sweep"}
 
-    def __init__(self, p: Params, spec: Spec, start_equity: float, offset_fn: Callable[[int], int] = ny7_offset):
-        self.p, self.spec, self.offset_fn = p, spec, offset_fn
-        self.m1 = Bars(60)
+    def __init__(self, p: Params, spec: Spec, start_equity: float, offset_fn: Callable[[int], int] = ny7_offset,
+                 sec: int = 60):
+        self.p, self.spec, self.offset_fn, self.sec = p, spec, offset_fn, sec
+        self.m1 = Bars(sec)
         self.atr: List[float] = []
         self.volsma: List[float] = []
         self.macro: Optional[Macro] = None
@@ -361,6 +368,7 @@ class Engine:
         self.cur: Optional[dict] = None
         self.last_exit = -10 ** 9
         self.last_touch = {1: -10 ** 9, -1: -10 ** 9}
+        self.sig = {1: 0, -1: 0}          # entry signal on the last bar per side (pattern id, 0 = none)
         self.warm = max(30, max(p.sweep_len, p.sl_lookback) + 5)
         self.start_eq = self.equity = self.peak = float(start_equity)
         self.max_dd = self.gross_w = self.gross_l = self.sum_r = 0.0
@@ -469,7 +477,7 @@ class Engine:
         if tr["partial"]:
             if ctx["bias15"] == -d:                   # M15 structure flipped: structural invalidation
                 px = c if d == 1 else c + spr
-                self._close(tr, px - d * slip, t + 60, i)
+                self._close(tr, px - d * slip, t + self.sec, i)
                 return
             a = self.atr[i]
             tr["sl"] = max(tr["sl"], c - self.p.trail_atr * a) if d == 1 else min(tr["sl"], c + spr + self.p.trail_atr * a)
@@ -494,7 +502,7 @@ class Engine:
         lots, capped = self.calc_lots(self.equity * p.risk_pct / 100.0, R)
         tr = {
             "id": len(self.trades), "dir": d, "side": "BUY" if d == 1 else "SELL", "why": self.WHY[why],
-            "bar": i, "t_bar": m.t[i], "t_in": m.t[i] + 60, "t_out": None,
+            "bar": i, "t_bar": m.t[i], "t_in": m.t[i] + self.sec, "t_out": None,
             "entry": entry, "sl0": sl, "sl": sl, "tp1": entry + d * p.tp1_r * R, "tp2": entry + d * p.tp2_r * R,
             "R": R, "lots": lots, "remain": lots, "partial": False, "open": True, "min_lot_capped": capped,
             "pnl": -p.commission * lots, "exit": None, "r": None,
@@ -504,10 +512,11 @@ class Engine:
         return tr
 
     def add_bar(self, t, o, h, l, c, v=0.0, spread=0.0) -> Optional[dict]:
-        """Append one CLOSED M1 bar and evaluate it. Returns the trade opened on it, if any."""
+        """Append one CLOSED entry bar and evaluate it. Returns the trade opened on it, if any."""
         m, p = self.m1, self.p
         m.append(t, o, h, l, c, v, spread)
         i = len(m) - 1
+        self.sig = {1: 0, -1: 0}
         tr = (h - l) if i == 0 else max(h - l, abs(h - m.c[i - 1]), abs(l - m.c[i - 1]))
         self.atr.append(tr if i == 0 else (self.atr[-1] * 13.0 + tr) / 14.0)
         lo20 = max(0, i - 19)
@@ -523,7 +532,7 @@ class Engine:
 
         if i < self.warm or self.macro is None:
             return None
-        ctx = self.context(t + 60)
+        ctx = self.context(t + self.sec)
         if ctx is None:
             return None
         self.ctx = ctx
@@ -531,7 +540,7 @@ class Engine:
         if self.cur is not None and i > self.cur["bar"]:
             self._manage(i, ctx)
 
-        # M1 microstructure
+        # entry-bar microstructure
         min_prev = min(m.l[i - p.sweep_len:i])
         max_prev = max(m.h[i - p.sweep_len:i])
         sweep = {1: l < min_prev and c > min_prev, -1: h > max_prev and c < max_prev}
@@ -558,6 +567,7 @@ class Engine:
             why = 1 if eng[d] else 2 if pin[d] else 3 if ib[d] else 4 if sw[d] else 0
             conf = p.mode == "balanced" or (i - self.last_touch[d]) < p.touch_bars or sweep[d]
             sig[d] = why if (sess and self.htf_ok(ctx, d) and why and conf) else 0
+        self.sig = sig
 
         if self.cur is not None or (i - self.last_exit) <= p.cooldown_bars or bool(sig[1]) == bool(sig[-1]):
             return None
@@ -585,7 +595,7 @@ class Engine:
 
 def run_backtest(m1: Bars, macro: Bars, struct: Bars, zone: Bars, p: Params, spec: Spec,
                  start_equity: float, offset_fn=ny7_offset) -> dict:
-    eng = Engine(p, spec, start_equity, offset_fn)
+    eng = Engine(p, spec, start_equity, offset_fn, m1.sec)
     eng.set_htf(macro, struct, zone)
     eng.equity_curve.append([m1.t[0] if len(m1) else 0, round(start_equity, 2)])
     for i in range(len(m1)):

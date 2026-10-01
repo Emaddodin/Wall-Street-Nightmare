@@ -25,13 +25,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from engine import (Bars, Engine, Params, Spec, SESSION_NAMES, ny7_offset, run_backtest,
+from boom import BoomTracker, setup as boom_setup
+from engine import (LADDER, Bars, Engine, Params, Spec, SESSION_NAMES, ny7_offset, run_backtest,
                     session_of, session_ok, utc_minutes)
 
 STATIC = Path(__file__).resolve().parent / "static"
 MAGIC = 26100102       # tags orders placed from this page
-TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600}
-HISTORY_M1 = 3000      # M1 bars replayed on start-up for the on-page stats and markers
+TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400}
+HISTORY_BARS = 3000    # entry-timeframe bars replayed on start-up for the on-page stats and markers
 
 
 # =================================================================== data sources
@@ -50,7 +51,8 @@ class MT5Source:
         self.symbol = self._resolve(symbol)
         if not mt5.symbol_select(self.symbol, True):
             raise RuntimeError(f"MT5 would not show {self.symbol} in Market Watch.")
-        self.tfs = {"M1": mt5.TIMEFRAME_M1, "M5": mt5.TIMEFRAME_M5, "M15": mt5.TIMEFRAME_M15, "H1": mt5.TIMEFRAME_H1}
+        self.tfs = {"M1": mt5.TIMEFRAME_M1, "M5": mt5.TIMEFRAME_M5, "M15": mt5.TIMEFRAME_M15, "H1": mt5.TIMEFRAME_H1,
+                    "H4": mt5.TIMEFRAME_H4}
         self.io = threading.Lock()   # one MT5 call at a time; each call takes about a millisecond
         self._spec = None
 
@@ -316,8 +318,10 @@ class DemoSource:
 
 # =================================================================== live hub
 class Hub:
-    def __init__(self, source, params: Params, utc_offset_hours: float | None = None, max_lots: float = 1.0):
+    def __init__(self, source, params: Params, utc_offset_hours: float | None = None, max_lots: float = 1.0,
+                 entry_tf: str = "M5"):
         self.src, self.p = source, params
+        self.tf, self.sec = entry_tf, TF_SECONDS[entry_tf]     # the indicator enters on closed bars of this timeframe
         self.max_lots = max_lots
         self.lock = threading.RLock()
         self.fixed_offset = None if utc_offset_hours is None else int(utc_offset_hours * 3600)
@@ -332,6 +336,7 @@ class Hub:
         self.forming = None
         self.tick_ = None
         self.kronos = None
+        self.boom = BoomTracker(self.spec.digits)
         self.bootstrap()
 
     # server clock -> UTC
@@ -350,20 +355,22 @@ class Hub:
         if abs(d - cand) < 120:          # the tick is fresh, so the difference is the server's UTC offset
             self.live_offset = int(cand)
 
-    def _htf(self, warm_minutes: int):
+    def _htf(self, entry_bars: int):
+        """Macro / structure / zone bars covering `entry_bars` entry bars plus each one's warm-up."""
         p = self.p
-        need = lambda tf, warm: int(warm_minutes * 60 / TF_SECONDS[tf]) + warm + 10
-        return (self.src.rates("H1", need("H1", p.macro_slow * 5)),
-                self.src.rates("M15", need("M15", p.struct_slow * 6)),
-                self.src.rates("M5", need("M5", p.rsi_band_len * 4 + p.zone_max_age)))
+        need = lambda tf, warm: int(entry_bars * self.sec / TF_SECONDS[tf]) + warm + 10
+        macro, struct, zone = LADDER[self.tf]
+        return (self.src.rates(macro, need(macro, p.macro_slow * 5)),
+                self.src.rates(struct, need(struct, p.struct_slow * 6)),
+                self.src.rates(zone, need(zone, p.rsi_band_len * 4 + p.zone_max_age)))
 
     def bootstrap(self) -> None:
         with self.lock:
             self._learn_offset(self.src.tick())
-            m1 = self.src.rates("M1", HISTORY_M1 + 1)
+            m1 = self.src.rates(self.tf, HISTORY_BARS + 1)
             acct = self.src.account()
-            eng = Engine(self.p, self.spec, acct["balance"] or 1000.0, self.offset)
-            eng.set_htf(*self._htf(HISTORY_M1))
+            eng = Engine(self.p, self.spec, acct["balance"] or 1000.0, self.offset, self.sec)
+            eng.set_htf(*self._htf(HISTORY_BARS))
             for i in range(len(m1) - 1):                      # last bar is still forming
                 eng.add_bar(m1.t[i], m1.o[i], m1.h[i], m1.l[i], m1.c[i], m1.v[i], m1.spread[i])
             self.engine = eng
@@ -385,9 +392,9 @@ class Hub:
             self._learn_offset(tick)
             eng = self.engine
             last_t = eng.m1.t[-1] if len(eng.m1) else 0
-            m1 = self.src.rates("M1", 10)
-            if len(m1) and m1.t[0] > last_t + 60 and last_t:
-                m1 = self.src.rates("M1", min(5000, (m1.t[-1] - last_t) // 60 + 5))
+            m1 = self.src.rates(self.tf, 10)
+            if len(m1) and m1.t[0] > last_t + self.sec and last_t:
+                m1 = self.src.rates(self.tf, min(5000, (m1.t[-1] - last_t) // self.sec + 5))
             if not len(m1):
                 return
             new = [i for i in range(len(m1) - 1) if m1.t[i] > last_t]
@@ -397,6 +404,8 @@ class Hub:
                     opened = eng.add_bar(m1.t[i], m1.o[i], m1.h[i], m1.l[i], m1.c[i], m1.v[i], m1.spread[i])
                     if opened and i == len(m1) - 2:
                         self._event("execute", self.exec_text(opened), opened["side"])
+                    for done in self.boom.on_bar(m1.t[i], m1.h[i], m1.l[i], m1.c[i], self.sec, eng.bar_spread(len(eng.m1) - 1)):
+                        self._event("boom_end", done["text"], done["side"])
             self.forming = self._bar_dict(m1, len(m1) - 1)
             self._radar()
 
@@ -423,10 +432,20 @@ class Hub:
                 if self.radar_bar[d] != f["time"]:
                     self.radar_bar[d] = f["time"]
                     side = "BUY" if d == 1 else "SELL"
-                    self._event("radar", "XAUUSD SCALP RADAR: Setup forming on M1. HTF Confluence verified. "
+                    self._event("radar", f"XAUUSD SCALP RADAR: Setup forming on {self.tf}. HTF Confluence verified. "
                                          f"Prepare for entry. [{side}]", side)
         if sides:
             self.radar = "BUY" if sides == [1] else ("SELL" if sides == [-1] else "BOTH")
+
+    def on_kronos(self, fc: dict) -> None:
+        """A Kronos forecast finished (worker thread): check it against the indicator for a Boom / Crash call."""
+        with self.lock:
+            eng = self.engine
+            if not eng or not len(eng.m1) or fc.get("t") != eng.m1.t[-1] or eng.ctx is None:
+                return                                   # a newer bar closed meanwhile; the next forecast decides
+            sig = self.boom.on_forecast(fc, boom_setup(eng), self.tick_ or self.src.tick(), self.sec)
+            if sig:
+                self._event("boom", sig["text"], sig["side"])
 
     # ------------------------------------------------------------ API payloads
     def state(self) -> dict:
@@ -453,11 +472,13 @@ class Hub:
                 "context": ctx, "zones": eng.zones, "radar": self.radar,
                 "active": eng.cur, "last_trade": eng.trades[-1] if eng.trades else None,
                 "trades": closed, "stats": eng.stats(),
-                "atr_m1": eng.atr[-1] if eng.atr else None,
+                "atr_m1": eng.atr[-1] if eng.atr else None,       # ATR(14) of the entry timeframe (name kept for the page)
+                "entry_tf": self.tf, "ladder": dict(zip(("macro", "struct", "zone"), LADDER[self.tf])),
                 "events": self.events[-30:], "error": self.error,
                 "positions": self.src.positions(), "caps": getattr(self.src, "caps", {"positions": True}),
                 "broker_rows": getattr(self.src, "rows", []),
                 "kronos": self.kronos.state() if self.kronos else None,
+                "boom": self.boom.state(),
                 "max_lots": min(self.max_lots, self.spec.max_lot),
             }
 
@@ -531,9 +552,9 @@ class Hub:
 
     def backtest(self, days: int, overrides: dict) -> dict:
         p = Params.from_dict({**asdict(self.p), **overrides})
-        bars = days * 1440
+        bars = days * 86400 // self.sec
         with self.lock:
-            m1 = self.src.rates("M1", bars + 200)
+            m1 = self.src.rates(self.tf, bars + 200)
             acct = self.src.account()
             htf = self._htf(bars)
         start_eq = float(overrides.get("balance") or acct["balance"] or 1000.0)
@@ -644,7 +665,7 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/state":
                 return self._json(HUB.state())
             if u.path == "/api/candles":
-                tf = q.get("tf", "M1")
+                tf = q.get("tf", HUB.tf)
                 if tf not in TF_SECONDS:
                     return self._json({"error": "unknown timeframe"}, 400)
                 return self._json(HUB.candles(tf, min(int(q.get("count", 600)), 5000)))
@@ -694,6 +715,7 @@ def main() -> None:
     ap.add_argument("--kronos", nargs="?", const="small", choices=["mini", "small", "base"],
                     help="show Kronos forecasts (model size, default small); needs install_kronos.sh")
     ap.add_argument("--kronos-repo", help="folder with the Kronos code (default: ../Kronos)")
+    ap.add_argument("--entry-tf", default="M5", choices=sorted(LADDER), help="timeframe the indicator enters on (default M5)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
@@ -715,13 +737,14 @@ def main() -> None:
             src = MT5Source(a.symbol, a.terminal)
         except ImportError:
             raise SystemExit("The MetaTrader5 package is missing. Run: py -m pip install MetaTrader5")
-    print(f"Data: {src.kind}  symbol: {src.symbol}  loading history...")
+    print(f"Data: {src.kind}  symbol: {src.symbol}  entry timeframe: {a.entry_tf}  loading history...")
     PORT = a.port
-    HUB = Hub(src, Params(), a.utc_offset, a.max_lots)
+    HUB = Hub(src, Params(), a.utc_offset, a.max_lots, a.entry_tf)
     threading.Thread(target=poll_loop, daemon=True).start()
     if a.kronos:
-        from kronos_signal import DEFAULT_REPO, KronosWorker
-        HUB.kronos = KronosWorker(HUB, repo=a.kronos_repo or DEFAULT_REPO, size=a.kronos)
+        from kronos_signal import DEFAULT_REPO, HORIZON, KronosWorker
+        HUB.kronos = KronosWorker(HUB, repo=a.kronos_repo or DEFAULT_REPO, size=a.kronos,
+                                  horizon=HORIZON.get(a.entry_tf, 15))
         print(f"Kronos-{a.kronos}: loading in the background (first run downloads it)")
     url = f"http://127.0.0.1:{a.port}"
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)

@@ -1,6 +1,6 @@
 # Gold Desk
 
-One page on your own PC for gold scalping: your broker's live M1 chart with the signals drawn on it, the H1 / M15 / M5 bias, the session clock, lot size from your balance, Buy / Sell / Close buttons, alerts, and a backtest tab on your MT5 history.
+One page on your own PC for gold scalping: your broker's live chart with the signals drawn on it (entries on M5 by default, with the H4 trend, H1 structure and M15 zones behind them; `--entry-tf M1` for the old H1 / M15 / M5 ladder), the session clock, lot size from your balance, Buy / Sell / Close buttons, alerts, and a backtest tab on your MT5 history.
 
 Every price comes from the MetaTrader 5 terminal running on the same PC, so the chart matches your broker exactly. Orders go out through that terminal, and only when you click.
 
@@ -31,7 +31,7 @@ Paste this once in Terminal:
 curl -fsSL https://raw.githubusercontent.com/Emaddodin/Wall-Street-Nightmare/refs/heads/claude/project-thread-ild2ro/dashboard/mac/install.sh | bash
 ```
 
-It puts Gold Desk in `~/GoldDesk`, installs the LiteFinance browser driver and Kronos, and adds a **Gold Desk** icon to your Desktop. Double-click that icon to trade: it updates Gold Desk to the latest version, stops any older copy, starts it with Kronos and the scalper on the chart, and opens the page. The first start also tests Kronos on the last 20 days of gold in the background and shows the result on the page. Settings (demo or real badge, Kronos size) are in `~/.golddesk/config.sh`.
+It puts Gold Desk in `~/GoldDesk`, installs the LiteFinance browser driver and Kronos, and adds a **Gold Desk** icon to your Desktop. Double-click that icon to trade: it updates Gold Desk to the latest version, stops any older copy, starts it with Kronos and the scalper on the chart, and opens the page. The first start also tests Kronos and the Boom / Crash calls on the last 30 days of gold in the background and shows the result on the page. Settings (demo or real badge, Kronos size) are in `~/.golddesk/config.sh`.
 
 ## On a Mac: LiteFinance (manual start)
 
@@ -50,15 +50,17 @@ python3 server.py --litefinance --account demo
 
 ## Kronos forecasts (optional)
 
-[Kronos](https://github.com/shiyu-coder/Kronos) is a pretrained candlestick model (MIT licence). Gold Desk can run it in the background: after each closed 1-minute candle it forecasts the next 15 minutes, draws that path as a yellow dashed line and shows UP / DOWN / FLAT. It never places orders and never slows a click.
+[Kronos](https://github.com/shiyu-coder/Kronos) is a pretrained candlestick model (MIT licence). Gold Desk can run it in the background: after each closed 5-minute candle it forecasts the next 2 hours, draws that path as a yellow dashed line and shows UP / DOWN / FLAT. It never places orders and never slows a click.
+
+**Boom / Crash** (`boom.py`, `state.boom` on the page) are short scalp calls for when Kronos and the indicator agree: Kronos expects at least 0.6 ATR within 30 minutes on a clean path, and the H4 trend, the H1 structure or the indicator's own entry signal points the same way (trend and structure not both against). BOOM buys, CRASH sells, at the live price; stop 1 ATR, target 0.8 to 1.5 ATR, over after 30 minutes. One at a time. They are the same rules as the BOOM / CRASH box on the VPS Kronos chart. Every finished call is scored (spread included) and saved to `~/.golddesk/boom_calls.csv`. They are untested signals, not trades.
 
 ```
 bash install_kronos.sh                                   # once: Kronos code + PyTorch
-python3 kronos_backtest.py --litefinance-days 20         # does it beat a coin flip on gold, after the spread?
+python3 kronos_backtest.py --litefinance-days 30         # do Kronos and Boom / Crash beat a coin flip on gold?
 python3 server.py --litefinance --account demo --kronos  # show it on the page
 ```
 
-The backtest prints how often the forecast got the direction right, the coin-flip range for that many tries, and the profit after the 0.22 spread per 0.01 lot. Treat the forecast as a curiosity unless that test says otherwise.
+The backtest replays the indicator on M5, forecasts at bars where it has a setup, and prints how often the forecast got the direction right (with the coin-flip range for that many tries), the plain Kronos trades and the Boom / Crash calls, all after the 0.22 spread per 0.01 lot. Treat both as a curiosity unless that test says otherwise.
 
 ## Using the page
 
@@ -86,6 +88,7 @@ A click reaches MT5 in a few milliseconds, because the page and the terminal are
 | File | What it is |
 |---|---|
 | `server.py` | Local web server and the MT5 connection |
-| `engine.py` | Signal rules and backtest (same rules as `mt5/XAU_M1_Scalper.mq5`) |
+| `engine.py` | Signal rules and backtest (same rules as `mt5/XAU_M1_Scalper.mq5`), on M5 or M1 |
+| `boom.py` | Boom / Crash scalp calls (Kronos + indicator) and their live scoring |
 | `static/` | The page, plus TradingView Lightweight Charts 4.2.3 (Apache 2.0) |
 | `start_dashboard.bat`, `start_demo.bat` | Double-click starters |
