@@ -339,6 +339,7 @@ class Hub:
         self.kronos = None
         self.boom = BoomTracker(self.spec.digits)
         self.soon: SoonAlerts | None = None     # "setup likely soon" pushes to your phone (needs Kronos)
+        self.booted = False                     # history loaded; until then the page opens and says why not
         self.bootstrap()
 
     # server clock -> UTC
@@ -367,16 +368,25 @@ class Hub:
                 self.src.rates(zone, need(zone, p.rsi_band_len * 4 + p.zone_max_age)))
 
     def bootstrap(self) -> None:
+        """Load the history and replay it. If the broker won't give candles yet, start empty and retry from poll."""
         with self.lock:
-            self._learn_offset(self.src.tick())
-            m1 = self.src.rates(self.tf, HISTORY_BARS + 1)
-            acct = self.src.account()
-            eng = Engine(self.p, self.spec, acct["balance"] or 1000.0, self.offset, self.sec)
-            eng.set_htf(*self._htf(HISTORY_BARS))
+            try:
+                self._learn_offset(self.src.tick())
+                m1 = self.src.rates(self.tf, HISTORY_BARS + 1)
+                acct = self.src.account()
+                eng = Engine(self.p, self.spec, acct["balance"] or 1000.0, self.offset, self.sec)
+                eng.set_htf(*self._htf(HISTORY_BARS))
+            except Exception as e:
+                self.error = f"Waiting for candle history: {e}"
+                print(self.error, flush=True)
+                if self.engine is None:
+                    self.engine = Engine(self.p, self.spec, 1000.0, self.offset, self.sec)    # empty for now
+                return
             for i in range(len(m1) - 1):                      # last bar is still forming
                 eng.add_bar(m1.t[i], m1.o[i], m1.h[i], m1.l[i], m1.c[i], m1.v[i], m1.spread[i])
             self.engine = eng
             self.forming = self._bar_dict(m1, len(m1) - 1) if len(m1) else None
+            self.booted, self.error = True, None
 
     @staticmethod
     def _bar_dict(b: Bars, i: int) -> dict:
@@ -388,6 +398,10 @@ class Hub:
         self.events = self.events[-60:]
 
     def poll(self) -> None:
+        if not self.booted:
+            self.bootstrap()
+            if not self.booted:
+                raise RuntimeError(self.error)
         with self.lock:
             tick = self.src.tick()
             self.tick_ = tick
@@ -490,7 +504,7 @@ class Hub:
                 "trades": closed, "stats": eng.stats(),
                 "atr_m1": eng.atr[-1] if eng.atr else None,       # ATR(14) of the entry timeframe (name kept for the page)
                 "entry_tf": self.tf, "ladder": dict(zip(("macro", "struct", "zone"), LADDER[self.tf])),
-                "events": self.events[-30:], "error": self.error,
+                "events": self.events[-30:], "error": self.error or getattr(self.src, "feed_note", None),
                 "positions": self.src.positions(), "caps": getattr(self.src, "caps", {"positions": True}),
                 "broker_rows": getattr(self.src, "rows", []),
                 "broker": self.src.broker() if hasattr(self.src, "broker") else {"connected": True, "message": None},
@@ -706,14 +720,18 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def poll_loop() -> None:
+    said = None
     while True:
         try:
             HUB.poll()
-            HUB.error = None
+            HUB.error = said = None
+            time.sleep(0.25)
         except Exception as e:
             HUB.error = str(e)
-            traceback.print_exc()
-        time.sleep(0.25)
+            if HUB.error != said:                  # once per new problem, not four times a second
+                said = HUB.error
+                traceback.print_exc()
+            time.sleep(2)
 
 
 def main() -> None:

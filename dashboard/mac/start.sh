@@ -32,7 +32,7 @@ main() {
 
   if [ -n "$VPS" ] && ssh -o BatchMode=yes -o ConnectTimeout=8 "$VPS" true 2>/dev/null; then
     vps_mode
-    echo "Your VPS didn't answer. Starting Gold Desk on this Mac instead."
+    echo "Starting Gold Desk on this Mac instead, so you can trade now."
   elif [ -n "$VPS" ]; then
     echo "Couldn't reach your VPS ($VPS). Starting Gold Desk on this Mac instead."
   fi
@@ -48,8 +48,23 @@ main() {
   fi
 
   echo
-  echo "Gold Desk is opening in your browser. Keep this window open while you trade; closing it stops Gold Desk."
-  exec python3 server.py "${args[@]}"
+  echo "Gold Desk is opening in Safari. Keep this window open while you trade; closing it stops Gold Desk."
+  ( for _ in $(seq 1 120); do
+      curl -fs -m 2 -o /dev/null "http://127.0.0.1:$PORT/api/state" && { show "http://127.0.0.1:$PORT"; exit; }
+      sleep 1
+    done ) &
+  exec python3 server.py "${args[@]}" --no-browser
+}
+# Open a page in Safari (Emad's browser), else the default one.
+show() {
+  open -a Safari "$1" 2>/dev/null || open "$1" 2>/dev/null || xdg-open "$1" 2>/dev/null
+}
+# One plain line on what Gold Desk on the VPS is doing or what went wrong there.
+vps_says() {
+  ssh -o BatchMode=yes -o ConnectTimeout=8 "$VPS" '
+    systemctl is-active -q golddesk || { echo "Gold Desk is not running on the VPS."; }
+    journalctl -u golddesk --since "-3 min" --no-pager -o cat 2>/dev/null \
+      | grep -E "refusing|429|Broker page|Waiting for|No saved|Error:|error:|Dashboard running" | tail -1' 2>/dev/null
 }
 # Broker page and dashboard on the VPS 24/7; this Mac only shows the page.
 vps_mode() {
@@ -57,24 +72,34 @@ vps_mode() {
   ssh -o BatchMode=yes "$VPS" 'mkdir -p /root/.golddesk && chmod 700 /root/.golddesk && test -s /root/.golddesk/lf_session.json' 2>/dev/null \
     || scp -q -o BatchMode=yes "$CONF/lf_session.json" "$VPS:/root/.golddesk/lf_session.json"
   if ! ssh -o BatchMode=yes "$VPS" "bash -s -- $BRANCH $ACCOUNT $VPS_KRONOS" < "$APP/dashboard/vps/setup.sh"; then
+    echo "Updating Gold Desk on the VPS didn't finish."
     return 1
   fi
-  local url="http://127.0.0.1:$PORT" opened=0
+  local url="http://127.0.0.1:$PORT" opened=0 up=0
   echo
   echo "Gold Desk runs on your VPS around the clock. Keep this window open to see it here; closing it doesn't stop the VPS."
   while true; do
     ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
-        -o LogLevel=QUIET -L "$PORT:127.0.0.1:8765" "$VPS" &       # quiet: no "open failed" lines while it starts
+        -o LogLevel=QUIET -L "$PORT:127.0.0.1:8765" "$VPS" 2>/dev/null &   # no "channel 2: open failed" lines
     local tunnel=$! i
-    for i in $(seq 1 900); do                       # after a restart the VPS page needs a moment; the first start minutes
-      curl -fs -m 2 -o /dev/null "$url/api/state" && break
+    for i in $(seq 1 240); do                       # after a restart the VPS page needs up to a minute
+      curl -fs -m 2 -o /dev/null "$url/api/state" && { up=1; break; }
       kill -0 $tunnel 2>/dev/null || break
-      [ $((i % 30)) = 0 ] && echo "Gold Desk is still starting on the VPS (the very first start takes a few minutes)..."
-      [ "$i" = 180 ] && ssh -o BatchMode=yes "$VPS" 'journalctl -u golddesk -n 8 --no-pager -o cat' 2>/dev/null
+      if [ $((i % 20)) = 0 ]; then
+        echo "Waiting for Gold Desk on the VPS... $(vps_says)"
+      fi
       sleep 1
     done
-    if [ $opened = 0 ] && curl -fs -m 2 -o /dev/null "$url/api/state"; then
-      open "$url" 2>/dev/null || xdg-open "$url" 2>/dev/null
+    if [ $up = 0 ]; then
+      kill $tunnel 2>/dev/null
+      echo
+      echo "Gold Desk on the VPS didn't open. What the VPS says: $(vps_says)"
+      echo "It keeps trying there by itself; the icon goes back to it next time."
+      return 1
+    fi
+    if [ $opened = 0 ]; then
+      echo "Gold Desk is open in Safari."
+      show "$url"
       opened=1
     fi
     wait $tunnel

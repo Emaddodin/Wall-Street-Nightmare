@@ -32,6 +32,15 @@ CHART = BASE + "/trading/chart?symbol=XAUUSD"
 RES = {"M1": "1", "M5": "5", "M15": "15", "H1": "60", "H4": "240"}
 SEC = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400}
 
+# LiteFinance answers HTTP 429 and blocks the address for a while when candles are asked for too often (the
+# VPS chart shares that address). The live bid keeps the last candle current, so history is re-read rarely:
+REFRESH_LIVE = 60.0      # seconds between re-reads while the broker page streams prices ...
+REFRESH_IDLE = 10.0      # ... and without live prices, when the candles are the only price there is
+REFRESH_HTF = 120.0      # M15 / H1 / H4
+SETTLE = 3.0             # after a bar closes, wait this long and read its final values once
+SPACING = 1.5            # seconds between any two requests
+BACKOFF = (60.0, 600.0)  # after a 429: wait 1 minute, doubling up to 10, before asking again
+
 # Order ticket, mapped from the logged-in page on 2026-10-01.
 SEL = {
     "bid": ".js_value_price_bid",
@@ -227,6 +236,11 @@ class LiteFinanceSource:
         self.spread = 0.22
         self._acct = {"at": 0.0}
         self._fresh_at: dict = {}
+        self._quote_at = 0.0
+        self._next_req = 0.0                    # earliest time for the next history request
+        self._hold_until = 0.0                  # no history requests before this (after a 429 or an outage)
+        self._backoff = BACKOFF[0]
+        self.feed_note: str | None = None       # why the candles are not updating, shown on the page
         self.data_lock = threading.Lock()
         self.http_lock = threading.Lock()
         self._conn = None
@@ -272,7 +286,9 @@ class LiteFinanceSource:
         self.browser = self._launch(pw)
         self.ctx = self.browser.new_context(storage_state=str(self.session), viewport={"width": 1366, "height": 850})
         self.page = self.ctx.new_page()
-        self.page.goto(self.url, wait_until="domcontentloaded", timeout=45000)
+        resp = self.page.goto(self.url, wait_until="domcontentloaded", timeout=45000)
+        if resp is not None and resp.status == 429:
+            raise RuntimeError("LiteFinance is refusing this server for now (too many requests, HTTP 429)")
         try:
             self.page.wait_for_selector(SEL["bid"], timeout=40000)
         except Exception:
@@ -295,6 +311,8 @@ class LiteFinanceSource:
             return
         pw, wait = None, 60
         while True:                                # keep trying; the dashboard runs meanwhile
+            if self._hold_until > time.time():         # LiteFinance is refusing this address: wait it out
+                time.sleep(self._hold_until - time.time())
             try:
                 pw = pw or sync_playwright().start()
                 self._open(pw)
@@ -354,6 +372,7 @@ class LiteFinanceSource:
         if q["bid"] > 0 and q["ask"] > 0:
             self.spread = round(q["ask"] - q["bid"], 2)
             self.last_quote = {"bid": q["bid"], "ask": q["ask"], "time": int(time.time())}
+            self._quote_at = time.time()
 
     def _read_rows(self) -> None:
         rows = self.page.evaluate(ROWS_JS)
@@ -394,21 +413,37 @@ class LiteFinanceSource:
     def _fetch(self, tf: str, t_from: int, t_to: int) -> list:
         path = "/chart/get-history?" + urlencode(
             {"symbol": self.symbol, "resolution": RES[tf], "from": int(t_from), "to": int(t_to)})
-        text = self._get(path)
-        if text is not None:
+        status, text = self._get(path)
+        if status is None and self.connected:        # Python couldn't reach it: try through the logged-in page
+            r = self._call(lambda p: p.evaluate(FETCH_JS, self.base + path))
+            status, text = r["status"], r["text"]
+        if status == 200:
+            self._backoff, self.feed_note = BACKOFF[0], None
             return parse_history(text)
-        r = self._call(lambda p: p.evaluate(FETCH_JS, self.base + path))
-        if r["status"] != 200:
-            raise RuntimeError(f"LiteFinance history returned HTTP {r['status']}")
-        return parse_history(r["text"])
+        if status == 429:
+            wait, self._backoff = self._backoff, min(self._backoff * 2, BACKOFF[1])
+            self._hold_until = time.time() + wait
+            self.feed_note = (f"LiteFinance is refusing this server for now (too many requests). Gold Desk waits "
+                              f"{int(wait)} s before asking again; the chart catches up by itself.")
+        else:
+            self._hold_until = time.time() + 15
+            self.feed_note = (f"LiteFinance candles: {text}" if status is None else
+                              f"LiteFinance candles returned HTTP {status}") + "; trying again in 15 s."
+        print(self.feed_note, flush=True)
+        raise RuntimeError(self.feed_note)
 
-    def _get(self, path: str) -> str | None:
+    def _get(self, path: str) -> tuple:
         """Candle history is public, so fetch it straight from Python on a kept-alive connection
-        instead of queueing behind orders in the browser."""
+        instead of queueing behind orders in the browser. (status, body), or (None, reason) if unreachable."""
         if not self.base.startswith(("https://", "http://")):
-            return None
+            return None, "no web address"
         with self.http_lock:
+            wait = self._next_req - time.time()
+            if wait > 0:
+                time.sleep(wait)                     # never two requests in a burst
+            err = "no answer"
             for _ in range(2):
+                self._next_req = time.time() + SPACING
                 try:
                     if self._conn is None:
                         tls = self.base.startswith("https://")
@@ -417,26 +452,42 @@ class LiteFinanceSource:
                     self._conn.request("GET", path, headers={"User-Agent": "Mozilla/5.0 GoldDesk",
                                                              "Accept": "application/json"})
                     r = self._conn.getresponse()
-                    body = r.read().decode("utf-8", "replace")
-                    return body if r.status == 200 else None
-                except (OSError, http.client.HTTPException):
-                    self._conn = None
-            return None
+                    return r.status, r.read().decode("utf-8", "replace")
+                except (OSError, http.client.HTTPException) as e:
+                    self._conn, err = None, str(e) or type(e).__name__
+            return None, err
 
     def _load(self, tf: str, count: int) -> list:
         with self.data_lock:
             return self._load_locked(tf, count)
 
+    def _due(self, tf: str, rows: list) -> bool:
+        """Re-read the tail now? Once each bar has closed, then every REFRESH_* seconds."""
+        sec, now, last = SEC[tf], time.time(), self._fresh_at.get(tf, 0.0)
+        end = rows[-1][0] + sec + SETTLE                    # the cached last bar is final from here
+        if now >= end > last:
+            return True
+        gap = REFRESH_HTF if sec > 300 else REFRESH_LIVE if now - self._quote_at < 5 else REFRESH_IDLE
+        if now - end > 600:                                 # market closed (weekend, holiday): nothing new
+            gap = max(gap, 300.0)
+        return now - last >= gap
+
     def _load_locked(self, tf: str, count: int) -> list:
         sec, now = SEC[tf], int(time.time())
         rows = self.cache[tf]
-        if rows and time.time() - self._fresh_at.get(tf, 0) < (1.0 if sec <= 300 else 4.0) and len(rows) >= count:
-            return rows[-count:]
-        self._fresh_at[tf] = time.time()
-        if rows:                                   # refresh the tail (the last bar may still be forming)
+        held = time.time() < self._hold_until
+        due = not rows or self._due(tf, rows)
+        if rows and (held or (not due and len(rows) >= count)):
+            return rows[-count:]                     # cached; while LiteFinance refuses, whatever we have
+        if held:
+            raise RuntimeError(self.feed_note or "LiteFinance candles are paused for a moment")
+        if due:
+            self._fresh_at[tf] = time.time()
+        if rows and due:                           # refresh the tail (the last bar may still be forming)
             fresh = self._fetch(tf, rows[-1][0] - 2 * sec, now + sec)
             keep = [r for r in rows if r[0] < (fresh[0][0] if fresh else now + sec)]
             rows = keep + fresh
+            self.cache[tf] = rows[-max(count, 6000):]
         chunk = 5000 * sec                          # LiteFinance answers up to about a week of M1 per call
         to = rows[0][0] if rows else now + sec
         empty = 0
@@ -448,6 +499,7 @@ class LiteFinanceSource:
             else:
                 empty += 1
             to -= chunk
+            self.cache[tf] = rows[-max(count, 6000):]
         self.cache[tf] = rows[-max(count, 6000):]
         return rows[-count:]
 
