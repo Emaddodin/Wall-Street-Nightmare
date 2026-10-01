@@ -194,7 +194,8 @@ def analyze(b, h1=None, off=lambda t: 0) -> dict | None:
             if sweep is not None and sweep >= t[max(0, end)]:
                 pools.append({"dir": d, "kind": "BSL" if d == 1 else "SSL", "price": p, "from_time": t[i],
                               "to_time": sweep, "swept": True})
-    liquidity = [q for q in pools if fresh(q)]
+    live = sorted((q for q in pools if not q["swept"]), key=lambda q: abs(q["price"] - px))
+    liquidity = live[:6] + [q for q in pools if q["swept"] and fresh(q)][-4:]     # nearest pools, latest sweeps
 
     # premium / discount from the last swing high and low
     pd = None
@@ -262,7 +263,7 @@ def analyze(b, h1=None, off=lambda t: 0) -> dict | None:
         next((f"{k['name']} killzone" for k in killzones if k["start"] <= t[n - 1] < k["end"]), None)) if x)
     return {
         "bias": trend, "summary": summary,
-        "swings": names[-12:],
+        "swings": names[-10:],
         "structure": structure[-6:],
         "ob": [clean(z) for z in _newest([z for z in obs if fresh(z)])],
         "fvg": [clean(g) for g in _newest([g for g in gaps if fresh(g)], 4)],
