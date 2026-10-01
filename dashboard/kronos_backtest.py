@@ -1,0 +1,161 @@
+"""Does Kronos call gold's next move better than a coin flip, after the spread?
+
+At evenly spaced points in M1 history it forecasts the next `--horizon` bars from the bars before,
+then checks what price really did. A trade is taken when the forecast moves more than
+`--min-atr` x ATR(14): enter at the next bar's open, exit at the close `--horizon` bars later,
+paying `--spread` once. P/L is in dollars for 0.01 lot (1 oz).
+
+    python3 kronos_backtest.py --litefinance-days 20            # LiteFinance M1 history (public feed)
+    python3 kronos_backtest.py --csv ~/dukascopy_xauusd_m1.csv  # any M1 CSV with time/open/high/low/close
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import math
+import random
+import time
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+from kronos_signal import DEFAULT_REPO, Kronos
+
+
+def load_csv(path: str) -> list:
+    rows = []
+    with open(Path(path).expanduser(), newline="") as f:
+        rd = csv.reader(f)
+        head = [h.strip().lower() for h in next(rd)]
+        def col(*names):
+            return next((i for i, h in enumerate(head) if h in names), None)
+        it = col("time", "timestamp", "timestamps", "date", "datetime", "gmt time", "local time")
+        io_, ih, il, ic = col("open", "o"), col("high", "h"), col("low", "l"), col("close", "c")
+        iv = col("volume", "vol", "v", "tick_volume")
+        if None in (it, io_, ih, il, ic):
+            raise SystemExit(f"Need time, open, high, low, close columns; found {head}")
+        for r in rd:
+            if not r:
+                continue
+            ts = r[it].strip()
+            try:
+                t = float(ts)
+                t = t / 1000 if t > 1e11 else t
+            except ValueError:
+                t = None
+                for fmt in ("%d.%m.%Y %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y.%m.%d %H:%M",
+                            "%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M:%S"):
+                    try:
+                        t = datetime.strptime(ts.replace("Z", "").split("+")[0].replace(" GMT", ""), fmt)
+                        t = t.replace(tzinfo=timezone.utc).timestamp()
+                        break
+                    except ValueError:
+                        continue
+                if t is None:
+                    continue
+            o, h, l, c = (float(r[i]) for i in (io_, ih, il, ic))
+            v = float(r[iv]) if iv is not None and r[iv] else 0.0
+            if v == 0 and h == l:          # Dukascopy pads closed hours with flat zero-volume bars
+                continue
+            rows.append([int(t), o, h, l, c, v])
+    rows.sort(key=lambda r: r[0])
+    return rows
+
+
+def load_litefinance(days: int) -> list:
+    now = int(time.time())
+    out, to = {}, now
+    while to > now - days * 86400:
+        url = (f"https://my.litefinance.org/chart/get-history?symbol=XAUUSD&resolution=1"
+               f"&from={to - 5 * 86400}&to={to}")
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 GoldDesk"})
+        d = json.loads(urllib.request.urlopen(req, timeout=20).read())
+        d = d.get("data", d)
+        for i, t in enumerate(d.get("t") or []):
+            out[int(t)] = [int(t), d["o"][i], d["h"][i], d["l"][i], d["c"][i], (d.get("v") or [0] * len(d["t"]))[i]]
+        to -= 5 * 86400
+    rows = sorted(out.values())
+    return [r for r in rows if r[0] < now - now % 60]       # closed bars only
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--csv")
+    ap.add_argument("--litefinance-days", type=int, default=0)
+    ap.add_argument("--last-days", type=float, default=30, help="test only the most recent N days of the data")
+    ap.add_argument("--points", type=int, default=400, help="how many forecasts to test")
+    ap.add_argument("--horizon", type=int, default=15)
+    ap.add_argument("--lookback", type=int, default=400)
+    ap.add_argument("--samples", type=int, default=5)
+    ap.add_argument("--min-atr", type=float, default=0.5)
+    ap.add_argument("--spread", type=float, default=0.22, help="round-trip cost in price units (0.22 = LiteFinance gold)")
+    ap.add_argument("--size", default="small", choices=["mini", "small", "base"])
+    ap.add_argument("--batch", type=int, default=8)
+    ap.add_argument("--repo", default=str(DEFAULT_REPO))
+    ap.add_argument("--out", default="kronos_backtest_trades.csv")
+    ap.add_argument("--seed", type=int, default=1)
+    a = ap.parse_args()
+
+    rows = load_csv(a.csv) if a.csv else load_litefinance(a.litefinance_days or 20)
+    if len(rows) < a.lookback + a.horizon + 50:
+        raise SystemExit(f"Only {len(rows)} bars loaded.")
+    t_end = rows[-1][0]
+    first = next(i for i, r in enumerate(rows) if r[0] >= t_end - a.last_days * 86400)
+    first = max(first, a.lookback)
+    last = len(rows) - a.horizon - 2
+    # only points where the next horizon bars are contiguous minutes (no weekend gap inside the trade)
+    cand = [i for i in range(first, last) if rows[i + a.horizon + 1][0] - rows[i][0] == (a.horizon + 1) * 60]
+    random.seed(a.seed)
+    pts = sorted(random.sample(cand, min(a.points, len(cand))))
+    print(f"{len(rows)} M1 bars, {datetime.fromtimestamp(rows[0][0], timezone.utc):%Y-%m-%d} to "
+          f"{datetime.fromtimestamp(t_end, timezone.utc):%Y-%m-%d}. Testing {len(pts)} forecasts, "
+          f"{a.horizon} min ahead, Kronos-{a.size}...")
+
+    import torch
+    torch.manual_seed(a.seed)
+    k = Kronos(a.repo, a.size, a.lookback, a.horizon, a.samples, a.min_atr)
+    print(f"Model on {k.device}.")
+    res, t0 = [], time.time()
+    for j in range(0, len(pts), a.batch):
+        chunk = pts[j:j + a.batch]
+        fc = k.forecast_batch([rows[i - a.lookback + 1:i + 1] for i in chunk])
+        for i, f in zip(chunk, fc):
+            entry = rows[i + 1][1]
+            exit_ = rows[i + a.horizon][4]
+            real = exit_ - entry
+            pnl = (f["dir"] * real - a.spread) if f["dir"] else 0.0
+            res.append({"time": datetime.fromtimestamp(rows[i][0], timezone.utc).strftime("%Y-%m-%d %H:%M"),
+                        "call": f["call"], "forecast_move": f["move"], "real_move": round(real, 2),
+                        "atr": f["atr"], "pnl_usd_0.01lot": round(pnl, 2)})
+        done = j + len(chunk)
+        el = time.time() - t0
+        print(f"  {done}/{len(pts)}  ({el / done:.1f} s per forecast)", end="\r", flush=True)
+    print()
+
+    with open(a.out, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(res[0]))
+        w.writeheader(); w.writerows(res)
+
+    sign = [r for r in res if r["forecast_move"] != 0 and r["real_move"] != 0]
+    dir_hit = sum((r["forecast_move"] > 0) == (r["real_move"] > 0) for r in sign) / max(1, len(sign))
+    trades = [r for r in res if r["call"] != "FLAT"]
+    wins = [r["pnl_usd_0.01lot"] for r in trades if r["pnl_usd_0.01lot"] > 0]
+    losses = [r["pnl_usd_0.01lot"] for r in trades if r["pnl_usd_0.01lot"] <= 0]
+    net = sum(wins) + sum(losses)
+    pf = sum(wins) / abs(sum(losses)) if losses and sum(losses) else math.inf
+    up_share = sum(r["real_move"] > 0 for r in sign) / max(1, len(sign))
+    # 95% band for a coin flip with this many calls
+    band = 1.96 * math.sqrt(0.25 / max(1, len(sign)))
+    print(f"\nDirection right: {dir_hit:.1%} of {len(sign)} forecasts (coin flip: 50% +/- {band:.1%}; "
+          f"price actually rose {up_share:.1%} of the time)")
+    print(f"Trades (forecast > {a.min_atr} ATR): {len(trades)}, wins {len(wins)} "
+          f"({len(wins) / max(1, len(trades)):.1%}), profit factor {pf:.2f}, net ${net:.2f} per 0.01 lot after spread")
+    verdict = ("NO EDGE: within coin-flip range or losing after costs." if (dir_hit < 0.5 + band or net <= 0)
+               else "Possible edge on this sample. Re-test on other months before trading it.")
+    print("Verdict:", verdict)
+    print(f"Every forecast: {Path(a.out).resolve()}")
+
+
+if __name__ == "__main__":
+    main()

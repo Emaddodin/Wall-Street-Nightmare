@@ -35,6 +35,8 @@
     priceFormat: { type: "price", precision: 2, minMove: 0.01 },
   });
   let last = null, loadedTf = null, first = 0;
+  const fcLine = chart.addLineSeries({ color: "#e5b33b", lineWidth: 2, lineStyle: 2, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false });
+  let fcKey = "";
 
   async function loadCandles() {
     const want = tf;
@@ -242,6 +244,24 @@
 
     drawMarkers();
     drawLines();
+    renderKronos();
+  }
+
+  function renderKronos() {
+    const k = S.kronos, el = $("kronos");
+    el.hidden = !k;
+    if (!k) return;
+    if (!k.path) {
+      el.innerHTML = `<b>Kronos</b> <span class="dim">${esc(k.error || (k.status === "loading model" ? "loading the model…" : "waiting for the next closed candle…"))}</span>`;
+    } else {
+      const cls = k.dir === 1 ? "good" : k.dir === -1 ? "bad" : "dim";
+      el.innerHTML = `<b>Kronos</b> next ${k.minutes} min: <b class="${cls}">${k.call}</b> <span class="num">→ ${fmt(k.target)} (${k.move >= 0 ? "+" : ""}${fmt(k.move)})</span>
+        <div class="dim" style="font-size:12px;margin-top:4px">${esc(k.model)} forecast, yellow dashed line on the 1m chart. Not proven profitable on gold yet.${k.error ? " " + esc(k.error) : ""}</div>`;
+    }
+    const key = tf + (k.path ? k.t : "");
+    if (key === fcKey) return;
+    fcKey = key;
+    fcLine.setData(tf === "M1" && k.path && last ? [{ time: k.t, value: k.last }, ...k.path] : []);
   }
 
   let refreshing = false;

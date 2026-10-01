@@ -38,6 +38,18 @@ python3 server.py --litefinance --account demo
 - `--lf-headless` hides the LiteFinance window. Leave it visible for now: open positions, closing and moving stops are still done in that window.
 - Your login is saved in `~/.golddesk/lf_session.json`, readable only by your Mac user. Gold Desk never sees your password.
 
+## Kronos forecasts (optional)
+
+[Kronos](https://github.com/shiyu-coder/Kronos) is a pretrained candlestick model (MIT licence). Gold Desk can run it in the background: after each closed 1-minute candle it forecasts the next 15 minutes, draws that path as a yellow dashed line and shows UP / DOWN / FLAT. It never places orders and never slows a click.
+
+```
+bash install_kronos.sh                                   # once: Kronos code + PyTorch
+python3 kronos_backtest.py --litefinance-days 20         # does it beat a coin flip on gold, after the spread?
+python3 server.py --litefinance --account demo --kronos  # show it on the page
+```
+
+The backtest prints how often the forecast got the direction right, the coin-flip range for that many tries, and the profit after the 0.22 spread per 0.01 lot. Treat the forecast as a curiosity unless that test says otherwise.
+
 ## Using the page
 
 - **Top bar**: DEMO / REAL MONEY badge, a green dot while prices are streaming, balance and equity.

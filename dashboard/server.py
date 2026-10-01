@@ -331,6 +331,7 @@ class Hub:
         self.engine: Engine | None = None
         self.forming = None
         self.tick_ = None
+        self.kronos = None
         self.bootstrap()
 
     # server clock -> UTC
@@ -456,6 +457,7 @@ class Hub:
                 "events": self.events[-30:], "error": self.error,
                 "positions": self.src.positions(), "caps": getattr(self.src, "caps", {"positions": True}),
                 "broker_rows": getattr(self.src, "rows", []),
+                "kronos": self.kronos.state() if self.kronos else None,
                 "max_lots": min(self.max_lots, self.spec.max_lot),
             }
 
@@ -689,6 +691,9 @@ def main() -> None:
     ap.add_argument("--lf-dry-run", action="store_true", help="fill the LiteFinance ticket but never press its button")
     ap.add_argument("--lf-url", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--account", choices=["demo", "real"], help="label the LiteFinance account (auto by default)")
+    ap.add_argument("--kronos", nargs="?", const="small", choices=["mini", "small", "base"],
+                    help="show Kronos forecasts (model size, default small); needs install_kronos.sh")
+    ap.add_argument("--kronos-repo", help="folder with the Kronos code (default: ../Kronos)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
@@ -714,6 +719,10 @@ def main() -> None:
     PORT = a.port
     HUB = Hub(src, Params(), a.utc_offset, a.max_lots)
     threading.Thread(target=poll_loop, daemon=True).start()
+    if a.kronos:
+        from kronos_signal import DEFAULT_REPO, KronosWorker
+        HUB.kronos = KronosWorker(HUB, repo=a.kronos_repo or DEFAULT_REPO, size=a.kronos)
+        print(f"Kronos-{a.kronos}: loading in the background (first run downloads it)")
     url = f"http://127.0.0.1:{a.port}"
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
     srv.daemon_threads = True
