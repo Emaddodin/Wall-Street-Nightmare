@@ -9,10 +9,6 @@ main() {
   local REPO=https://github.com/Emaddodin/Wall-Street-Nightmare.git APP=/opt/golddesk CONF=/root/.golddesk
   local changed=0
 
-  if [ ! -s "$CONF/lf_session.json" ]; then
-    echo "No LiteFinance login in $CONF yet. Nothing was changed."; exit 2
-  fi
-
   if [ -d "$APP/.git" ]; then
     git -C "$APP" fetch -q --depth 1 origin "$BRANCH"
     if [ "$(git -C "$APP" rev-parse HEAD)" != "$(git -C "$APP" rev-parse FETCH_HEAD)" ]; then
@@ -23,6 +19,12 @@ main() {
     git clone -q --depth 1 --branch "$BRANCH" --filter=blob:none --sparse "$REPO" "$APP"
     git -C "$APP" sparse-checkout set dashboard
     changed=1
+  fi
+
+  pine_feed || echo "The TradingView Kronos feed didn't install this time; Gold Desk carries on."
+
+  if [ ! -s "$CONF/lf_session.json" ]; then
+    echo "No LiteFinance login in $CONF yet, so the trading page wasn't started."; exit 2
   fi
 
   # Python: reuse the Kronos environment already on the VPS (it has CPU PyTorch), else make one
@@ -95,6 +97,30 @@ UNIT
                   --out $CONF/kronos_backtest_M5_trades.csv > $BT 2>&1" \
       && echo "Testing Kronos and Boom/Crash on the last 30 days of gold in the background (results show on the page)."
   fi
+}
+# Kronos paste lines for the TradingView indicator on port 8791, locked with the Kronos chart's key.
+# Emad asked for this in writing on 2026-10-01. Read-only: it serves forecasts, nothing else.
+pine_feed() {
+  local KEY=/root/kronos/chart/token.txt DST=/root/kronos/pine unit=/etc/systemd/system/kronos-pine-feed.service
+  if [ ! -s "$KEY" ]; then
+    echo "No Kronos chart key on the VPS, so the TradingView feed was skipped."; return 0
+  fi
+  local new=0
+  mkdir -p "$DST"
+  cmp -s "$APP/dashboard/pine/pine_feed.py" "$DST/pine_feed.py" || { cp "$APP/dashboard/pine/pine_feed.py" "$DST/"; new=1; }
+  if ! cmp -s "$APP/dashboard/pine/kronos-pine-feed.service" "$unit"; then
+    cp "$APP/dashboard/pine/kronos-pine-feed.service" "$unit"
+    systemctl daemon-reload
+    systemctl enable -q kronos-pine-feed
+    new=1
+  fi
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+    ufw allow 8791/tcp >/dev/null
+  fi
+  if [ "$new" = 1 ] || ! systemctl is-active -q kronos-pine-feed; then
+    systemctl restart kronos-pine-feed
+  fi
+  echo "TradingView Kronos lines: your chart link with 8790 changed to 8791."
 }
 main "$@"
 exit
