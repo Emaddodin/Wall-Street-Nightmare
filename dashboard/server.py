@@ -28,6 +28,7 @@ from urllib.parse import parse_qs, urlparse
 from boom import BoomTracker, setup as boom_setup
 from engine import (LADDER, Bars, Engine, Params, Spec, SESSION_NAMES, ny7_offset, run_backtest,
                     session_of, session_ok, utc_minutes)
+from smc import analyze as smc_analyze
 from soon import SoonAlerts, find_topic, ntfy_server
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -340,6 +341,8 @@ class Hub:
         self.boom = BoomTracker(self.spec.digits)
         self.soon: SoonAlerts | None = None     # "setup likely soon" pushes to your phone (needs Kronos)
         self.booted = False                     # history loaded; until then the page opens and says why not
+        self.chart_tf = entry_tf                # the timeframe the page's chart shows (its last candle request)
+        self.smc, self._smc_at, self._smc_tf, self._smc_err = None, 0.0, None, None
         self.bootstrap()
 
     # server clock -> UTC
@@ -424,6 +427,26 @@ class Hub:
                         self._event("boom_end", done["text"], done["side"])
             self.forming = self._bar_dict(m1, len(m1) - 1)
             self._radar()
+            self._update_smc()
+
+    def _update_smc(self) -> None:
+        """Smart Money / ICT read of the chart's timeframe (state.smc): when the chart's timeframe changes, else
+        every 15 s, so a closed candle shows up within that."""
+        tf = self.chart_tf
+        if tf == self._smc_tf and time.time() - self._smc_at < 15:
+            return
+        self._smc_tf, self._smc_at = tf, time.time()
+        try:
+            b = self.src.rates(tf, 1200)
+            self.smc = smc_analyze(b, b if tf == "H1" else self.src.rates("H1", 400), self.offset)
+            if self.smc:
+                self.smc["tf"] = tf
+            self._smc_err = None
+        except Exception as e:
+            self.smc = None
+            if str(e) != self._smc_err:
+                self._smc_err = str(e)
+                print(f"SMC/ICT layer skipped: {e}", flush=True)
 
     def exec_text(self, tr: dict) -> str:
         d = self.spec.digits
@@ -511,6 +534,7 @@ class Hub:
                 "kronos": self.kronos.state() if self.kronos else None,
                 "boom": self.boom.state(),
                 "alerts": self.soon.state() if self.soon else None,
+                "smc": self.smc,
                 "max_lots": min(self.max_lots, self.spec.max_lot),
             }
 
@@ -578,6 +602,7 @@ class Hub:
 
     def candles(self, tf: str, count: int) -> list:
         with self.lock:
+            self.chart_tf = tf
             b = self.src.rates(tf, count)
             return [{"time": b.t[i], "open": b.o[i], "high": b.h[i], "low": b.l[i], "close": b.c[i]}
                     for i in range(len(b))]
