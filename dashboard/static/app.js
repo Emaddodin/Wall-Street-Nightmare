@@ -173,6 +173,7 @@
     const right = r.width - chart.priceScale("right").width();
     const sec = TFSEC[tf], ts = chart.timeScale();
     if (ovl.smc) drawSmc(right, sec, ts);
+    if (ovl.boom) drawHeadsUp(right, sec, ts);
     drawBand(right, sec, ts);
     if (!ovl.scalper) return;
     zx.font = "600 10px JetBrains Mono, ui-monospace, monospace";
@@ -286,6 +287,28 @@
       hline(x1, right, yy, "rgba(236,232,223,.4)", [8, 4]);
       label(`${l.label} ${fmt(l.price)}`, right - 4, yy - 3, "rgba(236,232,223,.75)", "right");
     }
+  }
+
+  // the latest "setup likely soon" heads-up while it is live: its watch area as a dashed box up to when it's due
+  function liveHeadsUp() {
+    const al = S && S.alerts, h = al && al.recent && al.recent[al.recent.length - 1];
+    if (!h || !h.area) return null;
+    const now = (S.clock && S.clock.server_time) || Date.now() / 1000;
+    const due = h.t + (h.minutes || 15) * 60;
+    return now <= due + 15 * 60 ? { ...h, due, now } : null;
+  }
+  function drawHeadsUp(right, sec, ts) {
+    const h = liveHeadsUp();
+    if (!h) return;
+    const x1 = Math.min(right, xOf(h.t, ts, sec) ?? right), x2 = Math.min(right, xOf(h.due, ts, sec) ?? right);
+    const y1 = series.priceToCoordinate(h.area[1]), y2 = series.priceToCoordinate(h.area[0]);
+    if (y1 == null || y2 == null) return;
+    const rgb = h.dir === 1 || h.side === "BUY" ? "47,182,124" : "229,72,77";
+    const w = Math.max(6, x2 - x1), hh = Math.max(3, y2 - y1);
+    zx.fillStyle = `rgba(${rgb},.14)`; zx.fillRect(x1, y1, w, hh);
+    zx.setLineDash([5, 3]); zx.strokeStyle = `rgba(${rgb},.9)`; zx.lineWidth = 1.5; zx.strokeRect(x1 + .5, y1 + .5, w - 1, hh - 1); zx.setLineDash([]);
+    zx.font = "700 11px Barlow Semi Condensed, Barlow, sans-serif"; zx.fillStyle = `rgba(${rgb},1)`;
+    zx.fillText(`HEADS-UP ${h.side}`, x1 + 3, y1 - 5);
   }
 
   // the Kronos sample-path spread: outer shade = lowest to highest path, inner shade = middle half (p25 to p75)
@@ -573,6 +596,26 @@
       <span class="meta">Kronos ${a.move > 0 ? "+" : ""}${fmt(a.move)} (${esc(a.move_atr)} ATR) in ${esc(a.minutes)} min${a.why && a.why.length ? " · " + esc(a.why.join(", ")) : ""}</span>
       <span class="meta">${tally}</span>`;
   }
+  // state.alerts: {push, topic, sent, error, recent: [{kind, side, dir, t, minutes, area, what, why, up_prob, title, text}]}
+  function renderHeadsUp() {
+    const al = S.alerts, el = $("heads");
+    el.hidden = !al;
+    if (!al) return;
+    const h = liveHeadsUp(), last = (al.recent || [])[al.recent.length - 1];
+    const push = al.error ? `<span class="down">Phone push failed: ${esc(al.error)}</span>`
+      : al.push ? `Phone push on${al.sent ? ` · ${al.sent} sent` : ""}` : "Phone push off";
+    if (!h) {
+      el.className = "heads";
+      el.innerHTML = `<span class="hd">HEADS-UP</span><span class="ht dim">${last ? `Last: ${esc(last.side)} near ${fmt(last.area[0])}-${fmt(last.area[1])} at ${clock(last.t)}` : "Nothing expected right now."}</span><span class="hp">${push}</span>`;
+      return;
+    }
+    const up = h.dir === 1 || h.side === "BUY", left = Math.max(0, Math.round((h.due - h.now) / 60));
+    el.className = "heads live " + (up ? "up" : "down");
+    el.innerHTML = `<span class="hd">${up ? "▲" : "▼"} ${esc(h.side)} SETUP ${left ? `IN ~${left} MIN` : "DUE NOW"}</span>
+      <span class="ht">Watch <b class="num">${fmt(h.area[0])}-${fmt(h.area[1])}</b>${h.what ? ` · ${esc(h.what)}` : ""}${h.up_prob != null ? ` · Kronos up ${Math.round(h.up_prob * 100)}%` : ""}</span>
+      ${h.why && h.why.length ? `<span class="ht dim">${esc(h.why.join(", "))}</span>` : ""}
+      <span class="hp">${push} · a heads-up, not a trade signal</span>`;
+  }
   function renderScalper() {
     const s = S.active;
     $("scalper").innerHTML = s
@@ -640,6 +683,7 @@
     renderKronos();
     renderScalper();
     renderBoom();
+    renderHeadsUp();
     drawMarkers();
     drawLines();
     drawForecast();
