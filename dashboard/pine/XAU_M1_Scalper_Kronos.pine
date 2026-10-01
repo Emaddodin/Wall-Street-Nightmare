@@ -1,0 +1,624 @@
+//@version=5
+// =====================================================================
+// XAU M1 SCALPER + KRONOS  (TradingView port of Gold Desk / XAU_M1_Scalper.mq5)
+//
+// H1  : EMA 50/200 regime + ATR velocity-shock guard
+// M15 : BOS / CHoCH market structure + EMA 21/55 channel
+// M5  : fair value gaps, order blocks, RSI(14) with standard-deviation bands
+// M1  : liquidity sweeps, engulfing (+volume), rejection pins, inside-bar breaks
+// Kronos : the 15-minute forecast from the Kronos model, pasted in (see below)
+//
+// Same rules as dashboard/engine.py, including the trade lifecycle the on-chart
+// backtest simulates: entry at the signal bar's close plus spread and slippage,
+// 50% off at TP1 (1.5R), runner to breakeven, trailed by 1 ATR to TP2 (2.5R) or
+// until M15 structure flips.
+//
+// NO REPAINT
+//   * Signals, trades and the execution alert are evaluated once per M1 bar,
+//     on its close (barstate.isconfirmed). Only the radar alert runs intrabar.
+//   * Every higher-timeframe value is read as expr[1]: the last CLOSED H1 / M15 /
+//     M5 bar. It is requested with lookahead_on on purpose: with [1], that is
+//     TradingView's documented non-repainting form, and history and live see the
+//     same closed bar. With lookahead_off, [1] on history lags one extra HTF bar
+//     on most M1 bars, so the backtest would not match what fires live.
+//   * Three request.security calls in total (one tuple per timeframe).
+//
+// KRONOS
+//   Pine cannot run a neural network, so the forecast is pasted into the
+//   "Kronos forecasts" box as one or more lines (space or newline separated):
+//       KRONOS|<last bar open, UTC seconds>|<last close>|<ATR14>|<model>|<p1,p2,...,pN>
+//   dashboard/pine/kronos_pine_line.py prints exactly that line on the VPS or Mac.
+//   The forecast only applies to the N minutes after the bar it was made on, so
+//   using it never looks ahead. Paste a batch (--history) to see Kronos on past
+//   bars and in the backtest. request.seed was not used: TradingView only
+//   ingests seed data once a day, useless for a 15-minute M1 forecast.
+//
+// HONESTY NOTE: a Dukascopy M1 backtest (Jan 2025 - Sep 2026) of these exact
+// scalper rules found no edge (about 30% winners, profit factor 0.53-0.79).
+// Treat signals as a study, not as trades.
+// =====================================================================
+indicator("XAU M1 Scalper + Kronos", shorttitle="XAU Scalper+Kronos", overlay=true, max_lines_count=200, max_labels_count=300, max_boxes_count=60, max_polylines_count=20, max_bars_back=500)
+
+// ---------------------------------------------------------------- inputs
+gStrat = "Strategy Settings"
+modeIn       = input.string("Strict", "Signal mode", options=["Strict", "Balanced"], tooltip="Strict: the trigger must come within N bars of an M5 zone touch, or be a sweep. Balanced: the pattern alone is enough.", group=gStrat)
+sessFilter   = input.bool(true, "Only signal inside the sessions below", group=gStrat)
+tradeLondon  = input.bool(true, "London Open 07:00-10:00 UTC", group=gStrat)
+tradeNY      = input.bool(true, "NY / US session 12:30-16:00 UTC", group=gStrat)
+sweepLen     = input.int(10, "M1 micro swing lookback for sweeps", minval=2, group=gStrat)
+useEngulf    = input.bool(true, "Trigger: engulfing with volume", group=gStrat)
+volMult      = input.float(1.5, "Engulfing volume > x * SMA(20)", step=0.1, group=gStrat)
+usePin       = input.bool(true, "Trigger: liquidity rejection pin", group=gStrat)
+useInside    = input.bool(true, "Trigger: inside-bar breakout", group=gStrat)
+useSweep     = input.bool(true, "Trigger: sweep + close back inside", group=gStrat)
+touchBars    = input.int(3, "Zone touch counts for N M1 bars", minval=1, group=gStrat)
+cooldownBars = input.int(3, "M1 bars to wait after a trade closes", minval=0, group=gStrat)
+
+gTf = "Timeframes"
+tfMacro        = input.timeframe("60", "Macro regime timeframe", group=gTf)
+tfStruct       = input.timeframe("15", "Market structure timeframe", group=gTf)
+tfZone         = input.timeframe("5", "Liquidity / momentum timeframe", group=gTf)
+macroFast      = input.int(50, "H1 fast EMA", group=gTf)
+macroSlow      = input.int(200, "H1 slow EMA", group=gTf)
+shockAtrMult   = input.float(1.8, "Shock: H1 ATR > x * its 50-bar average", step=0.1, group=gTf)
+shockRangeMult = input.float(2.5, "Shock: one H1 range > x * ATR", step=0.1, group=gTf)
+shockHold      = input.int(2, "H1 bars a shock blocks counter-trend trades", minval=1, group=gTf)
+structFast     = input.int(21, "M15 fast EMA", group=gTf)
+structSlow     = input.int(55, "M15 slow EMA", group=gTf)
+swingLen       = input.int(3, "M15 swing pivot strength (bars each side)", minval=1, group=gTf)
+rsiLen         = input.int(14, "M5 RSI length", group=gTf)
+rsiBandLen     = input.int(50, "M5 RSI band lookback", group=gTf)
+rsiBandK       = input.float(1.5, "M5 RSI band width (std devs)", step=0.1, group=gTf)
+fvgMinAtr      = input.float(0.10, "M5 FVG minimum size (x ATR)", step=0.05, group=gTf)
+obDispAtr      = input.float(1.2, "M5 order block displacement body (x ATR)", step=0.1, group=gTf)
+zoneMaxAge     = input.int(48, "M5 zone lifetime (M5 bars)", minval=1, group=gTf)
+
+gRisk = "Risk Management"
+startEquity = input.float(10000, "Backtest start balance ($)", minval=1, group=gRisk)
+sizingIn    = input.string("Risk % of balance", "Position sizing", options=["Risk % of balance", "Fixed lots"], group=gRisk)
+riskPct     = input.float(1.0, "Risk per trade (% of balance)", step=0.25, group=gRisk)
+fixedLots   = input.float(0.10, "Fixed lots (when fixed sizing)", step=0.01, group=gRisk)
+slLookback  = input.int(8, "SL: structural swing lookback (M1 bars)", minval=1, group=gRisk)
+slBufferAtr = input.float(0.10, "SL: buffer beyond swing (x ATR)", step=0.05, group=gRisk)
+minSlAtr    = input.float(0.8, "SL: min distance, else use ATR stop (x ATR)", step=0.1, group=gRisk)
+atrSlMult   = input.float(1.5, "SL: ATR stop distance (x ATR 14)", step=0.1, group=gRisk)
+maxSlAtr    = input.float(3.0, "SL: skip trade if wider than (x ATR)", step=0.1, group=gRisk)
+tp1R        = input.float(1.5, "TP1 (R multiple)", step=0.1, group=gRisk)
+tp2R        = input.float(2.5, "TP2 (R multiple, 2.5 to 3)", step=0.1, group=gRisk)
+partialPct  = input.float(50.0, "Close % at TP1, rest to breakeven", step=5, group=gRisk)
+trailAtr    = input.float(1.0, "Runner trailing stop after TP1 (x ATR)", step=0.1, group=gRisk)
+
+gCost = "Execution Costs"
+spreadIn   = input.float(0.25, "Spread in price ($0.25 = 2.5 pips = 25 ticks)", step=0.01, group=gCost)
+commission = input.float(7.0, "Commission per 1.0 lot round turn ($)", step=0.5, group=gCost)
+slipTicks  = input.int(1, "Slippage on market fills (ticks)", minval=0, group=gCost)
+vpu        = input.float(100.0, "$ per 1.00 price move per 1.0 lot", tooltip="100 for a 100 oz gold lot.", group=gCost)
+minLot     = input.float(0.01, "Minimum lot", step=0.01, group=gCost)
+lotStep    = input.float(0.01, "Lot step", step=0.01, group=gCost)
+
+gKr = "Kronos"
+kronosText  = input.text_area("", "Kronos forecasts (paste lines from kronos_pine_line.py)", group=gKr)
+kGate       = input.string("Off", "Kronos filter on signals", options=["Off", "Agree inside forecast windows", "Agree, no forecast = no trade"], tooltip="Off: Kronos is only drawn. Agree inside windows: during the minutes a forecast covers, a BUY needs UP and a SELL needs DOWN; other bars are not filtered. No forecast = no trade: only bars a forecast covers can signal.", group=gKr)
+kMinAtr     = input.float(0.5, "UP / DOWN when the move exceeds x * ATR", step=0.1, group=gKr)
+kAlign      = input.bool(true, "Shift the path to this chart's feed", tooltip="Kronos reads LiteFinance prices. This moves the drawn path by the price gap between the two feeds at the forecast bar.", group=gKr)
+kDrawN      = input.int(3, "Forecast paths to draw", minval=0, maxval=15, group=gKr)
+kColor      = input.color(color.new(#f5c542, 0), "Path colour", group=gKr)
+
+gAlert = "Alerts"
+radarOn   = input.bool(true, "Radar: setup forming (bar still open)", group=gAlert)
+execOn    = input.bool(true, "Execute: signal on bar close", group=gAlert)
+kInAlerts = input.bool(true, "Add the Kronos call to execute alerts", group=gAlert)
+
+gDash = "Dashboard Aesthetics"
+showHud    = input.bool(true, "Show dashboard", group=gDash)
+hudPosIn   = input.string("Top right", "Dashboard position", options=["Top right", "Top left", "Bottom right", "Bottom left"], group=gDash)
+hudSize    = input.string("Small", "Dashboard text size", options=["Tiny", "Small", "Normal"], group=gDash)
+showSess   = input.bool(true, "Shade London / NY / Asian sessions", group=gDash)
+showZones  = input.bool(true, "Draw active M5 FVG / order blocks", group=gDash)
+showSwings = input.bool(false, "Draw M15 swing levels", group=gDash)
+showTrades = input.bool(true, "Draw trades (entry, SL, TP1, TP2, exits)", group=gDash)
+bullCol    = input.color(color.new(#26a69a, 0), "Buy colour", group=gDash)
+bearCol    = input.color(color.new(#ef5350, 0), "Sell colour", group=gDash)
+
+// ---------------------------------------------------------------- higher timeframes
+// Each function returns its values for the last CLOSED bar of its timeframe ([1]).
+f_macro() =>
+    eF = ta.ema(close, macroFast)
+    eS = ta.ema(close, macroSlow)
+    a = ta.atr(14)
+    avgA = ta.sma(a, 50)
+    reg = close > eF and eF > eS ? 1 : close < eF and eF < eS ? -1 : 0
+    hit = (bar_index >= 50 and a > shockAtrMult * avgA) or (bar_index >= 1 and (high - low) > shockRangeMult * nz(a[1]))
+    var int lastIdx = -1000000
+    var int lastDir = 0
+    if hit
+        lastIdx := bar_index
+        lastDir := close >= open ? 1 : -1
+    shock = bar_index - lastIdx < shockHold ? lastDir : 0
+    [reg[1], shock[1], eF[1], eS[1], a[1]]
+
+f_struct() =>
+    eF = ta.ema(close, structFast)
+    eS = ta.ema(close, structSlow)
+    var float swH = 0.0
+    var float swL = 0.0
+    var bool hBroken = true
+    var bool lBroken = true
+    var int st = 0
+    var int lastEv = 0
+    win = 2 * swingLen + 1
+    isPH = bar_index >= 2 * swingLen and high[swingLen] == ta.highest(high, win)
+    isPL = bar_index >= 2 * swingLen and low[swingLen] == ta.lowest(low, win)
+    if isPH
+        swH := high[swingLen]
+        hBroken := false
+    if isPL
+        swL := low[swingLen]
+        lBroken := false
+    if not hBroken and close > swH
+        lastEv := st == -1 ? 2 : 1
+        st := 1
+        hBroken := true
+    else if not lBroken and close < swL
+        lastEv := st == 1 ? -2 : -1
+        st := -1
+        lBroken := true
+    up = eF > eS
+    bias = st == 1 and up ? 1 : st == -1 and not up ? -1 : 0
+    [st[1], lastEv[1], bias[1], swH[1], swL[1], up[1]]
+
+f_zone() =>
+    r = ta.rsi(close, rsiLen)
+    mid = ta.sma(r, rsiBandLen)
+    sd = ta.stdev(r, rsiBandLen)
+    up = mid + rsiBandK * sd
+    lo = mid - rsiBandK * sd
+    longOk = r > r[1] and r < up
+    shortOk = r < r[1] and r > lo
+    a = ta.atr(14)
+    [time[1], open[1], high[1], low[1], close[1], open[2], high[2], low[2], close[2], open[3], high[3], low[3], close[3], open[4], high[4], low[4], close[4], a[1], r[1], up[1], lo[1], longOk[1], shortOk[1]]
+
+[hReg, hShock, hEF, hES, hAtr] = request.security(syminfo.tickerid, tfMacro, f_macro(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+[sSt, sEv, sBias, sSwH, sSwL, sUp] = request.security(syminfo.tickerid, tfStruct, f_struct(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+[zT, zO, zH, zL, zC, zO2, zH2, zL2, zC2, zO3, zH3, zL3, zC3, zO4, zH4, zL4, zC4, zAtr, zR, zUp, zLo, zLongOk, zShortOk] = request.security(syminfo.tickerid, tfZone, f_zone(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+
+// ---------------------------------------------------------------- M5 zones (built once per closed M5 bar)
+var array<int>   zDir   = array.new<int>()
+var array<float> zTop   = array.new<float>()
+var array<float> zBot   = array.new<float>()
+var array<int>   zBorn  = array.new<int>()     // M5 bar count at birth
+var array<int>   zBornT = array.new<int>()     // birth time (ms), for drawing
+var array<string> zKind = array.new<string>()
+var int m5Count = 0
+zoneMs = timeframe.in_seconds(tfZone) * 1000
+
+f_addZone(int d, string kind, float top, float bot, int bornT) =>
+    if top > bot
+        array.push(zDir, d)
+        array.push(zTop, top)
+        array.push(zBot, bot)
+        array.push(zBorn, m5Count)
+        array.push(zBornT, bornT)
+        array.push(zKind, kind)
+
+f_dropZone(int k) =>
+    array.remove(zDir, k)
+    array.remove(zTop, k)
+    array.remove(zBot, k)
+    array.remove(zBorn, k)
+    array.remove(zBornT, k)
+    array.remove(zKind, k)
+
+newM5 = not na(zT) and zT != nz(zT[1])
+if newM5
+    m5Count += 1
+    if array.size(zDir) > 0
+        for k = array.size(zDir) - 1 to 0
+            dk = array.get(zDir, k)
+            mitigated = (dk == 1 and zC < array.get(zBot, k)) or (dk == -1 and zC > array.get(zTop, k))
+            if mitigated or array.get(zBorn, k) < m5Count - zoneMaxAge
+                f_dropZone(k)
+    if m5Count >= 4 and not na(zAtr)
+        bornT = zT + zoneMs
+        if zL > zH3 and zL - zH3 >= fvgMinAtr * zAtr
+            f_addZone(1, "FVG", zL, zH3, bornT)
+        if zH < zL3 and zL3 - zH >= fvgMinAtr * zAtr
+            f_addZone(-1, "FVG", zL3, zH, bornT)
+        if math.abs(zC - zO) >= obDispAtr * zAtr
+            if zC > zO
+                if zC2 < zO2
+                    f_addZone(1, "OB", zH2, zL2, bornT)
+                else if zC3 < zO3
+                    f_addZone(1, "OB", zH3, zL3, bornT)
+                else if zC4 < zO4
+                    f_addZone(1, "OB", zH4, zL4, bornT)
+            else
+                if zC2 > zO2
+                    f_addZone(-1, "OB", zH2, zL2, bornT)
+                else if zC3 > zO3
+                    f_addZone(-1, "OB", zH3, zL3, bornT)
+                else if zC4 > zO4
+                    f_addZone(-1, "OB", zH4, zL4, bornT)
+    while array.size(zDir) > 30
+        f_dropZone(0)
+
+f_touch(int d, float lo, float hi) =>
+    bool hit = false
+    n = array.size(zDir)
+    if n > 0
+        for k = 0 to n - 1
+            if array.get(zDir, k) == d and lo <= array.get(zTop, k) and hi >= array.get(zBot, k)
+                hit := true
+                break
+    hit
+
+// ---------------------------------------------------------------- Kronos forecasts
+var array<int>    kT     = array.new<int>()     // open time (UTC s) of the last bar Kronos read
+var array<float>  kLast  = array.new<float>()
+var array<float>  kAtr   = array.new<float>()
+var array<float>  kTgt   = array.new<float>()
+var array<int>    kDir   = array.new<int>()
+var array<int>    kH     = array.new<int>()     // horizon in M1 bars
+var array<string> kModel = array.new<string>()
+var array<string> kPath  = array.new<string>()
+var array<float>  kChart = array.new<float>()   // this chart's close at kT, for feed alignment
+
+if barstate.isfirst and str.length(kronosText) > 0
+    txt = str.replace_all(str.replace_all(str.replace_all(kronosText, "\r", " "), "\n", " "), "\t", " ")
+    for rec in str.split(txt, " ")
+        f = str.split(rec, "|")
+        if array.size(f) >= 6 and array.get(f, 0) == "KRONOS"
+            t = str.tonumber(array.get(f, 1))
+            last = str.tonumber(array.get(f, 2))
+            a = str.tonumber(array.get(f, 3))
+            pts = str.split(array.get(f, 5), ",")
+            n = array.size(pts)
+            tgt = n > 0 ? str.tonumber(array.get(pts, n - 1)) : na
+            if not na(t) and not na(last) and not na(a) and not na(tgt)
+                move = tgt - last
+                array.push(kT, int(t))
+                array.push(kLast, last)
+                array.push(kAtr, a)
+                array.push(kTgt, tgt)
+                array.push(kDir, move > kMinAtr * a ? 1 : move < -kMinAtr * a ? -1 : 0)
+                array.push(kH, n)
+                array.push(kModel, array.get(f, 4))
+                array.push(kPath, array.get(f, 5))
+                array.push(kChart, na)
+
+// The forecast made after bar kT covers the bars that open at kT+1m ... kT+Nm.
+int kIdx = -1
+kN = array.size(kT)
+if kN > 0
+    for k = 0 to kN - 1
+        t0 = array.get(kT, k)
+        if time == t0 * 1000
+            array.set(kChart, k, close)
+        if time >= (t0 + 60) * 1000 and time < (t0 + 60 + array.get(kH, k) * 60) * 1000
+            if kIdx < 0 or t0 > array.get(kT, kIdx)
+                kIdx := k
+kCover = kIdx >= 0
+kDirBar = kCover ? array.get(kDir, kIdx) : 0
+kOkL = kGate == "Off" or (kCover and kDirBar == 1) or (kGate == "Agree inside forecast windows" and not kCover)
+kOkS = kGate == "Off" or (kCover and kDirBar == -1) or (kGate == "Agree inside forecast windows" and not kCover)
+
+// ---------------------------------------------------------------- M1 execution layer
+atr1 = ta.atr(14)
+volSma = ta.sma(volume, 20)
+minPrev = ta.lowest(low, sweepLen)[1]
+maxPrev = ta.highest(high, sweepLen)[1]
+swingLo = ta.lowest(low, slLookback)
+swingHi = ta.highest(high, slLookback)
+sweepL = low < minPrev and close > minPrev
+sweepS = high > maxPrev and close < maxPrev
+
+touchL = f_touch(1, low, high)
+touchS = f_touch(-1, low, high)
+var int lastTouchL = -1000000
+var int lastTouchS = -1000000
+if touchL
+    lastTouchL := bar_index
+if touchS
+    lastTouchS := bar_index
+
+body = math.abs(close - open)
+rng = high - low
+pBody = math.abs(close[1] - open[1])
+volOk = volume > volMult * nz(volSma[1])
+engL = useEngulf and close > open and close[1] < open[1] and close >= open[1] and open <= close[1] and body > pBody and volOk
+engS = useEngulf and close < open and close[1] > open[1] and close <= open[1] and open >= close[1] and body > pBody and volOk
+lw = math.min(open, close) - low
+uw = high - math.max(open, close)
+pinL = usePin and rng > 0 and lw >= 2 * body and lw >= 0.6 * rng and (sweepL or touchL)
+pinS = usePin and rng > 0 and uw >= 2 * body and uw >= 0.6 * rng and (sweepS or touchS)
+insidePrev = high[1] <= high[2] and low[1] >= low[2]
+ibL = useInside and insidePrev and close > high[2] and close > open
+ibS = useInside and insidePrev and close < low[2] and close < open
+swpL = useSweep and sweepL and close > open
+swpS = useSweep and sweepS and close < open
+
+// sessions, in UTC from the bar's open time
+utcMin = hour(time, "UTC") * 60 + minute(time, "UTC")
+sessId = utcMin >= 420 and utcMin < 600 ? 1 : utcMin >= 750 and utcMin < 960 ? 2 : utcMin < 420 ? 3 : 0
+sessOk = not sessFilter or (sessId == 1 and tradeLondon) or (sessId == 2 and tradeNY)
+
+var float asiaHi = na
+var float asiaLo = na
+if sessId == 3 and nz(sessId[1], -1) != 3
+    asiaHi := high
+    asiaLo := low
+else if sessId == 3
+    asiaHi := math.max(asiaHi, high)
+    asiaLo := math.min(asiaLo, low)
+
+ready = bar_index >= 30 and not na(hReg) and not na(sBias) and not na(zR) and m5Count >= 4 and not na(atr1)
+htfL = ready and hReg == 1 and nz(hShock) != -1 and sBias == 1 and zLongOk
+htfS = ready and hReg == -1 and nz(hShock) != 1 and sBias == -1 and zShortOk
+
+whyL = engL ? 1 : pinL ? 2 : ibL ? 3 : swpL ? 4 : 0
+whyS = engS ? 1 : pinS ? 2 : ibS ? 3 : swpS ? 4 : 0
+confL = modeIn == "Balanced" or (bar_index - lastTouchL) < touchBars or sweepL
+confS = modeIn == "Balanced" or (bar_index - lastTouchS) < touchBars or sweepS
+sigL = sessOk and htfL and whyL > 0 and confL and kOkL
+sigS = sessOk and htfS and whyS > 0 and confS and kOkS
+
+f_why(int w) =>
+    w == 1 ? "Engulfing" : w == 2 ? "Rejection pin" : w == 3 ? "Inside-bar break" : w == 4 ? "Liquidity sweep" : ""
+
+// ---------------------------------------------------------------- trade lifecycle + backtest
+var bool  inTrade  = false
+var int   tDir     = 0
+var int   tBar     = 0
+var float tEntry   = na
+var float tSL      = na
+var float tTP1     = na
+var float tTP2     = na
+var float tR       = na
+var float tLots    = na
+var float tRemain  = na
+var float tPnl     = 0.0
+var bool  tPartial = false
+var int   lastExit = -1000000
+var float equity   = startEquity
+var float peak     = startEquity
+var float maxDD    = 0.0
+var float grossW   = 0.0
+var float grossL   = 0.0
+var float sumR     = 0.0
+var int   wins     = 0
+var int   losses   = 0
+
+spr = spreadIn
+slip = slipTicks * syminfo.mintick
+bool newLong = false
+bool newShort = false
+bool closedNow = false
+float exitPx = na
+float exitR = na
+
+if barstate.isconfirmed and inTrade and bar_index > tBar
+    d = tDir
+    // likely intrabar path: bullish bars O-L-H-C, bearish O-H-L-C
+    p1 = close >= open ? low : high
+    p2 = close >= open ? high : low
+    for k = 0 to 3
+        raw = k == 0 ? open : k == 1 ? p1 : k == 2 ? p2 : close
+        px = d == 1 ? raw : raw + spr       // longs exit on the bid, shorts on the ask
+        if (d == 1 and px <= tSL) or (d == -1 and px >= tSL)
+            exitPx := (k == 0 ? px : tSL) - d * slip   // a gap through the stop fills at the open
+            closedNow := true
+            break
+        if not tPartial and ((d == 1 and px >= tTP1) or (d == -1 and px <= tTP1))
+            leg = math.floor(tLots * partialPct / 100.0 / lotStep + 1e-9) * lotStep
+            if leg < minLot or tLots - leg < minLot - 1e-9
+                leg := 0.0                  // the minimum lot cannot be split: TP1 only moves the stop
+            tPnl += (tTP1 - tEntry) * d * leg * vpu
+            tRemain -= leg
+            tPartial := true
+            tSL := d == 1 ? math.max(tSL, tEntry) : math.min(tSL, tEntry)
+        if tPartial and ((d == 1 and px >= tTP2) or (d == -1 and px <= tTP2))
+            exitPx := tTP2
+            closedNow := true
+            break
+    if not closedNow and tPartial
+        if sBias == -d                      // M15 structure flipped: structural invalidation
+            exitPx := (d == 1 ? close : close + spr) - d * slip
+            closedNow := true
+        else
+            tSL := d == 1 ? math.max(tSL, close - trailAtr * atr1) : math.min(tSL, close + spr + trailAtr * atr1)
+    if closedNow
+        tPnl += (exitPx - tEntry) * d * tRemain * vpu
+        riskMoney = tLots * tR * vpu
+        exitR := riskMoney > 0 ? tPnl / riskMoney : 0.0
+        equity += tPnl
+        peak := math.max(peak, equity)
+        if peak > 0
+            maxDD := math.max(maxDD, (peak - equity) / peak * 100.0)
+        sumR += exitR
+        if tPnl > 0
+            wins += 1
+            grossW += tPnl
+        else
+            losses += 1
+            grossL -= tPnl
+        inTrade := false
+        lastExit := bar_index
+        if showTrades
+            label.new(bar_index, exitPx, (exitR >= 0 ? "+" : "") + str.tostring(exitR, "#.##") + "R", style=label.style_label_left, color=color.new(color.gray, 85), textcolor=exitR >= 0 ? bullCol : bearCol, size=size.tiny, tooltip="Closed " + str.tostring(exitPx, format.mintick) + "  P/L $" + str.tostring(tPnl, "#,##0.00"))
+
+float sigEntry = na
+float sigSL = na
+if barstate.isconfirmed and not inTrade and (bar_index - lastExit) > cooldownBars and sigL != sigS
+    d = sigL ? 1 : -1
+    a = atr1
+    float entry = na
+    float sl = na
+    if d == 1
+        entry := close + spr + slip                     // buy at the ask
+        sl := swingLo - slBufferAtr * a
+        if entry - sl < minSlAtr * a
+            sl := entry - atrSlMult * a
+    else
+        entry := close - slip                           // sell at the bid
+        sl := swingHi + slBufferAtr * a + spr           // the stop triggers on the ask
+        if sl - entry < minSlAtr * a
+            sl := entry + atrSlMult * a
+    R = math.abs(entry - sl)
+    if R > 0 and R <= maxSlAtr * a
+        float lots = fixedLots
+        if sizingIn == "Risk % of balance"
+            perLot = R * vpu + commission
+            lots := math.floor(equity * riskPct / 100.0 / perLot / lotStep + 1e-9) * lotStep
+        lots := math.max(lots, minLot)
+        inTrade := true
+        tDir := d
+        tBar := bar_index
+        tEntry := entry
+        tSL := sl
+        tTP1 := entry + d * tp1R * R
+        tTP2 := entry + d * tp2R * R
+        tR := R
+        tLots := lots
+        tRemain := lots
+        tPartial := false
+        tPnl := -commission * lots
+        newLong := d == 1
+        newShort := d == -1
+        sigEntry := entry
+        sigSL := sl
+
+// ---------------------------------------------------------------- plots
+plotEntry = showTrades and inTrade ? tEntry : na
+plot(plotEntry, "Entry", color=color.new(color.gray, 0), style=plot.style_linebr, linewidth=1)
+plot(showTrades and inTrade ? tSL : na, "SL", color=bearCol, style=plot.style_linebr, linewidth=2)
+plot(showTrades and inTrade ? tTP1 : na, "TP1", color=color.new(bullCol, 30), style=plot.style_linebr, linewidth=1)
+plot(showTrades and inTrade ? tTP2 : na, "TP2", color=bullCol, style=plot.style_linebr, linewidth=2)
+plot(showSwings ? sSwH : na, "M15 swing high", color=color.new(color.orange, 40), style=plot.style_stepline)
+plot(showSwings ? sSwL : na, "M15 swing low", color=color.new(color.aqua, 40), style=plot.style_stepline)
+
+kTag = kCover ? (kDirBar == 1 ? "Kronos UP" : kDirBar == -1 ? "Kronos DOWN" : "Kronos FLAT") : "no Kronos forecast"
+if newLong or newShort
+    w = newLong ? whyL : whyS
+    if showTrades
+        label.new(bar_index, newLong ? low : high, newLong ? "BUY" : "SELL", style=newLong ? label.style_label_up : label.style_label_down, color=newLong ? bullCol : bearCol, textcolor=color.white, size=size.small, tooltip=f_why(w) + "\nEntry " + str.tostring(tEntry, format.mintick) + "\nSL " + str.tostring(tSL, format.mintick) + "\nTP1 " + str.tostring(tTP1, format.mintick) + "\nTP2 " + str.tostring(tTP2, format.mintick) + "\nLots " + str.tostring(tLots, "#.##") + "\n" + kTag)
+
+bgcolor(showSess and sessId == 1 ? color.new(color.blue, 93) : showSess and sessId == 2 ? color.new(color.purple, 93) : showSess and sessId == 3 ? color.new(color.gray, 96) : na, title="Sessions")
+
+// ---------------------------------------------------------------- alerts
+radarL = radarOn and sessOk and htfL and kOkL and not inTrade and (touchL or low <= minPrev)
+radarS = radarOn and sessOk and htfS and kOkS and not inTrade and (touchS or high >= maxPrev)
+radarMsg = "XAUUSD SCALP RADAR: Setup forming on M1. HTF Confluence verified. Prepare for entry."
+if (radarL or radarS) and not barstate.isconfirmed
+    alert(radarMsg + (radarL ? " | Bias: LONG" : " | Bias: SHORT"), alert.freq_once_per_bar)
+
+if execOn and (newLong or newShort)
+    msg = "XAUUSD SCALP EXECUTE: " + (newLong ? "BUY" : "SELL") + " @ " + str.tostring(close, format.mintick) + " | SL: " + str.tostring(tSL, format.mintick) + " | TP1: " + str.tostring(tTP1, format.mintick) + " | TP2: " + str.tostring(tTP2, format.mintick)
+    if kInAlerts
+        msg += " | " + kTag
+    alert(msg, alert.freq_once_per_bar_close)
+
+alertcondition(radarL or radarS, "XAU Radar", "XAUUSD SCALP RADAR: Setup forming on M1. HTF Confluence verified. Prepare for entry.")
+alertcondition(newLong, "XAU Execute BUY", 'XAUUSD SCALP EXECUTE: BUY @ {{close}} | SL: {{plot("SL")}} | TP1: {{plot("TP1")}} | TP2: {{plot("TP2")}}')
+alertcondition(newShort, "XAU Execute SELL", 'XAUUSD SCALP EXECUTE: SELL @ {{close}} | SL: {{plot("SL")}} | TP1: {{plot("TP1")}} | TP2: {{plot("TP2")}}')
+
+// ---------------------------------------------------------------- drawings on the last bar
+var array<box> zBoxes = array.new<box>()
+var array<polyline> kPolys = array.new<polyline>()
+var array<label> kLabels = array.new<label>()
+if barstate.islast
+    while array.size(zBoxes) > 0
+        box.delete(array.pop(zBoxes))
+    if showZones and array.size(zDir) > 0
+        for k = 0 to array.size(zDir) - 1
+            up = array.get(zDir, k) == 1
+            c = up ? bullCol : bearCol
+            array.push(zBoxes, box.new(array.get(zBornT, k), array.get(zTop, k), time, array.get(zBot, k), xloc=xloc.bar_time, border_color=color.new(c, 60), bgcolor=color.new(c, 88), text="M5 " + array.get(zKind, k), text_size=size.tiny, text_color=color.new(c, 30), text_halign=text.align_left))
+    while array.size(kPolys) > 0
+        polyline.delete(array.pop(kPolys))
+    while array.size(kLabels) > 0
+        label.delete(array.pop(kLabels))
+    if kN > 0 and kDrawN > 0
+        for k = math.max(0, kN - kDrawN) to kN - 1
+            t0 = array.get(kT, k)
+            ch = array.get(kChart, k)
+            off = kAlign and not na(ch) ? ch - array.get(kLast, k) : 0.0
+            pts = array.new<chart.point>()
+            pts.push(chart.point.from_time(t0 * 1000, array.get(kLast, k) + off))
+            vals = str.split(array.get(kPath, k), ",")
+            for i = 0 to array.size(vals) - 1
+                v = str.tonumber(array.get(vals, i))
+                if not na(v)
+                    pts.push(chart.point.from_time((t0 + 60 * (i + 1)) * 1000, v + off))
+            newest = k == kN - 1
+            array.push(kPolys, polyline.new(pts, xloc=xloc.bar_time, line_color=newest ? kColor : color.new(kColor, 60), line_style=line.style_dashed, line_width=newest ? 2 : 1))
+            if newest
+                dk = array.get(kDir, k)
+                endT = (t0 + 60 * array.get(kH, k)) * 1000
+                array.push(kLabels, label.new(endT, array.get(kTgt, k) + off, "Kronos " + (dk == 1 ? "UP" : dk == -1 ? "DOWN" : "FLAT") + " " + str.tostring(array.get(kTgt, k) + off, format.mintick), xloc=xloc.bar_time, style=label.style_label_left, color=color.new(kColor, 20), textcolor=color.black, size=size.small))
+
+// ---------------------------------------------------------------- dashboard
+hudPos = hudPosIn == "Top left" ? position.top_left : hudPosIn == "Bottom right" ? position.bottom_right : hudPosIn == "Bottom left" ? position.bottom_left : position.top_right
+txtSize = hudSize == "Tiny" ? size.tiny : hudSize == "Normal" ? size.normal : size.small
+var table hud = table.new(hudPos, 2, 22, bgcolor=color.new(#131722, 10), border_color=color.new(color.gray, 70), border_width=1, frame_color=color.new(color.gray, 50), frame_width=1)
+
+f_row(int r, string k, string v, color vc) =>
+    table.cell(hud, 0, r, k, text_color=color.new(color.white, 30), text_size=txtSize, text_halign=text.align_left)
+    table.cell(hud, 1, r, v, text_color=vc, text_size=txtSize, text_halign=text.align_left)
+
+f_head(int r, string t) =>
+    table.cell(hud, 0, r, t, text_color=color.new(#f5c542, 0), text_size=txtSize, text_halign=text.align_left, bgcolor=color.new(#2a2e39, 0))
+    table.cell(hud, 1, r, "", bgcolor=color.new(#2a2e39, 0))
+
+if showHud and barstate.islast
+    white = color.new(color.white, 0)
+    good = bullCol
+    bad = bearCol
+    warn = color.orange
+    // 1. feed audit
+    f_head(0, "XAU M1 SCALPER + KRONOS")
+    pre = syminfo.prefix
+    rawFeed = pre == "OANDA" or pre == "PEPPERSTONE" or pre == "ICMARKETS" or pre == "FXOPEN" or pre == "FOREXCOM" or pre == "SAXO" or pre == "TVC" or pre == "FX" or pre == "CAPITALCOM"
+    f_row(1, "Feed", pre + ":" + syminfo.ticker + (rawFeed ? "  raw-spread OK" : "  check feed"), rawFeed ? good : warn)
+    f_row(2, "Broker match", "Use your execution broker's own XAUUSD ticker", color.new(color.white, 40))
+    f_row(3, "Chart", timeframe.period == "1" ? "M1 OK" : "Switch to 1 minute", timeframe.period == "1" ? good : bad)
+    sessName = sessId == 1 ? "London Open (active)" : sessId == 2 ? "NY / US (active)" : sessId == 3 ? "Asian (low liquidity)" : "Between sessions"
+    f_row(4, "Session", sessName, sessId == 1 or sessId == 2 ? good : warn)
+    aRange = asiaHi - asiaLo
+    aFlag = not na(aRange) and not na(hAtr) and aRange < 2 * hAtr
+    f_row(5, "Asian range", na(aRange) ? "-" : "$" + str.tostring(aRange, "#.##") + (aFlag ? "  contracted" : ""), aFlag ? warn : white)
+    // 2. MTF confluence
+    f_head(6, "CONFLUENCE")
+    f_row(7, "H1 regime", (hReg == 1 ? "Bull" : hReg == -1 ? "Bear" : "Neutral") + (nz(hShock) != 0 ? "  SHOCK " + (hShock == 1 ? "up" : "down") : ""), hReg == 1 ? good : hReg == -1 ? bad : white)
+    evTxt = sEv == 2 ? "CHoCH up" : sEv == 1 ? "BOS up" : sEv == -1 ? "BOS down" : sEv == -2 ? "CHoCH down" : "-"
+    f_row(8, "M15 structure", evTxt + (sUp ? "  EMA up" : "  EMA down"), sBias == 1 ? good : sBias == -1 ? bad : white)
+    f_row(9, "M5 RSI", str.tostring(zR, "#.0") + "  band " + str.tostring(zLo, "#") + "-" + str.tostring(zUp, "#") + "  zones " + str.tostring(array.size(zDir)), zLongOk ? good : zShortOk ? bad : white)
+    f_row(10, "Setup", htfL ? "LONG aligned" : htfS ? "SHORT aligned" : "No alignment", htfL ? good : htfS ? bad : white)
+    // 3. Kronos
+    f_head(11, "KRONOS")
+    if kN > 0
+        li = kN - 1
+        for k = 0 to kN - 1
+            if array.get(kT, k) > array.get(kT, li)
+                li := k
+        ageMin = (timenow - (array.get(kT, li) + 60) * 1000) / 60000.0
+        fresh = ageMin < array.get(kH, li)
+        dk = array.get(kDir, li)
+        f_row(12, "Call", (dk == 1 ? "UP" : dk == -1 ? "DOWN" : "FLAT") + "  target " + str.tostring(array.get(kTgt, li), format.mintick) + "  (" + array.get(kModel, li) + ")", dk == 1 ? good : dk == -1 ? bad : white)
+        f_row(13, "Age", str.tostring(ageMin, "#") + " min" + (fresh ? "  fresh" : "  STALE, paste a new line"), fresh ? good : warn)
+    else
+        f_row(12, "Call", "No forecast pasted", warn)
+        f_row(13, "Age", "-", white)
+    f_row(14, "Filter", kGate, white)
+    // 4. backtest HUD
+    f_head(15, "BACKTEST (this chart)")
+    n = wins + losses
+    pf = grossL > 0 ? grossW / grossL : na
+    f_row(16, "Trades / win rate", str.tostring(n) + "  /  " + (n > 0 ? str.tostring(100.0 * wins / n, "#.0") + "%" : "-"), white)
+    f_row(17, "Profit factor", na(pf) ? "-" : str.tostring(pf, "#.00"), na(pf) ? white : pf >= 1 ? good : bad)
+    f_row(18, "Max drawdown", str.tostring(maxDD, "#.0") + "%", maxDD > 10 ? bad : white)
+    avgW = wins > 0 ? grossW / wins : 0.0
+    avgL = losses > 0 ? grossL / losses : 0.0
+    f_row(19, "Avg win / avg loss", "$" + str.tostring(avgW, "#,##0") + " / $" + str.tostring(avgL, "#,##0") + (avgL > 0 ? "  (" + str.tostring(avgW / avgL, "#.00") + ")" : ""), white)
+    net = equity - startEquity
+    f_row(20, "Net P/L", "$" + str.tostring(net, "#,##0.00") + "  (" + str.tostring(sumR, "#.0") + "R)", net >= 0 ? good : bad)
+    f_row(21, "Open trade", inTrade ? (tDir == 1 ? "BUY " : "SELL ") + str.tostring(tLots, "#.##") + " lots @ " + str.tostring(tEntry, format.mintick) : "none", white)
