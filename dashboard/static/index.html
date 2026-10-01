@@ -75,6 +75,7 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .ovl button i { width: 14px; height: 0; border-top: 2px dashed var(--gold); }
 .ovl button i.z { height: 10px; border: 1px solid rgba(47,123,245,.8); background: rgba(47,123,245,.25); border-radius: 2px; }
 .ovl button i.b { width: 0; height: 0; border: 5px solid transparent; border-bottom: 9px solid var(--up); border-top: 0; }
+.ovl button i.s { width: 12px; height: 10px; border: 0; border-top: 1px solid var(--warn); border-bottom: 1px dashed var(--fg); background: linear-gradient(rgba(229,72,77,.3) 50%, rgba(47,182,124,.3) 50%); }
 .ovl button:not(.on) i { opacity: .35; }
 .tfs { display: flex; gap: 2px; background: rgba(21,23,26,.92); padding: 3px; border-radius: 9px; border: 1px solid var(--line); }
 .tfs button { padding: 4px 11px; border-radius: 6px; color: var(--dim); font: 600 13px var(--label); }
@@ -231,7 +232,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
     <div class="chartwrap">
       <div class="chartbar">
         <div class="tfs" id="tfs"><button data-tf="M1">1m</button><button data-tf="M5">5m</button><button data-tf="M15">15m</button><button data-tf="H1">1h</button><button data-tf="H4">4h</button></div>
-        <div class="ovl" id="ovl"><button data-o="kronos" title="Kronos forecast path and target"><i></i>Kronos</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button><button data-o="boom" title="Boom / Crash calls: arrows, entry, SL and TP"><i class="b"></i>Boom/Crash</button></div>
+        <div class="ovl" id="ovl"><button data-o="kronos" title="Kronos forecast path and target"><i></i>Kronos</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button><button data-o="boom" title="Boom / Crash calls: arrows, entry, SL and TP"><i class="b"></i>Boom/Crash</button><button data-o="smc" title="Smart Money / ICT: structure (BOS, CHoCH), liquidity, FVG, order blocks, premium / discount, OTE, killzones, key levels"><i class="s"></i>SMC/ICT</button></div>
       </div>
       <div id="chart"></div>
       <canvas id="zones"></canvas>
