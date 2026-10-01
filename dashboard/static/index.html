@@ -33,7 +33,8 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; direction: ltr !important; unicode-bidi: isolate; }
-body * { direction: ltr; }
+body * { direction: ltr; text-align: left; }   /* RTL browser add-ons and page translation flip alignment too */
+button, button *, .lotbox input { text-align: center; }
 body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--ui); display: flex; flex-direction: column; overflow: hidden; }
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
