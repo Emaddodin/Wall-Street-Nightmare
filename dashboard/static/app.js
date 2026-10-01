@@ -12,7 +12,7 @@
 
   let S = null;            // latest /api/state
   let Q = null;            // latest streamed quote
-  let tf = store.get("tf", "M1");
+  let tf = store.get("tf5", "M5");          // M5 is the main entry timeframe
   let lastQuoteAt = 0;
   let shownNote = "";
   const fmt = (x) => (x == null || !Number.isFinite(+x)) ? "-" : (+x).toFixed(2);
@@ -48,6 +48,7 @@
     const rows = await get(`/api/candles?tf=${want}&count=1200`).catch(() => null);
     if (!Array.isArray(rows) || want !== tf) return;
     series.setData(rows);
+    if (rows.length > 160) chart.timeScale().setVisibleLogicalRange({ from: rows.length - 150, to: rows.length + 10 });   // open on recent bars
     loadedTf = want;
     first = rows.length ? rows[0].time : 0;
     last = rows.length ? { ...rows[rows.length - 1] } : null;
@@ -88,15 +89,19 @@
     if (key !== markerKey) { series.setMarkers(m); markerKey = key; }
   }
 
-  // Kronos forecast path (state.kronos.path: M1 bars on the broker clock), drawn on the 1m chart only
+  // Kronos forecast path (state.kronos.path: M1 bars on the broker clock), shown on 1m and 5m; on 5m each point is the
+  // forecast close of that 5m bar
   let fcKey = "";
   function drawForecast() {
     const k = S && S.kronos;
-    const ok = !!(ovl.kronos && tf === "M1" && loadedTf === tf && k && Array.isArray(k.path) && k.path.length && last);
+    const ok = !!(ovl.kronos && (tf === "M1" || tf === "M5") && loadedTf === tf && k && Array.isArray(k.path) && k.path.length && last);
     const key = ok ? tf + k.t : "";
     if (key === fcKey) return;
     fcKey = key;
-    forecast.setData(ok ? [{ time: k.t, value: k.last }, ...k.path.filter((p) => p.time > k.t)] : []);
+    if (!ok) { forecast.setData([]); return; }
+    const sec = TFSEC[tf], start = k.t - (k.t % sec), byBar = new Map([[start, k.last]]);
+    for (const p of k.path) { const b = p.time - (p.time % sec); if (b >= start) byBar.set(b, p.value); }
+    forecast.setData([...byBar].sort((a, b) => a[0] - b[0]).map(([time, value]) => ({ time, value })));
   }
 
   let lines = [], linesKey = "";
@@ -172,7 +177,7 @@
   document.querySelectorAll("#tfs button").forEach((b) => {
     b.classList.toggle("on", b.dataset.tf === tf);
     b.addEventListener("click", () => {
-      tf = b.dataset.tf; store.set("tf", tf);
+      tf = b.dataset.tf; store.set("tf5", tf);
       document.querySelectorAll("#tfs button").forEach((x) => x.classList.toggle("on", x === b));
       loadCandles();
     });
@@ -321,15 +326,15 @@
     el.innerHTML = `<span class="name">Kronos · next ${esc(k.minutes)} min</span><span></span>
       <span class="call ${d > 0 ? "up" : d < 0 ? "down" : "flat"}">${d > 0 ? "▲ UP" : d < 0 ? "▼ DOWN" : "— FLAT"} <span class="num" style="font-size:14px">${fmt(k.target)} (${k.move >= 0 ? "+" : ""}${fmt(k.move)})</span></span><span></span>
       ${strength != null ? `<span class="meter"><i style="width:${strength}%;background:${d > 0 ? C.up : d < 0 ? C.down : C.dim}"></i></span>` : ""}
-      <span class="meta">${esc(k.model || "Kronos")} forecast, gold dashed line on the 1m chart. ${k.backtest && k.backtest.status === "done" ? "" : " Not proven on gold yet."}${k.error ? " " + esc(k.error) : ""}</span>${btHtml(k.backtest)}`;
+      <span class="meta">${esc(k.model || "Kronos")} forecast, gold dashed line on the 1m and 5m chart. ${k.backtest && k.backtest.status === "done" ? "" : " Not proven on gold yet."}${k.error ? " " + esc(k.error) : ""}</span>${btHtml(k.backtest)}`;
   }
   function renderScalper() {
     const s = S.active;
     $("scalper").innerHTML = s
-      ? `<span class="name">M1 scalper</span><button class="use" data-src="scalper">Use SL/TP</button>
+      ? `<span class="name">Scalper</span><button class="use" data-src="scalper">Use SL/TP</button>
          <span class="call ${s.dir === 1 ? "up" : "down"}">${s.dir === 1 ? "▲ BUY" : "▼ SELL"} <span class="num" style="font-size:14px">${fmt(s.entry)}</span></span>
          <span class="meta">SL ${fmt(s.sl)} · TP ${fmt(s.tp2)} · lost money in the backtest, use your own judgement</span>`
-      : `<span class="name">M1 scalper</span><span></span><span class="call flat">No signal</span><span></span>
+      : `<span class="name">Scalper</span><span></span><span class="call flat">No signal</span><span></span>
          <span class="meta">Lost money in the backtest. Shown for reference only.</span>`;
   }
 
