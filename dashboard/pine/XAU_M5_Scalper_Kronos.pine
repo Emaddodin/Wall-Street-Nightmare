@@ -1,84 +1,89 @@
 //@version=5
 // =====================================================================
-// XAU M1 SCALPER + KRONOS  (TradingView port of Gold Desk / XAU_M1_Scalper.mq5)
+// XAU M5 SCALPER + KRONOS  (TradingView port of Gold Desk / XAU_M1_Scalper.mq5)
 //
-// H1  : EMA 50/200 regime + ATR velocity-shock guard
-// M15 : BOS / CHoCH market structure + EMA 21/55 channel
-// M5  : fair value gaps, order blocks, RSI(14) with standard-deviation bands
-// M1  : liquidity sweeps, engulfing (+volume), rejection pins, inside-bar breaks
-// Kronos : the 15-minute forecast from the Kronos model, pasted in (see below)
+// M5 is the entry timeframe (run it on a 5-minute chart). Every layer of the M1
+// original moved up one step:
+// H4  : EMA 50/200 regime + ATR velocity-shock guard        (was H1)
+// H1  : BOS / CHoCH market structure + EMA 21/55 channel    (was M15)
+// M15 : fair value gaps, order blocks, RSI(14) with std-dev bands (was M5)
+// M5  : liquidity sweeps, engulfing (+volume), rejection pins, inside-bar breaks (was M1)
+// Kronos : the forecast from the Kronos model, pasted in (see below)
+// The higher timeframes are inputs, and nothing assumes a chart timeframe, so
+// the M1 original is the same script with 60 / 15 / 5 on a 1-minute chart.
 //
 // Same rules as dashboard/engine.py, including the trade lifecycle the on-chart
 // backtest simulates: entry at the signal bar's close plus spread and slippage,
 // 50% off at TP1 (1.5R), runner to breakeven, trailed by 1 ATR to TP2 (2.5R) or
-// until M15 structure flips.
+// until the structure timeframe flips.
 //
 // NO REPAINT
-//   * Signals, trades and the execution alert are evaluated once per M1 bar,
+//   * Signals, trades and the execution alert are evaluated once per entry bar,
 //     on its close (barstate.isconfirmed). Only the radar alert runs intrabar.
-//   * Every higher-timeframe value is read as expr[1]: the last CLOSED H1 / M15 /
-//     M5 bar. It is requested with lookahead_on on purpose: with [1], that is
+//   * Every higher-timeframe value is read as expr[1]: the last CLOSED H4 / H1 /
+//     M15 bar. It is requested with lookahead_on on purpose: with [1], that is
 //     TradingView's documented non-repainting form, and history and live see the
 //     same closed bar. With lookahead_off, [1] on history lags one extra HTF bar
-//     on most M1 bars, so the backtest would not match what fires live.
+//     on most entry bars, so the backtest would not match what fires live.
 //   * Three request.security calls in total (one tuple per timeframe).
 //
 // KRONOS
 //   Pine cannot run a neural network, so the forecast is pasted into the
 //   "Kronos forecasts" box as one or more lines (space or newline separated):
-//       KRONOS|<last bar open, UTC seconds>|<last close>|<ATR14>|<model>|<p1,p2,...,pN>
+//       KRONOS|<last bar open, UTC seconds>|<last close>|<ATR14>|<model>|<p1,p2,...,pN>|<bar seconds>
+//   The last field is the bar size Kronos read (300 = M5 bars, 60 or absent = M1).
 //   dashboard/pine/kronos_pine_line.py prints exactly that line on the VPS or Mac.
-//   The forecast only applies to the N minutes after the bar it was made on, so
+//   The forecast only applies to the N bars after the bar it was made on, so
 //   using it never looks ahead. Paste a batch (--history) to see Kronos on past
 //   bars and in the backtest. request.seed was not used: TradingView only
-//   ingests seed data once a day, useless for a 15-minute M1 forecast.
+//   ingests seed data once a day, useless for a forecast of the next few bars.
 //
-// HONESTY NOTE: a Dukascopy M1 backtest (Jan 2025 - Sep 2026) of these exact
-// scalper rules found no edge (about 30% winners, profit factor 0.53-0.79).
-// Treat signals as a study, not as trades.
+// HONESTY NOTE: a Dukascopy backtest (Jan 2025 - Sep 2026) of the M1 version of
+// these rules found no edge (about 30% winners, profit factor 0.53-0.79). This M5
+// version has not been backtested yet. Treat signals as a study, not as trades.
 // =====================================================================
-indicator("XAU M1 Scalper + Kronos", shorttitle="XAU Scalper+Kronos", overlay=true, max_lines_count=200, max_labels_count=300, max_boxes_count=60, max_polylines_count=20, max_bars_back=500)
+indicator("XAU M5 Scalper + Kronos", shorttitle="XAU M5 Scalper+Kronos", overlay=true, max_lines_count=200, max_labels_count=300, max_boxes_count=60, max_polylines_count=20, max_bars_back=500)
 
 // ---------------------------------------------------------------- inputs
 gStrat = "Strategy Settings"
-modeIn       = input.string("Strict", "Signal mode", options=["Strict", "Balanced"], tooltip="Strict: the trigger must come within N bars of an M5 zone touch, or be a sweep. Balanced: the pattern alone is enough.", group=gStrat)
+modeIn       = input.string("Strict", "Signal mode", options=["Strict", "Balanced"], tooltip="Strict: the trigger must come within N bars of a zone touch, or be a sweep. Balanced: the pattern alone is enough.", group=gStrat)
 sessFilter   = input.bool(true, "Only signal inside the sessions below", group=gStrat)
 tradeLondon  = input.bool(true, "London Open 07:00-10:00 UTC", group=gStrat)
 tradeNY      = input.bool(true, "NY / US session 12:30-16:00 UTC", group=gStrat)
-sweepLen     = input.int(10, "M1 micro swing lookback for sweeps", minval=2, group=gStrat)
+sweepLen     = input.int(10, "Entry-bar micro swing lookback for sweeps", minval=2, group=gStrat)
 useEngulf    = input.bool(true, "Trigger: engulfing with volume", group=gStrat)
 volMult      = input.float(1.5, "Engulfing volume > x * SMA(20)", step=0.1, group=gStrat)
 usePin       = input.bool(true, "Trigger: liquidity rejection pin", group=gStrat)
 useInside    = input.bool(true, "Trigger: inside-bar breakout", group=gStrat)
 useSweep     = input.bool(true, "Trigger: sweep + close back inside", group=gStrat)
-touchBars    = input.int(3, "Zone touch counts for N M1 bars", minval=1, group=gStrat)
-cooldownBars = input.int(3, "M1 bars to wait after a trade closes", minval=0, group=gStrat)
+touchBars    = input.int(3, "Zone touch counts for N entry bars", minval=1, group=gStrat)
+cooldownBars = input.int(3, "Entry bars to wait after a trade closes", minval=0, group=gStrat)
 
 gTf = "Timeframes"
-tfMacro        = input.timeframe("60", "Macro regime timeframe", group=gTf)
-tfStruct       = input.timeframe("15", "Market structure timeframe", group=gTf)
-tfZone         = input.timeframe("5", "Liquidity / momentum timeframe", group=gTf)
-macroFast      = input.int(50, "H1 fast EMA", group=gTf)
-macroSlow      = input.int(200, "H1 slow EMA", group=gTf)
-shockAtrMult   = input.float(1.8, "Shock: H1 ATR > x * its 50-bar average", step=0.1, group=gTf)
-shockRangeMult = input.float(2.5, "Shock: one H1 range > x * ATR", step=0.1, group=gTf)
-shockHold      = input.int(2, "H1 bars a shock blocks counter-trend trades", minval=1, group=gTf)
-structFast     = input.int(21, "M15 fast EMA", group=gTf)
-structSlow     = input.int(55, "M15 slow EMA", group=gTf)
-swingLen       = input.int(3, "M15 swing pivot strength (bars each side)", minval=1, group=gTf)
-rsiLen         = input.int(14, "M5 RSI length", group=gTf)
-rsiBandLen     = input.int(50, "M5 RSI band lookback", group=gTf)
-rsiBandK       = input.float(1.5, "M5 RSI band width (std devs)", step=0.1, group=gTf)
-fvgMinAtr      = input.float(0.10, "M5 FVG minimum size (x ATR)", step=0.05, group=gTf)
-obDispAtr      = input.float(1.2, "M5 order block displacement body (x ATR)", step=0.1, group=gTf)
-zoneMaxAge     = input.int(48, "M5 zone lifetime (M5 bars)", minval=1, group=gTf)
+tfMacro        = input.timeframe("240", "Macro regime timeframe (H4)", group=gTf)
+tfStruct       = input.timeframe("60", "Market structure timeframe (H1)", group=gTf)
+tfZone         = input.timeframe("15", "Liquidity / momentum timeframe (M15)", group=gTf)
+macroFast      = input.int(50, "Macro fast EMA", group=gTf)
+macroSlow      = input.int(200, "Macro slow EMA", group=gTf)
+shockAtrMult   = input.float(1.8, "Shock: macro ATR > x * its 50-bar average", step=0.1, group=gTf)
+shockRangeMult = input.float(2.5, "Shock: one macro bar range > x * ATR", step=0.1, group=gTf)
+shockHold      = input.int(2, "Macro bars a shock blocks counter-trend trades", minval=1, group=gTf)
+structFast     = input.int(21, "Structure fast EMA", group=gTf)
+structSlow     = input.int(55, "Structure slow EMA", group=gTf)
+swingLen       = input.int(3, "Structure swing pivot strength (bars each side)", minval=1, group=gTf)
+rsiLen         = input.int(14, "Zone-TF RSI length", group=gTf)
+rsiBandLen     = input.int(50, "Zone-TF RSI band lookback", group=gTf)
+rsiBandK       = input.float(1.5, "Zone-TF RSI band width (std devs)", step=0.1, group=gTf)
+fvgMinAtr      = input.float(0.10, "FVG minimum size (x ATR)", step=0.05, group=gTf)
+obDispAtr      = input.float(1.2, "Order block displacement body (x ATR)", step=0.1, group=gTf)
+zoneMaxAge     = input.int(48, "Zone lifetime (zone-TF bars)", minval=1, group=gTf)
 
 gRisk = "Risk Management"
 startEquity = input.float(10000, "Backtest start balance ($)", minval=1, group=gRisk)
 sizingIn    = input.string("Risk % of balance", "Position sizing", options=["Risk % of balance", "Fixed lots"], group=gRisk)
 riskPct     = input.float(1.0, "Risk per trade (% of balance)", step=0.25, group=gRisk)
 fixedLots   = input.float(0.10, "Fixed lots (when fixed sizing)", step=0.01, group=gRisk)
-slLookback  = input.int(8, "SL: structural swing lookback (M1 bars)", minval=1, group=gRisk)
+slLookback  = input.int(8, "SL: structural swing lookback (entry bars)", minval=1, group=gRisk)
 slBufferAtr = input.float(0.10, "SL: buffer beyond swing (x ATR)", step=0.05, group=gRisk)
 minSlAtr    = input.float(0.8, "SL: min distance, else use ATR stop (x ATR)", step=0.1, group=gRisk)
 atrSlMult   = input.float(1.5, "SL: ATR stop distance (x ATR 14)", step=0.1, group=gRisk)
@@ -114,8 +119,8 @@ showHud    = input.bool(true, "Show dashboard", group=gDash)
 hudPosIn   = input.string("Top right", "Dashboard position", options=["Top right", "Top left", "Bottom right", "Bottom left"], group=gDash)
 hudSize    = input.string("Small", "Dashboard text size", options=["Tiny", "Small", "Normal"], group=gDash)
 showSess   = input.bool(true, "Shade London / NY / Asian sessions", group=gDash)
-showZones  = input.bool(true, "Draw active M5 FVG / order blocks", group=gDash)
-showSwings = input.bool(false, "Draw M15 swing levels", group=gDash)
+showZones  = input.bool(true, "Draw active FVG / order blocks", group=gDash)
+showSwings = input.bool(false, "Draw structure swing levels", group=gDash)
 showTrades = input.bool(true, "Draw trades (entry, SL, TP1, TP2, exits)", group=gDash)
 bullCol    = input.color(color.new(#26a69a, 0), "Buy colour", group=gDash)
 bearCol    = input.color(color.new(#ef5350, 0), "Sell colour", group=gDash)
@@ -182,11 +187,11 @@ f_zone() =>
 [sSt, sEv, sBias, sSwH, sSwL, sUp] = request.security(syminfo.tickerid, tfStruct, f_struct(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
 [zT, zO, zH, zL, zC, zO2, zH2, zL2, zC2, zO3, zH3, zL3, zC3, zO4, zH4, zL4, zC4, zAtr, zR, zUp, zLo, zLongOk, zShortOk] = request.security(syminfo.tickerid, tfZone, f_zone(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
 
-// ---------------------------------------------------------------- M5 zones (built once per closed M5 bar)
+// ---------------------------------------------------------------- zones (built once per closed zone-TF bar)
 var array<int>   zDir   = array.new<int>()
 var array<float> zTop   = array.new<float>()
 var array<float> zBot   = array.new<float>()
-var array<int>   zBorn  = array.new<int>()     // M5 bar count at birth
+var array<int>   zBorn  = array.new<int>()     // zone-TF bar count at birth
 var array<int>   zBornT = array.new<int>()     // birth time (ms), for drawing
 var array<string> zKind = array.new<string>()
 var int m5Count = 0
@@ -258,10 +263,11 @@ var array<float>  kLast  = array.new<float>()
 var array<float>  kAtr   = array.new<float>()
 var array<float>  kTgt   = array.new<float>()
 var array<int>    kDir   = array.new<int>()
-var array<int>    kH     = array.new<int>()     // horizon in M1 bars
+var array<int>    kH     = array.new<int>()     // horizon in forecast bars
 var array<string> kModel = array.new<string>()
 var array<string> kPath  = array.new<string>()
 var array<float>  kChart = array.new<float>()   // this chart's close at kT, for feed alignment
+var array<int>    kStep  = array.new<int>()     // seconds per forecast bar (60 = M1, 300 = M5)
 
 if barstate.isfirst and str.length(kronosText) > 0
     txt = str.replace_all(str.replace_all(str.replace_all(kronosText, "\r", " "), "\n", " "), "\t", " ")
@@ -285,16 +291,27 @@ if barstate.isfirst and str.length(kronosText) > 0
                 array.push(kModel, array.get(f, 4))
                 array.push(kPath, array.get(f, 5))
                 array.push(kChart, na)
+                st = array.size(f) >= 7 ? str.tonumber(array.get(f, 6)) : na
+                array.push(kStep, na(st) ? 60 : int(st))
 
-// The forecast made after bar kT covers the bars that open at kT+1m ... kT+Nm.
+// The forecast made after bar kT (step s) covers chart bars that OPEN at or after kT+s, when it
+// existed, until kT+s+N*s. An M5 bar that opened before the forecast existed is never covered.
+// The chart's M1 closes are only read to line the drawn path up with this feed.
+[ltT, ltC] = request.security_lower_tf(syminfo.tickerid, "1", [time, close])
 int kIdx = -1
 kN = array.size(kT)
 if kN > 0
     for k = 0 to kN - 1
         t0 = array.get(kT, k)
-        if time == t0 * 1000
-            array.set(kChart, k, close)
-        if time >= (t0 + 60) * 1000 and time < (t0 + 60 + array.get(kH, k) * 60) * 1000
+        s0 = array.get(kStep, k)
+        if na(array.get(kChart, k))
+            if time == t0 * 1000 and timeframe.in_seconds() == s0
+                array.set(kChart, k, close)
+            else if s0 == 60 and array.size(ltT) > 0
+                for j = 0 to array.size(ltT) - 1
+                    if array.get(ltT, j) == t0 * 1000
+                        array.set(kChart, k, array.get(ltC, j))
+        if time >= (t0 + s0) * 1000 and time < (t0 + s0 + array.get(kH, k) * s0) * 1000
             if kIdx < 0 or t0 > array.get(kT, kIdx)
                 kIdx := k
 kCover = kIdx >= 0
@@ -302,7 +319,7 @@ kDirBar = kCover ? array.get(kDir, kIdx) : 0
 kOkL = kGate == "Off" or (kCover and kDirBar == 1) or (kGate == "Agree inside forecast windows" and not kCover)
 kOkS = kGate == "Off" or (kCover and kDirBar == -1) or (kGate == "Agree inside forecast windows" and not kCover)
 
-// ---------------------------------------------------------------- M1 execution layer
+// ---------------------------------------------------------------- entry-timeframe execution layer
 atr1 = ta.atr(14)
 volSma = ta.sma(volume, 20)
 minPrev = ta.lowest(low, sweepLen)[1]
@@ -421,7 +438,7 @@ if barstate.isconfirmed and inTrade and bar_index > tBar
             closedNow := true
             break
     if not closedNow and tPartial
-        if sBias == -d                      // M15 structure flipped: structural invalidation
+        if sBias == -d                      // structure timeframe flipped: structural invalidation
             exitPx := (d == 1 ? close : close + spr) - d * slip
             closedNow := true
         else
@@ -493,8 +510,8 @@ plot(plotEntry, "Entry", color=color.new(color.gray, 0), style=plot.style_linebr
 plot(showTrades and inTrade ? tSL : na, "SL", color=bearCol, style=plot.style_linebr, linewidth=2)
 plot(showTrades and inTrade ? tTP1 : na, "TP1", color=color.new(bullCol, 30), style=plot.style_linebr, linewidth=1)
 plot(showTrades and inTrade ? tTP2 : na, "TP2", color=bullCol, style=plot.style_linebr, linewidth=2)
-plot(showSwings ? sSwH : na, "M15 swing high", color=color.new(color.orange, 40), style=plot.style_stepline)
-plot(showSwings ? sSwL : na, "M15 swing low", color=color.new(color.aqua, 40), style=plot.style_stepline)
+plot(showSwings ? sSwH : na, "Structure swing high", color=color.new(color.orange, 40), style=plot.style_stepline)
+plot(showSwings ? sSwL : na, "Structure swing low", color=color.new(color.aqua, 40), style=plot.style_stepline)
 
 kTag = kCover ? (kDirBar == 1 ? "Kronos UP" : kDirBar == -1 ? "Kronos DOWN" : "Kronos FLAT") : "no Kronos forecast"
 if newLong or newShort
@@ -507,7 +524,7 @@ bgcolor(showSess and sessId == 1 ? color.new(color.blue, 93) : showSess and sess
 // ---------------------------------------------------------------- alerts
 radarL = radarOn and sessOk and htfL and kOkL and not inTrade and (touchL or low <= minPrev)
 radarS = radarOn and sessOk and htfS and kOkS and not inTrade and (touchS or high >= maxPrev)
-radarMsg = "XAUUSD SCALP RADAR: Setup forming on M1. HTF Confluence verified. Prepare for entry."
+radarMsg = "XAUUSD SCALP RADAR: Setup forming on M5. HTF Confluence verified. Prepare for entry."
 if (radarL or radarS) and not barstate.isconfirmed
     alert(radarMsg + (radarL ? " | Bias: LONG" : " | Bias: SHORT"), alert.freq_once_per_bar)
 
@@ -517,7 +534,7 @@ if execOn and (newLong or newShort)
         msg += " | " + kTag
     alert(msg, alert.freq_once_per_bar_close)
 
-alertcondition(radarL or radarS, "XAU Radar", "XAUUSD SCALP RADAR: Setup forming on M1. HTF Confluence verified. Prepare for entry.")
+alertcondition(radarL or radarS, "XAU Radar", "XAUUSD SCALP RADAR: Setup forming on M5. HTF Confluence verified. Prepare for entry.")
 alertcondition(newLong, "XAU Execute BUY", 'XAUUSD SCALP EXECUTE: BUY @ {{close}} | SL: {{plot("SL")}} | TP1: {{plot("TP1")}} | TP2: {{plot("TP2")}}')
 alertcondition(newShort, "XAU Execute SELL", 'XAUUSD SCALP EXECUTE: SELL @ {{close}} | SL: {{plot("SL")}} | TP1: {{plot("TP1")}} | TP2: {{plot("TP2")}}')
 
@@ -532,7 +549,7 @@ if barstate.islast
         for k = 0 to array.size(zDir) - 1
             up = array.get(zDir, k) == 1
             c = up ? bullCol : bearCol
-            array.push(zBoxes, box.new(array.get(zBornT, k), array.get(zTop, k), time, array.get(zBot, k), xloc=xloc.bar_time, border_color=color.new(c, 60), bgcolor=color.new(c, 88), text="M5 " + array.get(zKind, k), text_size=size.tiny, text_color=color.new(c, 30), text_halign=text.align_left))
+            array.push(zBoxes, box.new(array.get(zBornT, k), array.get(zTop, k), time, array.get(zBot, k), xloc=xloc.bar_time, border_color=color.new(c, 60), bgcolor=color.new(c, 88), text=tfZone + " " + array.get(zKind, k), text_size=size.tiny, text_color=color.new(c, 30), text_halign=text.align_left))
     while array.size(kPolys) > 0
         polyline.delete(array.pop(kPolys))
     while array.size(kLabels) > 0
@@ -540,6 +557,7 @@ if barstate.islast
     if kN > 0 and kDrawN > 0
         for k = math.max(0, kN - kDrawN) to kN - 1
             t0 = array.get(kT, k)
+            s0 = array.get(kStep, k)
             ch = array.get(kChart, k)
             off = kAlign and not na(ch) ? ch - array.get(kLast, k) : 0.0
             pts = array.new<chart.point>()
@@ -548,12 +566,12 @@ if barstate.islast
             for i = 0 to array.size(vals) - 1
                 v = str.tonumber(array.get(vals, i))
                 if not na(v)
-                    pts.push(chart.point.from_time((t0 + 60 * (i + 1)) * 1000, v + off))
+                    pts.push(chart.point.from_time((t0 + s0 * (i + 1)) * 1000, v + off))
             newest = k == kN - 1
             array.push(kPolys, polyline.new(pts, xloc=xloc.bar_time, line_color=newest ? kColor : color.new(kColor, 60), line_style=line.style_dashed, line_width=newest ? 2 : 1))
             if newest
                 dk = array.get(kDir, k)
-                endT = (t0 + 60 * array.get(kH, k)) * 1000
+                endT = (t0 + s0 * array.get(kH, k)) * 1000
                 array.push(kLabels, label.new(endT, array.get(kTgt, k) + off, "Kronos " + (dk == 1 ? "UP" : dk == -1 ? "DOWN" : "FLAT") + " " + str.tostring(array.get(kTgt, k) + off, format.mintick), xloc=xloc.bar_time, style=label.style_label_left, color=color.new(kColor, 20), textcolor=color.black, size=size.small))
 
 // ---------------------------------------------------------------- dashboard
@@ -575,12 +593,12 @@ if showHud and barstate.islast
     bad = bearCol
     warn = color.orange
     // 1. feed audit
-    f_head(0, "XAU M1 SCALPER + KRONOS")
+    f_head(0, "XAU M5 SCALPER + KRONOS")
     pre = syminfo.prefix
     rawFeed = pre == "OANDA" or pre == "PEPPERSTONE" or pre == "ICMARKETS" or pre == "FXOPEN" or pre == "FOREXCOM" or pre == "SAXO" or pre == "TVC" or pre == "FX" or pre == "CAPITALCOM"
     f_row(1, "Feed", pre + ":" + syminfo.ticker + (rawFeed ? "  raw-spread OK" : "  check feed"), rawFeed ? good : warn)
     f_row(2, "Broker match", "Use your execution broker's own XAUUSD ticker", color.new(color.white, 40))
-    f_row(3, "Chart", timeframe.period == "1" ? "M1 OK" : "Switch to 1 minute", timeframe.period == "1" ? good : bad)
+    f_row(3, "Chart", timeframe.period == "5" ? "M5 OK" : "Switch to 5 minutes", timeframe.period == "5" ? good : bad)
     sessName = sessId == 1 ? "London Open (active)" : sessId == 2 ? "NY / US (active)" : sessId == 3 ? "Asian (low liquidity)" : "Between sessions"
     f_row(4, "Session", sessName, sessId == 1 or sessId == 2 ? good : warn)
     aRange = asiaHi - asiaLo
@@ -588,10 +606,10 @@ if showHud and barstate.islast
     f_row(5, "Asian range", na(aRange) ? "-" : "$" + str.tostring(aRange, "#.##") + (aFlag ? "  contracted" : ""), aFlag ? warn : white)
     // 2. MTF confluence
     f_head(6, "CONFLUENCE")
-    f_row(7, "H1 regime", (hReg == 1 ? "Bull" : hReg == -1 ? "Bear" : "Neutral") + (nz(hShock) != 0 ? "  SHOCK " + (hShock == 1 ? "up" : "down") : ""), hReg == 1 ? good : hReg == -1 ? bad : white)
+    f_row(7, "Regime " + tfMacro, (hReg == 1 ? "Bull" : hReg == -1 ? "Bear" : "Neutral") + (nz(hShock) != 0 ? "  SHOCK " + (hShock == 1 ? "up" : "down") : ""), hReg == 1 ? good : hReg == -1 ? bad : white)
     evTxt = sEv == 2 ? "CHoCH up" : sEv == 1 ? "BOS up" : sEv == -1 ? "BOS down" : sEv == -2 ? "CHoCH down" : "-"
-    f_row(8, "M15 structure", evTxt + (sUp ? "  EMA up" : "  EMA down"), sBias == 1 ? good : sBias == -1 ? bad : white)
-    f_row(9, "M5 RSI", str.tostring(zR, "#.0") + "  band " + str.tostring(zLo, "#") + "-" + str.tostring(zUp, "#") + "  zones " + str.tostring(array.size(zDir)), zLongOk ? good : zShortOk ? bad : white)
+    f_row(8, "Structure " + tfStruct, evTxt + (sUp ? "  EMA up" : "  EMA down"), sBias == 1 ? good : sBias == -1 ? bad : white)
+    f_row(9, "RSI " + tfZone, str.tostring(zR, "#.0") + "  band " + str.tostring(zLo, "#") + "-" + str.tostring(zUp, "#") + "  zones " + str.tostring(array.size(zDir)), zLongOk ? good : zShortOk ? bad : white)
     f_row(10, "Setup", htfL ? "LONG aligned" : htfS ? "SHORT aligned" : "No alignment", htfL ? good : htfS ? bad : white)
     // 3. Kronos
     f_head(11, "KRONOS")
@@ -600,8 +618,8 @@ if showHud and barstate.islast
         for k = 0 to kN - 1
             if array.get(kT, k) > array.get(kT, li)
                 li := k
-        ageMin = (timenow - (array.get(kT, li) + 60) * 1000) / 60000.0
-        fresh = ageMin < array.get(kH, li)
+        ageMin = (timenow - (array.get(kT, li) + array.get(kStep, li)) * 1000) / 60000.0
+        fresh = ageMin < array.get(kH, li) * array.get(kStep, li) / 60.0
         dk = array.get(kDir, li)
         f_row(12, "Call", (dk == 1 ? "UP" : dk == -1 ? "DOWN" : "FLAT") + "  target " + str.tostring(array.get(kTgt, li), format.mintick) + "  (" + array.get(kModel, li) + ")", dk == 1 ? good : dk == -1 ? bad : white)
         f_row(13, "Age", str.tostring(ageMin, "#") + " min" + (fresh ? "  fresh" : "  STALE, paste a new line"), fresh ? good : warn)
