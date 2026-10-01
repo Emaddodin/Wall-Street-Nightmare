@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode
 
-from engine import Bars, Spec
+from engine import Bars, Spec, market_hours
 
 HOME = Path.home() / ".golddesk"
 SESSION = HOME / "lf_session.json"
@@ -40,6 +40,9 @@ REFRESH_HTF = 120.0      # M15 / H1 / H4
 SETTLE = 3.0             # after a bar closes, wait this long and read its final values once
 SPACING = 1.5            # seconds between any two requests
 BACKOFF = (60.0, 600.0)  # after a 429: wait 1 minute, doubling up to 10, before asking again
+STALE = 120.0            # broker page prices frozen this long while gold trades: reload it, then restart it
+DEAD = 15.0              # broker page unreadable this long: restart the browser
+
 
 # Order ticket, mapped from the logged-in page on 2026-10-01.
 SEL = {
@@ -230,6 +233,8 @@ class LiteFinanceSource:
         self.account_type = account_type
         self.dry_run = dry_run
         self.jobs: queue.Queue = queue.Queue()
+        self._job_lock = threading.Lock()       # a job either runs on the page or is dropped, never both
+        self._freezes = 0                       # page restarts in a row that didn't bring prices back
         self.cache: dict = {tf: [] for tf in RES}
         self.form: dict = {}
         self.last_quote = None
@@ -309,10 +314,44 @@ class LiteFinanceSource:
             self._boot_err = "the playwright package is missing (python3 -m pip install playwright)"
             ready.set()
             return
-        pw, wait = None, 60
+        pw = None
+        while True:                                # open the page, keep it fed, reopen it if it dies or freezes
+            pw = self._connect(sync_playwright, pw, ready)
+            try:
+                why = self._run()
+            except Exception as e:
+                why = f"the page loop failed ({str(e).splitlines()[0][:80]})"
+            self.connected, self._boot_err = False, f"Broker page: {why}; opening it again"
+            print(self._boot_err, flush=True)
+            self._drop_jobs("The LiteFinance page is reopening")
+            self._close_browser()
+
+    def _drop_jobs(self, why: str) -> None:
+        """Answer every waiting job with an error: nothing queued now may reach the next page late."""
+        while True:
+            try:
+                fn, box, done = self.jobs.get_nowait()
+            except queue.Empty:
+                return
+            with self._job_lock:
+                if box.get("dropped"):
+                    continue
+                box["started"], box["e"] = True, RuntimeError(f"{why}; nothing was sent")
+            done.set()
+
+    def _close_browser(self) -> None:
+        try:
+            if self.browser:
+                self.browser.close()
+        except Exception:
+            pass
+        self.browser = None
+
+    def _connect(self, sync_playwright, pw, ready: threading.Event):
+        wait = 60
         while True:                                # keep trying; the dashboard runs meanwhile
             if self._hold_until > time.time():         # LiteFinance is refusing this address: wait it out
-                time.sleep(self._hold_until - time.time())
+                time.sleep(max(0.0, self._hold_until - time.time()))
             try:
                 pw = pw or sync_playwright().start()
                 self._open(pw)
@@ -320,18 +359,13 @@ class LiteFinanceSource:
             except Exception as e:
                 self._boot_err = f"Broker page not connected: {str(e).splitlines()[0]}"
                 print(self._boot_err, flush=True)
-                try:
-                    if self.browser:
-                        self.browser.close()
-                except Exception:
-                    pass
-                self.browser = None
+                self._close_browser()
                 ready.set()
                 time.sleep(wait)
                 wait = min(wait * 2, 600)
-        self._read_quote()
-        self._read_account()
         try:
+            self._read_quote()
+            self._read_account()
             before = self.page.url
             self.page.evaluate(OPEN_PORTFOLIO_JS)      # show the open-trades panel (a tab, not a trade button)
             self.page.wait_for_timeout(300)
@@ -341,31 +375,68 @@ class LiteFinanceSource:
         except Exception:
             pass
         self.connected, self._boot_err = True, None
+        print("Broker page connected.", flush=True)
         ready.set()
-        acct_at = rows_at = time.time()
-        while True:                                # orders first; between them, keep the quote fresh
+        return pw
+
+    def _run(self) -> str:
+        """Orders first; between them keep the quote fresh. Returns why the page has to be opened again."""
+        acct_at = rows_at = reloaded_at = 0.0
+        last, moved_at, failing = self._prices(), time.time(), None
+        while True:
             try:
                 fn, box, done = self.jobs.get(timeout=0.04)
             except queue.Empty:
+                now = time.time()
                 try:
                     self._read_quote()
-                    if self._note_at and time.time() > self._note_at:
+                    failing = None
+                    if self._note_at and now > self._note_at:
                         self._note_at = 0.0
                         self.note = self.page.evaluate(NOTES_JS) or ""
-                    if time.time() - acct_at > 3:
-                        acct_at = time.time()
+                    if now - acct_at > 3:
+                        acct_at = now
                         self._read_account()
-                    if time.time() - rows_at > 1:
-                        rows_at = time.time()
+                    if now - rows_at > 1:
+                        rows_at = now
                         self._read_rows()
-                except Exception:
-                    pass
+                except Exception as e:
+                    failing = failing or now
+                    if now - failing > DEAD:
+                        return f"the LiteFinance page stopped answering ({str(e).splitlines()[0][:80]})"
+                q = self._prices()
+                if q != last:                          # prices move: the page is fine
+                    last, moved_at, reloaded_at, self._freezes = q, now, 0.0, 0
+                elif not (market_hours(now)[0] and market_hours(now - 600)[0]):
+                    moved_at = now                     # market shut, or open under 10 min: still prices are normal
+                elif now - moved_at > STALE * 2 ** min(self._freezes, 4):   # gold trades but these prices don't
+                    if reloaded_at:
+                        self._freezes += 1             # next time wait longer (a holiday looks the same)
+                        return "LiteFinance prices stayed frozen after a reload"
+                    reloaded_at = moved_at = now
+                    self.connected, self._boot_err = False, "Broker page prices froze; reloading it"
+                    print(self._boot_err, flush=True)
+                    try:
+                        self.page.reload(wait_until="domcontentloaded", timeout=45000)
+                        self.page.wait_for_selector(SEL["bid"], timeout=40000)
+                        self._close_popups()
+                    except Exception as e:
+                        return f"the LiteFinance page froze and didn't reload ({str(e).splitlines()[0][:80]})"
+                    self.connected, self._boot_err = True, None
                 continue
+            with self._job_lock:
+                if box.get("dropped"):
+                    continue                           # its caller gave up waiting: never run it late
+                box["started"] = True
             try:
                 box["v"] = fn(self.page)
             except Exception as e:
                 box["e"] = e
             done.set()
+
+    def _prices(self):
+        q = self.last_quote
+        return q and (q["bid"], q["ask"])
 
     def _read_quote(self) -> None:
         q = self.page.evaluate(QUOTE_JS, SEL)
@@ -397,7 +468,12 @@ class LiteFinanceSource:
         box, done = {}, threading.Event()
         self.jobs.put((fn, box, done))
         if not done.wait(timeout):
-            raise RuntimeError("LiteFinance page is not responding")
+            with self._job_lock:
+                box["dropped"] = "started" not in box
+            if box["dropped"]:
+                raise RuntimeError("LiteFinance page is not responding; nothing was sent")
+            if not done.wait(30):                  # already running on the page: wait for its answer
+                raise RuntimeError("LiteFinance page is not responding; check the LiteFinance window before trading again")
         if "e" in box:
             raise box["e"]
         return box["v"]

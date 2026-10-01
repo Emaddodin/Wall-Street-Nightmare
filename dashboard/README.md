@@ -47,6 +47,7 @@ python3 server.py --litefinance --account demo
 - `--lf-dry-run` fills the LiteFinance ticket but never presses its button. Use it to watch what an order would do.
 - `--lf-headless` hides the LiteFinance window. Leave it visible for now: open positions, closing and moving stops are still done in that window.
 - Your login is saved in `~/.golddesk/lf_session.json`, readable only by your Mac user. Gold Desk never sees your password.
+- If the LiteFinance page stops answering, or its prices freeze while gold is trading, Gold Desk reloads it and, if that doesn't help, opens it again by itself. A Buy or Sell that waited on a stuck page is never sent late: the ticket says nothing was sent.
 
 ## Kronos forecasts (optional)
 
@@ -71,6 +72,7 @@ The backtest replays the indicator on M5, forecasts at bars where it has a setup
 ## Using the page
 
 - **Top bar**: DEMO / REAL MONEY badge, a green dot while prices are streaming, balance and equity.
+- **Market closed**: gold stops every day from 17:00 to 18:00 New York time and from Friday 17:00 to Sunday 18:00. Prices stand still then, and the page says the market is closed and when it opens.
 - **Chart**: 1m / 5m / 15m / 1h. The last candle moves with every price. Signal arrows print only after a candle closes.
 - **SELL / BUY**: one click sends the order straight away, no confirm box. The box under them says what happened and how long it took.
 - **Lots**: type it, use − / +, or tap 0.01 / 0.05 / 0.10 / 0.50 / 1.00.

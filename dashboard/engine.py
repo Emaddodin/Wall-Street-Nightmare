@@ -204,6 +204,21 @@ def ny7_offset(server_t: int) -> int:
     return (3 if us_dst(server_t) else 2) * 3600
 
 
+def market_hours(utc: float) -> tuple:
+    """Gold trades from Sunday 18:00 to Friday 17:00 New York time, with a break from 17:00 to 18:00 each day.
+    -> (open?, why closed or None, UTC time it opens again or None)."""
+    ny = int(utc) + ny7_offset(int(utc)) - 7 * 3600
+    day, mins = (ny // 86400 + 3) % 7, ny % 86400 // 60          # Monday = 0
+    if day == 5 or (day == 4 and mins >= 1020) or (day == 6 and mins < 1080):
+        why, back = "weekend", (6 - day) * 86400 + 1080 * 60 - mins * 60
+    elif 1020 <= mins < 1080:
+        why, back = "daily break", 1080 * 60 - mins * 60
+    else:
+        return True, None, None
+    t = int(utc) - int(utc) % 60 + back
+    return False, why, t + ny7_offset(int(utc)) - ny7_offset(t)      # the clocks may change over a weekend
+
+
 def utc_minutes(server_t: int, offset_fn: Callable[[int], int]) -> int:
     u = server_t - offset_fn(server_t)
     return (u % 86400) // 60

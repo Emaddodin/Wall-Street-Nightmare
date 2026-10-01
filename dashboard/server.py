@@ -26,7 +26,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from boom import BoomTracker, setup as boom_setup
-from engine import (LADDER, Bars, Engine, Params, Spec, SESSION_NAMES, ny7_offset, run_backtest,
+from engine import (LADDER, Bars, Engine, Params, Spec, SESSION_NAMES, market_hours, ny7_offset, run_backtest,
                     session_of, session_ok, utc_minutes)
 from smc import analyze as smc_analyze
 from soon import SoonAlerts, find_topic, ntfy_server
@@ -501,7 +501,22 @@ class Hub:
                     self._event("soon", f"{pr['title']}: watch {pr['area'][0]:.2f}-{pr['area'][1]:.2f}", pr["side"])
 
     # ------------------------------------------------------------ API payloads
+    def market(self) -> dict:
+        """Is gold trading now? Synthetic demo prices never stop, so the demo is always open."""
+        now = time.time()
+        is_open, why, back = market_hours(now) if self.src.kind != "demo" else (True, None, None)
+        note = None
+        if not is_open:
+            mins = max(1, -(-(back - int(now)) // 60))
+            d, h, m = mins // 1440, mins % 1440 // 60, mins % 60
+            wait = " ".join(f"{v} {u}" for v, u in (((d, "d"), (h, "h")) if d else ((h, "h"), (m, "min"))) if v)
+            note = (f"Market closed: gold's daily break (17:00 to 18:00 New York). Prices start again by themselves in {wait}."
+                    if why == "daily break" else
+                    f"Market closed for the weekend. Gold opens again Sunday 18:00 New York time, in {wait}.")
+        return {"open": is_open, "why": why, "reopens": back, "note": note}
+
     def state(self) -> dict:
+        mk = self.market()
         with self.lock:
             eng, tk = self.engine, self.tick_
             acct = self.src.account()
@@ -527,7 +542,9 @@ class Hub:
                 "trades": closed, "stats": eng.stats(),
                 "atr_m1": eng.atr[-1] if eng.atr else None,       # ATR(14) of the entry timeframe (name kept for the page)
                 "entry_tf": self.tf, "ladder": dict(zip(("macro", "struct", "zone"), LADDER[self.tf])),
-                "events": self.events[-30:], "error": self.error or getattr(self.src, "feed_note", None),
+                "events": self.events[-30:],
+                "error": self.error or getattr(self.src, "feed_note", None) or mk["note"],
+                "market": mk,
                 "positions": self.src.positions(), "caps": getattr(self.src, "caps", {"positions": True}),
                 "broker_rows": getattr(self.src, "rows", []),
                 "broker": self.src.broker() if hasattr(self.src, "broker") else {"connected": True, "message": None},
