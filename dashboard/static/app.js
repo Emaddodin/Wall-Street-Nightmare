@@ -3,7 +3,7 @@
   "use strict";
   const TOKEN = document.querySelector('meta[name="dash-token"]').content;
   const $ = (id) => document.getElementById(id);
-  const TFSEC = { M1: 60, M5: 300, M15: 900, H1: 3600 };
+  const TFSEC = { M1: 60, M5: 300, M15: 900, H1: 3600, H4: 14400 };
   const C = { buy: "#2f7bf5", sell: "#e5533c", up: "#2fb67c", down: "#e5484d", gold: "#d6ad52", dim: "#8e8a80", line: "#262a2f", bg: "#0e0f11" };
   const store = {
     get(k, d) { try { const v = localStorage.getItem("gd3_" + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
@@ -41,7 +41,7 @@
   });
   const forecast = chart.addLineSeries({ color: C.gold, lineWidth: 2, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
   let last = null, loadedTf = null, first = 0;
-  const ovl = Object.assign({ kronos: true, scalper: true }, store.get("ovl", {}));
+  const ovl = Object.assign({ kronos: true, scalper: true, boom: true }, store.get("ovl", {}));
 
   async function loadCandles() {
     const want = tf;
@@ -84,7 +84,18 @@
     const m = list.map((t) => ({
       time: t.t_bar - (t.t_bar % sec), position: t.dir === 1 ? "belowBar" : "aboveBar",
       color: t.dir === 1 ? C.buy : C.sell, shape: t.dir === 1 ? "arrowUp" : "arrowDown", text: t.dir === 1 ? "BUY" : "SELL",
-    })).filter((x) => x.time >= first).sort((a, b) => a.time - b.time);
+    }));
+    // Boom/Crash calls: entered on the bar after the forecast bar (t); finished ones show their result in R
+    const bm = S.boom, esec = TFSEC[S.entry_tf] || 300;
+    if (ovl.boom && bm) {
+      for (const b of (bm.history || []).concat(bm.active ? [bm.active] : [])) {
+        const at = b.t + esec, up = b.dir === 1 || b.side === "BUY";
+        m.push({ time: Math.min(at - (at % sec), last ? last.time : at), position: up ? "belowBar" : "aboveBar",
+          color: up ? C.up : C.down, shape: up ? "arrowUp" : "arrowDown",
+          text: `${b.kind || (up ? "BOOM" : "CRASH")}${b.r != null && b.exit != null ? ` ${b.r > 0 ? "+" : ""}${(+b.r).toFixed(1)}R` : ""}` });
+      }
+    }
+    m.splice(0, m.length, ...m.filter((x) => x.time >= first).sort((a, b) => a.time - b.time));
     const key = tf + JSON.stringify(m.map((x) => [x.time, x.text]));
     if (key !== markerKey) { series.setMarkers(m); markerKey = key; }
   }
@@ -114,6 +125,12 @@
     }
     const k = S.kronos;
     if (ovl.kronos && k && k.path && Number.isFinite(+k.target)) want.push([+k.target, C.gold, `Kronos ${k.call || ""} ${k.minutes || ""}m`, 2]);
+    const ba = S.boom && S.boom.active;
+    if (ovl.boom && ba) {
+      want.push([ba.entry, C.gold, `${ba.kind} entry`, 0]);
+      want.push([ba.sl, C.down, `${ba.kind} SL`, 2]);
+      want.push([ba.tp, C.up, `${ba.kind} TP`, 2]);
+    }
     if (ovl.scalper) {
       const a = S.active;
       if (a) {
@@ -291,7 +308,8 @@
   document.querySelector(".sig").addEventListener("click", (e) => {
     const u = e.target.closest(".use");
     if (!u || !S) return;
-    const lv = S.active && { sl: S.active.sl, tp: S.active.tp2 };
+    const ba = S.boom && S.boom.active;
+    const lv = u.dataset.src === "boom" ? ba && { sl: ba.sl, tp: ba.tp } : S.active && { sl: S.active.sl, tp: S.active.tp2 };
     if (!lv) return;
     $("sl").value = lv.sl ? fmt(lv.sl) : ""; $("tp").value = lv.tp ? fmt(lv.tp) : "";
     $("protect").open = true;
@@ -327,6 +345,34 @@
       <span class="call ${d > 0 ? "up" : d < 0 ? "down" : "flat"}">${d > 0 ? "▲ UP" : d < 0 ? "▼ DOWN" : "— FLAT"} <span class="num" style="font-size:14px">${fmt(k.target)} (${k.move >= 0 ? "+" : ""}${fmt(k.move)})</span></span><span></span>
       ${strength != null ? `<span class="meter"><i style="width:${strength}%;background:${d > 0 ? C.up : d < 0 ? C.down : C.dim}"></i></span>` : ""}
       <span class="meta">${esc(k.model || "Kronos")} forecast, gold dashed line on the 1m and 5m chart. ${k.backtest && k.backtest.status === "done" ? "" : " Not proven on gold yet."}${k.error ? " " + esc(k.error) : ""}</span>${btHtml(k.backtest)}`;
+  }
+  // state.boom: {active: {kind, side, dir, entry, sl, tp, move, move_atr, minutes, expires, strong, why[]} | null,
+  //              history: [...with exit, how, r, usd_001], stats: {calls, wins, losses, net_r, net_usd_001}, proven}
+  function renderBoom() {
+    const bm = S.boom, el = $("boom");
+    el.hidden = !bm;
+    if (!bm) return;
+    const st = bm.stats || {}, a = bm.active;
+    const tally = st.calls
+      ? `${st.calls} call${st.calls === 1 ? "" : "s"} · ${st.wins}W ${st.losses}L · <span class="${tone(st.net_r)}">${st.net_r > 0 ? "+" : ""}${(+st.net_r).toFixed(1)}R</span> · <span class="${tone(st.net_usd_001)}">${signed(st.net_usd_001)}</span> per 0.01 lot`
+      : "No calls yet";
+    const tag = `<span class="untested">${bm.proven ? "TESTED" : "UNTESTED"}</span>`;
+    el.className = "card boom" + (a ? (a.dir === 1 || a.side === "BUY" ? " live up" : " live down") : "");
+    if (!a) {
+      const h = (bm.history || [])[bm.history.length - 1];
+      el.innerHTML = `<span class="name">Boom / Crash</span>${tag}<span class="call flat">Waiting</span><span></span>
+        <span class="meta">${h ? `Last: ${esc(h.kind)} ${esc(h.side)} ${h.how === "target" ? "hit target" : h.how === "stop" ? "hit stop" : "timed out"}, ${h.r > 0 ? "+" : ""}${(+h.r).toFixed(2)}R · ` : ""}${tally}</span>`;
+      return;
+    }
+    const up = a.dir === 1 || a.side === "BUY";
+    const now = (S.clock && S.clock.server_time) || Date.now() / 1000;
+    const left = Math.max(0, Math.ceil((a.expires - now) / 60));
+    el.innerHTML = `<span class="name">${up ? "BOOM" : "CRASH"}${a.strong ? " · strong" : ""}</span>${tag}
+      <span class="call ${up ? "up" : "down"}">${up ? "▲ BUY" : "▼ SELL"} <span class="num" style="font-size:14px">${fmt(a.entry)}</span></span>
+      <button class="use" data-src="boom">Use SL/TP</button>
+      <span class="lvls num"><span>SL <b class="down">${fmt(a.sl)}</b></span><span>TP <b class="up">${fmt(a.tp)}</b></span><span><b>${left}</b> min left</span></span>
+      <span class="meta">Kronos ${a.move > 0 ? "+" : ""}${fmt(a.move)} (${esc(a.move_atr)} ATR) in ${esc(a.minutes)} min${a.why && a.why.length ? " · " + esc(a.why.join(", ")) : ""}</span>
+      <span class="meta">${tally}</span>`;
   }
   function renderScalper() {
     const s = S.active;
@@ -394,6 +440,7 @@
 
     renderKronos();
     renderScalper();
+    renderBoom();
     drawMarkers();
     drawLines();
     drawForecast();
