@@ -388,6 +388,13 @@
     const live = Date.now() - lastQuoteAt < 15000;
     const br = (S && S.broker) || { connected: true, message: null };
     const capOk = !(S && S.caps && S.caps.trading === false);
+    const mk = S && S.market;
+    if (mk && mk.open === false && !live) {         // gold's daily break or the weekend: closed, not broken
+      const at = mk.reopens ? new Date(mk.reopens * 1000) : null;
+      const when = at ? (mk.why === "weekend" ? at.toLocaleDateString([], { weekday: "short" }) + " " : "") + clock(mk.reopens) : null;
+      return { ok: false, live, head: "Market closed", closed: true,
+        why: `${mk.why === "weekend" ? "Weekend" : "Gold's daily break"}${when ? ` · opens ${when}` : ""}. Prices start again by themselves.` };
+    }
     if (S && (!br.connected || !capOk)) return { ok: false, live, head: "Broker offline", why: br.message || "The broker page is not connected." };
     if (!live) return { ok: false, live, head: lastQuoteAt ? "Prices stopped" : "Connecting", why: lastQuoteAt ? "No new prices for 15 seconds." : "Waiting for the first price." };
     return { ok: true, live, head: "Live prices", why: "" };
@@ -401,11 +408,13 @@
     $("ticketWrap").classList.toggle("off", !t.ok);
     const off = $("tradeOff");
     off.hidden = t.ok || (!S && !lastQuoteAt);
-    if (!off.hidden) off.innerHTML = `<b>Buy and Sell are off.</b> ${esc(t.why)}${last ? " The chart still updates." : ""}`;
-    const want = t.ok ? "ready" : "off";
+    off.classList.toggle("closed", !!t.closed);
+    if (!off.hidden) off.innerHTML = t.closed ? `<b>Market closed.</b> ${esc(t.why)}` : `<b>Buy and Sell are off.</b> ${esc(t.why)}${last ? " The chart still updates." : ""}`;
+    const want = t.ok ? "ready" : t.closed ? "closed" : "off";
     if (resultIdle && idleShown !== want && (S || lastQuoteAt)) {
       idleShown = want;
       if (t.ok) result("idle", "Ready to trade", "Click SELL or BUY. The order goes out at once, with no confirm box.", true);
+      else if (t.closed) result("wait", "Market closed", "Buy and Sell come back when prices return.", true);
       else result("wait", "Waiting for the broker", "Buy and Sell come back by themselves once prices flow again.", true);
     }
     if (!t.live && last && !(S && S.tick)) {          // no live quote: show the last candle price, greyed out
@@ -674,7 +683,7 @@
       if (sub) sub.textContent += (sub.textContent ? " · " : "") + "LiteFinance: " + a.note;
     }
     const issues = [];
-    if (S.error) issues.push(S.error);
+    if (S.error && !(S.market && S.error === S.market.note)) issues.push(S.error);   // market closed is said by the ticket
     if (S.source === "mt5" && !a.trade_allowed) issues.push("MT5 is blocking orders: turn on the Algo Trading button in MT5.");
     $("banner").hidden = !issues.length;
     $("banner").textContent = issues.join("  ");
