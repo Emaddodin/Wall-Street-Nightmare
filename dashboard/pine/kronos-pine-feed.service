@@ -1,0 +1,16 @@
+# Serves the VPS Kronos forecasts as paste lines for the TradingView indicator (port 8791).
+# Reads the Kronos chart service's JSON; never runs Kronos itself. Set SOURCE to that JSON's URL.
+[Unit]
+Description=Kronos paste lines for TradingView
+After=network-online.target
+
+[Service]
+Environment=SOURCE=http://127.0.0.1:8790/REPLACE_WITH_FORECAST_JSON_PATH
+ExecStart=/bin/sh -c 'exec /usr/bin/python3 /root/kronos/pine/pine_feed.py --source "$SOURCE?k=$(cat /root/kronos/chart/token.txt)"'
+Restart=always
+RestartSec=5
+Nice=10
+MemoryMax=100M
+
+[Install]
+WantedBy=multi-user.target
