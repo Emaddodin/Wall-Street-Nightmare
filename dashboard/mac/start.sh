@@ -1,8 +1,10 @@
 #!/bin/bash
 # What the "Gold Desk" icon on the Desktop runs: update, stop any older copy, start, open the page.
+# With a VPS (VPS=stratton in ~/.golddesk/config.sh, the default) the broker page runs there 24/7;
+# this updates it, then opens it here through your SSH key. Nothing is opened to the internet.
 main() {
   local APP="$HOME/GoldDesk" CONF="$HOME/.golddesk" BRANCH=claude/project-thread-ild2ro
-  ACCOUNT=demo; KRONOS=small; PORT=8765
+  ACCOUNT=demo; KRONOS=small; PORT=8765; VPS=stratton; VPS_KRONOS=small
   [ -f "$CONF/config.sh" ] && . "$CONF/config.sh"
 
   echo "Gold Desk: checking for updates..."
@@ -28,6 +30,13 @@ main() {
   cd "$APP/dashboard" || exit 1
   [ -f "$CONF/lf_session.json" ] || python3 server.py --litefinance-login
 
+  if [ -n "$VPS" ] && ssh -o BatchMode=yes -o ConnectTimeout=8 "$VPS" true 2>/dev/null; then
+    vps_mode
+    echo "Your VPS didn't answer. Starting Gold Desk on this Mac instead."
+  elif [ -n "$VPS" ]; then
+    echo "Couldn't reach your VPS ($VPS). Starting Gold Desk on this Mac instead."
+  fi
+
   local args=(--litefinance --account "$ACCOUNT" --port "$PORT")
   if [ "$KRONOS" != off ] && python3 -c "import torch" 2>/dev/null; then
     args+=(--kronos "$KRONOS")
@@ -42,5 +51,35 @@ main() {
   echo "Gold Desk is opening in your browser. Keep this window open while you trade; closing it stops Gold Desk."
   exec python3 server.py "${args[@]}"
 }
+# Broker page and dashboard on the VPS 24/7; this Mac only shows the page.
+vps_mode() {
+  echo "Updating Gold Desk on your VPS..."
+  ssh -o BatchMode=yes "$VPS" 'mkdir -p /root/.golddesk && chmod 700 /root/.golddesk && test -s /root/.golddesk/lf_session.json' 2>/dev/null \
+    || scp -q -o BatchMode=yes "$CONF/lf_session.json" "$VPS:/root/.golddesk/lf_session.json"
+  if ! ssh -o BatchMode=yes "$VPS" "bash -s -- $BRANCH $ACCOUNT $VPS_KRONOS" < "$APP/dashboard/vps/setup.sh"; then
+    return 1
+  fi
+  local url="http://127.0.0.1:$PORT" opened=0
+  echo
+  echo "Gold Desk runs on your VPS around the clock. Keep this window open to see it here; closing it doesn't stop the VPS."
+  while true; do
+    ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+        -L "$PORT:127.0.0.1:8765" "$VPS" &
+    local tunnel=$! i
+    for i in $(seq 1 120); do                       # the VPS page needs a moment after a restart
+      curl -fs -m 2 -o /dev/null "$url/api/state" && break
+      kill -0 $tunnel 2>/dev/null || break
+      sleep 1
+    done
+    if [ $opened = 0 ] && curl -fs -m 2 -o /dev/null "$url/api/state"; then
+      open "$url" 2>/dev/null || xdg-open "$url" 2>/dev/null
+      opened=1
+    fi
+    wait $tunnel
+    echo "Connection to the VPS dropped. Reconnecting..."
+    sleep 3
+  done
+}
+
 main "$@"
 exit
