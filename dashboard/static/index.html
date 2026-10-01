@@ -120,6 +120,10 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 .lotbox button { background: var(--raise); border-radius: 7px; font: 600 16px var(--mono); color: var(--dim); height: 24px; }
 .lotbox button:hover { color: var(--fg); }
 .lotbox input { text-align: center; font: 700 19px var(--mono); padding: 4px 2px; border-radius: 7px; }
+#ticketWrap { display: flex; flex-direction: column; gap: 16px; }
+#ticketWrap.off .px { opacity: .55; }
+.tradeoff { margin-top: -6px; border: 1px solid rgba(229,72,77,.5); background: rgba(229,72,77,.1); color: #ffc9c4; border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.35; }
+.tradeoff b { color: #fff; }
 .spreadline { display: flex; justify-content: space-between; font: 500 13px var(--label); color: var(--dim); margin-top: -8px; }
 .spreadline b { font: 600 13px var(--mono); color: var(--fg); }
 
@@ -243,6 +247,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
   </div>
 
   <aside>
+    <div id="ticketWrap">
     <div class="ticket">
       <button class="big sell" id="sell"><small>SELL</small><span class="px" id="bid">-</span></button>
       <div class="lotbox">
@@ -253,6 +258,8 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
       <button class="big buy" id="buy"><small>BUY</small><span class="px" id="ask">-</span></button>
     </div>
     <div class="spreadline"><span>Spread <b id="spr">-</b></span><span>Lots <b id="lotsTxt">0.01</b> · one click sends</span></div>
+    </div>
+    <div class="tradeoff" id="tradeOff" role="status" hidden></div>
 
     <div class="chips" id="chips"><button>0.01</button><button>0.05</button><button>0.10</button><button>0.50</button><button>1.00</button></div>
 
