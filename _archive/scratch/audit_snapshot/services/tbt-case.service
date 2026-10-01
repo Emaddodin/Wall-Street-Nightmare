@@ -1,8 +1,0 @@
-[Unit]
-Description=TBT case study -- the path of every open trade, a line a minute
-
-[Service]
-Type=oneshot
-User=tbt
-WorkingDirectory=/home/tbt/bot
-ExecStart=/home/tbt/venv/bin/python -u /home/tbt/bot/tools/casestudy.py record

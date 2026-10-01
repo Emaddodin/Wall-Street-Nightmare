@@ -1,8 +1,0 @@
-[Unit]
-Description=TBT perch -- put the book's window over the coin about to print
-
-[Service]
-Type=oneshot
-User=tbt
-WorkingDirectory=/home/tbt/bot
-ExecStart=/home/tbt/venv/bin/python -u /home/tbt/bot/perch.py

@@ -1,0 +1,468 @@
+# TRANSCRIPT: tzwj
+# video: TzwJTfYgK5FAujgWfLNa+fO1C_jia-DY.mp4 (16:16, 1644x1080, iPad MT5 screen recording, captions burned in)
+# engine: faster-whisper 1.2.1, model Systran/faster-whisper-small, int8, CPU, VAD on
+# raw-whisper file=audio/tzwj.wav model=small task=transcribe lang=en p=1.00 duration=975.8s
+# raw-whisper elapsed=1413s
+# note: Auto-detect on the first 30 s said Yoruba p=0.83 (English p=0.06) because of the West-African accent; that run was aborted (tzwj.transcribe.small.autolang_aborted.txt) and re-run with language forced to en. The content is English. Burned-in captions were used to confirm fixes.
+# Timestamps are video time [mm:ss.ss]. Evidence label: MEASURED (machine transcription;
+#   whisper errors remain in ORIGINAL). Section ENGLISH = source is English, so the
+#   translation is the original, with phrase fixes; [cap] = confirmed by burned-in caption,
+#   [ctx] = inferred from trading context (OPINION).
+
+====================================================================================================
+ORIGINAL (verbatim whisper output, language = English)
+====================================================================================================
+[00:00.00 - 00:02.64] I tried turning $14 into thousands.
+[00:02.64 - 00:07.40] I blew the whole account after seeing over $100 and then started over and actually hit
+[00:07.40 - 00:09.40] $5,300 plus target.
+[00:09.40 - 00:12.96] Here is the entire unedited proof of every single entry and exit.
+[00:12.96 - 00:14.56] Next we will show you the wins.
+[00:14.56 - 00:17.04] I recorded every single trade.
+[00:17.04 - 00:21.68] The mistakes that wired me out the first time and the exaggerated that changed everything
+[00:21.68 - 00:23.24] on attempt 2.
+[00:23.24 - 00:27.92] In this video, I'm working you through my full trade log step by step so you can
+[00:27.92 - 00:32.80] see what went wrong, what worked and the risk management lesson that saved the account.
+[00:33.36 - 00:40.32] So I funded $14 on this account and then this is my first setup. I saw this setup on gold and then
+[00:40.32 - 00:46.40] I started making my entry immediately. Okay, so and then let me explain the reasons behind
+[00:46.40 - 00:52.08] this setup for you. Looking at the previous price, we can see that gold have been dropping to the
+[00:52.08 - 00:58.30] downside. Okay, good have been dropping making pullback dropping making pullbacks and like it just kept
+[00:58.30 - 01:04.50] drawing to the downside and it kept breaking lows and forming new lows. Okay, so that is what good
+[01:04.50 - 01:10.80] ZOWUSD have been doing. Okay, and right now looking at the chart we can see that there is a pullback
+[01:10.80 - 01:17.60] right now and the market is currently at a zone where the market have broken out from previously.
+[01:17.60 - 01:23.52] So this is the zone as you can see on my screen. So the market broke out of this place previously
+[01:23.52 - 01:27.92] And it is back here and as it came back. I didn't enter immediately
+[01:27.92 - 01:31.86] I waited for it to drop and then come back again at that level
+[01:31.86 - 01:36.64] So and now I expect it to drop massively to the downside now on the truth
+[01:36.64 - 01:42.24] So already moving in profit look at its up 11 dollars in profit right now 12 dollars
+[01:42.24 - 01:50.16] And yeah, it is dropping to the downside. Let's watch and observe and see how it goes. It is even up 17 dollars in profit right now
+[01:50.36 - 01:55.92] Guys, I don't know what is happening, but the market is just pumping to downside 23 dollars in profit
+[01:56.40 - 02:02.31] Here the market is up over 30 dollars in profit already. So I decided to close all my position boom
+[02:02.67 - 02:06.35] After closing the trades I was up 48 point 22 dollars
+[02:06.35 - 02:08.91] And then I started looking for the next trade
+[02:08.91 - 02:16.31] I found a new set of here on the Zal USD. Okay, so this is a look so sweet, but this is actually what blew my account
+[02:16.75 - 02:19.29] So if you look if you look at the market
+[02:19.87 - 02:22.53] Market is currently have been ranging
+[02:23.03 - 02:25.03] So the market have been ranging
+[02:25.74 - 02:29.30] Okay, and it have been respecting this resistant level
+[02:29.70 - 02:36.95] Okay, so the market was ranging around that price and then it broke out of the support to the downside
+[02:36.95 - 02:41.75] And what this means is that the sellers are still in control
+[02:42.15 - 02:45.15] Okay, so that's what this means if the market could break
+[02:45.67 - 02:50.11] This the previous strong support means that the sellers are still in control
+[02:50.11 - 02:56.65] So I look for a strong resistance level which is this place currently where the market have reacted to eat like more than
+[02:56.87 - 03:02.83] Six times so market have reacted this place more than six times and that smacks it that makes it a strong
+[03:02.83 - 03:06.51] resistance level and that is the reason why I waited for the market to come there and
+[03:06.51 - 03:12.51] still even react before I now decided to take my treat because this is the resistance that
+[03:12.51 - 03:16.71] this is the reaction that happened around the resistance that made me to enter the cell
+[03:16.71 - 03:17.71] treat.
+[03:17.71 - 03:21.79] So this is the reaction and this is where my stop loss is.
+[03:21.79 - 03:26.95] If the market reaches this level, I'm going to get stopped out and then this is my take
+[03:26.95 - 03:27.95] profit also.
+[03:27.95 - 03:30.15] Let me show you where I spent the market to go.
+[03:30.15 - 03:34.19] I expected market to drop to this this level here
+[03:35.30 - 03:37.98] Okay, so I expected the market to drop to this level here
+[03:38.42 - 03:44.93] This is what happened some minutes later. So the market dropped and I'm up over 100 around hundred dollars in profit
+[03:45.17 - 03:47.77] So if you look at my equity my equity is up around
+[03:48.49 - 03:51.57] 140 dollars, but I made a very huge mistake here
+[03:51.57 - 03:54.61] I didn't close and if my on my last video
+[03:54.61 - 04:00.25] I want you guys the reason why I used to close at the nearest support and resistance that is not good to be too greedy
+[04:00.25 - 04:07.85] But at this point I did not close it. I wanted it to drop even more so that I'll be able to flip this $48 to maybe
+[04:08.21 - 04:13.37] Around $500 or $300. That was what I expected
+[04:13.51 - 04:16.73] But look at what happened market started going up immediately
+[04:17.21 - 04:23.79] So instead of me to close I only recorded it and I didn't close. I'm down in losses right now
+[04:23.79 - 04:28.47] I'm down minus 30 dollars right now. So look at minus 36 dollars
+[04:28.47 - 04:36.23] minus $34 minus $41 and I have just $48 boom I finally lost the account and
+[04:36.23 - 04:43.75] I'm down to $0 right now so the market went up and I lost the account and I'm
+[04:43.75 - 04:49.31] down 0.00 dollars in equity right now so what have we learned instead of me to
+[04:49.31 - 04:53.55] close profits I did not close the profits I was still holding for it to
+[04:53.55 - 04:59.39] go down more so that I'll be able to get so much money from one single trade but
+[04:59.39 - 05:02.59] that is not how it's supposed to work I'm supposed to just close it and then wait
+[05:02.59 - 05:06.71] for the next trade and then make some more money so it is better to be closing
+[05:06.71 - 05:11.03] it quickly and just be catching out step by step down for you to try to make
+[05:11.03 - 05:15.07] all the money you want to make from one single trade so that's what I've learned
+[05:15.07 - 05:19.95] and I'm going to apply it and see if I'll be able to like achieve my target
+[05:19.95 - 05:26.63] So let me let me find the gain and try the second time after closing the trade look at what happened
+[05:26.79 - 05:31.69] So after they stopped me out the market reversed massively and I achieved my target
+[05:31.89 - 05:36.11] Okay, so look at the market reverse and I achieved my target, but I
+[05:36.45 - 05:41.61] Was stopped out first before the market now dropped finally so that is what happened guys
+[05:41.71 - 05:45.09] So I got stopped out and then boom the market just dropped to the downside
+[05:45.09 - 05:53.25] What this means is that my analysis is still even correct, but the liquidation happened in the market and also if I close it earlier
+[05:53.25 - 05:58.71] I wouldn't have like hold till when I lost my account. So that those are the two things that happen
+[05:58.73 - 06:01.03] So it is time to find the game and try again
+[06:01.65 - 06:07.37] After losing the account that decided to fund again and now I have a buy setup on Zau USD right now
+[06:07.41 - 06:13.93] So let me explain the reason for this buy setup. So looking at the previous trend
+[06:13.93 - 06:16.69] we can see that the market have been dropping to the downside
+[06:16.69 - 06:21.31] right so the market have been dropping to the downside and then there is this strong
+[06:22.57 - 06:23.61] resistance
+[06:23.61 - 06:30.52] There is this strong levels that the market decided to start breaking so the market broke this level straight to the upside
+[06:30.52 - 06:33.96] You see we can see that when the market came to this level there is no reaction
+[06:34.28 - 06:39.64] No confirmation for us to enter sales like it just kept going to the upside straight and now
+[06:39.64 - 06:46.50] It came back to test on this one. So that's the reason why I entered the buy day in few minutes later
+[06:46.50 - 06:51.00] I was up over $40 in profit. So I decided to close all the position
+[06:52.32 - 06:58.34] boom I close all position and my balance became 52 point 29 us dollars
+[06:58.50 - 07:02.00] We use so the market just reacted to the level perfectly
+[07:02.00 - 07:06.32] I saw a new buy set up on good and I started stacking my buys immediately
+[07:06.32 - 07:12.82] Okay, and now let me explain the reasons behind this buy setup. So looking at the market, the
+[07:12.82 - 07:18.52] market was dropping and then later it turned to an uptrend, right? So it turned to an uptrend
+[07:18.52 - 07:23.74] and this was around where we made a buy, we took a buy from here, right? So then the
+[07:23.74 - 07:30.32] market now dropped to the downside to hit the, this previous support level and then
+[07:30.32 - 07:34.06] it started going to the upside. I didn't enter trade deal or place any pending trade
+[07:34.06 - 07:38.94] because I want to enter after confirmation so it started going to the upside
+[07:38.94 - 07:42.66] we consulted around the outside going to the upside so I saw this candlestick
+[07:42.66 - 07:46.34] pattern this bullish engulfing candlestick pattern so and whenever this
+[07:46.34 - 07:49.62] happened after a confirmation it means that it's going to be a fire and we
+[07:49.62 - 07:53.54] shouldn't expect a drawdown okay so I think you guys should learn a lot about
+[07:53.54 - 07:58.90] go and learn about candlestick patterns so after this strong bullish
+[07:58.90 - 08:02.98] engulfing that is why I decided to enter my buy trade and now I'm up
+[08:02.98 - 08:07.62] $80 plus right now. So I'm gonna be closing this trade soon. I don't want to repeat the mistake
+[08:07.62 - 08:12.60] I did the other time so I don't want to be repeating mistakes. So I'm going to be closing the straight soon
+[08:13.18 - 08:15.28] So this is the stop loss for the street
+[08:15.48 - 08:19.72] This is the stop loss for the street and then the take profit is going to be the nearest
+[08:20.34 - 08:21.98] resistance levels
+[08:21.98 - 08:25.47] So let me show you guys the the take profit level of these trades
+[08:25.55 - 08:28.11] So this is the take profit level this nearest
+[08:28.11 - 08:32.43] If the market reaches there, I will close it.
+[08:32.43 - 08:36.47] I don't need to wait for it to go to this upper level.
+[08:36.47 - 08:40.11] But there is a high chance that the market is still going to go there.
+[08:40.11 - 08:43.11] But the fact that the high chance is still going to go there doesn't mean that I'm going
+[08:43.11 - 08:45.51] to hold this trade down till that place.
+[08:45.51 - 08:49.99] So sometimes you just have to like scalp and like take something from the market and
+[08:49.99 - 08:50.99] just run.
+[08:50.99 - 08:54.11] Okay, so like don't stay for too long in case they will find you.
+[08:54.11 - 08:56.30] Just take something and go.
+[08:56.30 - 08:57.30] Boom.
+[08:57.30 - 09:03.78] my take profit is hit successfully look at this close it boom so guys I'm up
+[09:03.78 - 09:11.90] 207.38 dollars at this point so 207.38 dollars from 14 dollars and this is a
+[09:11.90 - 09:17.88] very sweet journey but you remember I told you guys my target is thousands so
+[09:17.88 - 09:22.34] I'm only going to stop if I can get to thousand and if I just lose this account
+[09:22.34 - 09:26.34] it is totally fine this is money that I can afford to lose I mean
+[09:26.34 - 09:34.34] I'm gonna end up with a new boss, I can't afford to lose this account, that's why I'm risking it all.
+[09:34.34 - 09:41.34] I entered new boss around the same place I closed it the other time again, after some candles formed.
+[09:41.34 - 09:48.34] And let me explain what happened. So the same reason why I entered the previous trade is the same reason why I entered this one too.
+[09:48.34 - 09:53.14] see the the the bullish engulfing that formed here again at around the same
+[09:53.14 - 09:57.46] um resistance level so this this tells us that the buyers are still in control of
+[09:57.46 - 10:00.74] the market and there's high probability this resistance is going to be broken
+[10:00.74 - 10:05.54] and is going to push to that resistance at the at the up okay so and there's
+[10:05.54 - 10:09.22] confirmation on this one and this confirmation means the market is not
+[10:09.22 - 10:13.14] going to drop anymore before it goes to the upside okay so that is the reason
+[10:13.14 - 10:17.06] why i entered so when whenever bullish engulfing happens like this
+[10:17.06 - 10:21.54] is the high probability the market is going to push to the upside at that moment.
+[10:21.54 - 10:27.14] Okay, so without going to the downside before going to the upside.
+[10:27.14 - 10:33.86] So that is why I pumped some buys right now and I'm going to be watching to see how the market react to this.
+[10:33.86 - 10:39.46] I'm up in good profit already. I'm running over $100 in profit already.
+[10:39.46 - 10:42.50] So the market just spiked to the upside and I don't know what is happening.
+[10:42.50 - 10:43.38] The market is dropping.
+[10:43.38 - 10:47.90] This means that the account is going to blue. Let's watch and see what actually happened
+[10:47.90 - 10:52.14] So the market came back to the entry right now and then boom. It just started going up. Boom
+[10:52.38 - 10:57.46] Let's close it. Let's quickly close it close close close close close close all position boom
+[10:57.46 - 11:02.42] So I close all the position and now I I was now open 730 point
+[11:02.46 - 11:04.10] 69 us dollars
+[11:04.10 - 11:08.42] Okay, so there's still a high probability that the market is going to eat that is not level but
+[11:08.42 - 11:15.26] Okay, just close your profit and leave the market. Okay, so that's it. Just snatch it and leave it
+[11:15.76 - 11:20.62] The market actually hit that take profit and it is back to retest at that same place
+[11:20.62 - 11:26.10] Okay, so you remember the that place which I told you guys I expect the market to to hit that resistance
+[11:26.10 - 11:31.50] It hit it broke out and now it is there and that is the reason for this current buys which I just entered
+[11:31.58 - 11:32.06] Okay
+[11:32.06 - 11:38.90] So the market is back to react to to retest at that resistant level after the breakout and we can see that the trend is very
+[11:38.90 - 11:42.90] Very strong right now. So if the trend is very very strong like this
+[11:42.90 - 11:46.90] Or you have to do is to wait for the market to pull back today to to tap in your
+[11:47.38 - 11:53.72] Resistance zone and then you enter buys and then you wash out for what happens always apply proper risk management
+[11:53.72 - 11:58.08] Always okay, so proper risk management is applied. Let's watch and see how this is this good
+[11:58.08 - 12:01.82] I'm calling it up over five hundred dollars in profit right now already
+[12:02.06 - 12:05.50] So let's watch and keep observing and see how this is going to move.
+[12:07.43 - 12:10.95] Boom. It's going to find gold is flying gold is flying.
+[12:11.15 - 12:15.79] So at this point, I decided to close the trade because I don't want to be too greedy.
+[12:15.99 - 12:19.11] Remember, so greediness kills when it comes to trading.
+[12:19.31 - 12:20.91] So that's why I don't want to be too greedy.
+[12:21.11 - 12:23.99] And whenever the market just comes to the nearest support or resistance,
+[12:24.19 - 12:30.11] I just close the trade so the movement is not much, but it hits the target already.
+[12:30.31 - 12:32.34] And I made over one thousand dollars.
+[12:32.34 - 12:34.74] So this is more than enough for me to close the trade.
+[12:34.74 - 12:36.82] So I don't need to wait for it to still go up,
+[12:36.82 - 12:40.62] but there's actually a level of the which I expected to still go,
+[12:40.62 - 12:43.74] but I decided to close it because I don't want to be too greedy.
+[12:43.74 - 12:45.58] So when it comes to trading, don't be too greedy.
+[12:45.58 - 12:47.74] Always apply proper risk management.
+[12:47.74 - 12:50.98] Don't trade with anyone you cannot afford to lose.
+[12:50.98 - 12:51.82] Okay.
+[12:51.82 - 12:53.42] So and the broker which I'm using is Xnet,
+[12:53.42 - 12:55.82] unlimited level there, gives me unlimited level.
+[12:55.82 - 12:56.90] Check on the video description.
+[12:56.90 - 12:57.90] I'm gonna drop it there.
+[12:57.90 - 12:59.82] And I also got most of this trade
+[12:59.82 - 13:01.58] on my Telegram community.
+[13:01.58 - 13:03.02] So check the video description.
+[13:03.02 - 13:05.42] I'm gonna leave the link there too.
+[13:05.42 - 13:09.02] A few minutes later, I found a new sell setup.
+[13:09.02 - 13:13.29] So, and then I decided to make my sell trades.
+[13:13.29 - 13:16.57] So I entered some sell with one lot size.
+[13:16.57 - 13:19.57] And then let me show you what happened that caused this.
+[13:19.57 - 13:21.41] If you look at the bigger picture,
+[13:21.41 - 13:23.41] if you zoom in very well and look at bigger picture,
+[13:23.41 - 13:26.53] you can see that the market is currently a selling market.
+[13:26.53 - 13:28.49] So the market is in a downtrend.
+[13:28.49 - 13:31.17] If you look at it from the bigger picture, okay?
+[13:31.17 - 13:36.13] and then we have this resistance which got broken and it turned to an option and which made us to buy
+[13:36.13 - 13:40.61] but thank god i closed the trade and that's the nearest resistance left if not i would have lost
+[13:40.61 - 13:46.37] this account already okay because that was a fake out and the market decided to drop into the zone
+[13:46.37 - 13:54.29] already so what i learned from the other account that blew is what helped me to to make this profit
+[13:54.29 - 13:59.73] okay so look at the market came down and broke the support level and now went back up there to
+[13:59.73 - 14:04.93] retested so now this shows us that the market is going to drop okay so that was a
+[14:04.93 - 14:08.17] freakout and the real direction is going to be a sell so that's the reason why I
+[14:08.17 - 14:14.37] entered this cell okay so and I expected to drop to the downside I saw an
+[14:14.37 - 14:20.23] engulfing pattern and I added another few cells again so look at after the entry
+[14:20.23 - 14:23.95] it just dropped to the downside immediately that like it spiked to the
+[14:23.95 - 14:27.83] downside and then formed a new engulfing pattern but immediately after
+[14:27.83 - 14:32.07] the engulfing pattern closed, the market started to pull back immediately which made me to add
+[14:32.07 - 14:37.91] another position since I found my favorite candlestick pattern. So I added some fuel cell
+[14:37.91 - 14:42.23] position and then the market started to consolidate and now it dropped. So I want to just close
+[14:42.23 - 14:48.15] it now and just like go to my broker and make some withdrawals right now. So I'm going to close
+[14:48.15 - 14:53.99] all the position immediately if there's a new fuel drop right now. So I'm monitoring boom I've
+[14:53.99 - 14:55.99] closed all my position and
+[14:56.11 - 14:59.39] After closing all my position my new balance became
+[14:59.91 - 15:04.87] 5351.11 so this is how this happened guys
+[15:04.87 - 15:11.59] And I was able to to scale from $14 to over $5,000 on my second attempt
+[15:11.59 - 15:17.95] This does not happen overnight. I've been trading since 2019 so I've been treating since early 2019
+[15:17.95 - 15:20.35] So I have over like several have seven years
+[15:20.35 - 15:24.39] standard 7 years plus experience. If you check on my youtube channel you will see
+[15:24.39 - 15:28.51] that I've been teaching this advanced price action since around 2022 so I
+[15:28.51 - 15:31.99] started making videos about this strategy. So I've mastered it very well. So
+[15:31.99 - 15:35.19] before you trade like this you should also make sure you practice it and
+[15:35.19 - 15:38.47] master it very well. I drop most of this trade on my telegram community.
+[15:38.47 - 15:42.31] Check on the video description, join us and let's keep making trials together.
+[15:42.31 - 15:45.75] There's no harm in trying. If you enjoyed watching this video make sure to
+[15:45.75 - 15:48.91] smash like button and subscribe to the channel and tell me what you think
+[15:48.91 - 15:53.95] about this video and what which video do you want me to make next and what do you want me to clarify
+[15:53.95 - 15:58.11] you on so the reason why I've been showing my take showing you guys my take profit and my stop
+[15:58.11 - 16:03.47] loss very well is because um someone made a comment that should be showing where my stop loss
+[16:03.47 - 16:08.67] and take profit is so most times I don't usually like show them on the chat but I already
+[16:08.67 - 16:12.27] know the lot side which I'm using before I enter it and I already know how much I'm risking
+
+====================================================================================================
+ENGLISH (translation not required: source is English; normalized for whisper mis-hearings)
+====================================================================================================
+[00:00.00 - 00:02.64] I tried turning $14 into thousands.
+[00:02.64 - 00:07.40] I blew the whole account after seeing over $100 and then started over and actually hit
+[00:07.40 - 00:09.40] $5,300 plus target.
+[00:09.40 - 00:12.96] Here is the entire unedited proof of every single entry and exit.
+[00:12.96 - 00:14.56] Next we will show you the wins.
+[00:14.56 - 00:17.04] I recorded every single trade.
+[00:17.04 - 00:21.68] The mistakes that wiped me out the first time and the exact strategy that changed everything   {cap,ctx}
+[00:21.68 - 00:23.24] on attempt 2.
+[00:23.24 - 00:27.92] In this video, I'm working you through my full trade log step by step so you can
+[00:27.92 - 00:32.80] see what went wrong, what worked and the risk management lesson that saved the account.
+[00:33.36 - 00:40.32] So I funded $14 on this account and then this is my first setup. I saw this setup on gold and then
+[00:40.32 - 00:46.40] I started making my entry immediately. Okay, so and then let me explain the reasons behind
+[00:46.40 - 00:52.08] this setup for you. Looking at the previous price, we can see that gold have been dropping to the
+[00:52.08 - 00:58.30] downside. Okay, gold have been dropping making pullback dropping making pullbacks and like it just kept   {ctx}
+[00:58.30 - 01:04.50] drawing to the downside and it kept breaking lows and forming new lows. Okay, so that is what gold   {ctx}
+[01:04.50 - 01:10.80] XAUUSD have been doing. Okay, and right now looking at the chart we can see that there is a pullback   {ctx}
+[01:10.80 - 01:17.60] right now and the market is currently at a zone where the market have broken out from previously.
+[01:17.60 - 01:23.52] So this is the zone as you can see on my screen. So the market broke out of this place previously
+[01:23.52 - 01:27.92] And it is back here and as it came back. I didn't enter immediately
+[01:27.92 - 01:31.86] I waited for it to drop and then come back again at that level
+[01:31.86 - 01:36.64] So and now I expect it to drop massively to the downside now on the truth
+[01:36.64 - 01:42.24] So already moving in profit look at its up 11 dollars in profit right now 12 dollars
+[01:42.24 - 01:50.16] And yeah, it is dropping to the downside. Let's watch and observe and see how it goes. It is even up 17 dollars in profit right now
+[01:50.36 - 01:55.92] Guys, I don't know what is happening, but the market is just pumping to downside 23 dollars in profit
+[01:56.40 - 02:02.31] Here the market is up over 30 dollars in profit already. So I decided to close all my position boom
+[02:02.67 - 02:06.35] After closing the trades I was up 48 point 22 dollars
+[02:06.35 - 02:08.91] And then I started looking for the next trade
+[02:08.91 - 02:16.31] I found a new set of here on the XAUUSD. Okay, so this is a look so sweet, but this is actually what blew my account   {ctx}
+[02:16.75 - 02:19.29] So if you look if you look at the market
+[02:19.87 - 02:22.53] Market is currently have been ranging
+[02:23.03 - 02:25.03] So the market have been ranging
+[02:25.74 - 02:29.30] Okay, and it have been respecting this resistant level
+[02:29.70 - 02:36.95] Okay, so the market was ranging around that price and then it broke out of the support to the downside
+[02:36.95 - 02:41.75] And what this means is that the sellers are still in control
+[02:42.15 - 02:45.15] Okay, so that's what this means if the market could break
+[02:45.67 - 02:50.11] This the previous strong support means that the sellers are still in control
+[02:50.11 - 02:56.65] So I look for a strong resistance level which is this place currently where the market have reacted to eat like more than
+[02:56.87 - 03:02.83] Six times so market have reacted this place more than six times and that smacks it that makes it a strong
+[03:02.83 - 03:06.51] resistance level and that is the reason why I waited for the market to come there and
+[03:06.51 - 03:12.51] still even react before I now decided to take my trade because this is the resistance that   {ctx}
+[03:12.51 - 03:16.71] this is the reaction that happened around the resistance that made me to enter the sell   {ctx}
+[03:16.71 - 03:17.71] trade.   {ctx}
+[03:17.71 - 03:21.79] So this is the reaction and this is where my stop loss is.
+[03:21.79 - 03:26.95] If the market reaches this level, I'm going to get stopped out and then this is my take
+[03:26.95 - 03:27.95] profit also.
+[03:27.95 - 03:30.15] Let me show you where I spent the market to go.
+[03:30.15 - 03:34.19] I expected market to drop to this this level here
+[03:35.30 - 03:37.98] Okay, so I expected the market to drop to this level here
+[03:38.42 - 03:44.93] This is what happened some minutes later. So the market dropped and I'm up over 100 around hundred dollars in profit
+[03:45.17 - 03:47.77] So if you look at my equity my equity is up around
+[03:48.49 - 03:51.57] 140 dollars, but I made a very huge mistake here
+[03:51.57 - 03:54.61] I didn't close and if my on my last video
+[03:54.61 - 04:00.25] I want you guys the reason why I used to close at the nearest support and resistance that is not good to be too greedy
+[04:00.25 - 04:07.85] But at this point I did not close it. I wanted it to drop even more so that I'll be able to flip this $48 to maybe
+[04:08.21 - 04:13.37] Around $500 or $300. That was what I expected
+[04:13.51 - 04:16.73] But look at what happened market started going up immediately
+[04:17.21 - 04:23.79] So instead of me to close I only recorded it and I didn't close. I'm down in losses right now
+[04:23.79 - 04:28.47] I'm down minus 30 dollars right now. So look at minus 36 dollars
+[04:28.47 - 04:36.23] minus $34 minus $41 and I have just $48 boom I finally lost the account and
+[04:36.23 - 04:43.75] I'm down to $0 right now so the market went up and I lost the account and I'm
+[04:43.75 - 04:49.31] down 0.00 dollars in equity right now so what have we learned instead of me to
+[04:49.31 - 04:53.55] close profits I did not close the profits I was still holding for it to
+[04:53.55 - 04:59.39] go down more so that I'll be able to get so much money from one single trade but
+[04:59.39 - 05:02.59] that is not how it's supposed to work I'm supposed to just close it and then wait
+[05:02.59 - 05:06.71] for the next trade and then make some more money so it is better to be closing
+[05:06.71 - 05:11.03] it quickly and just be catching out step by step down for you to try to make
+[05:11.03 - 05:15.07] all the money you want to make from one single trade so that's what I've learned
+[05:15.07 - 05:19.95] and I'm going to apply it and see if I'll be able to like achieve my target
+[05:19.95 - 05:26.63] So let me let me find the gain and try the second time after closing the trade look at what happened
+[05:26.79 - 05:31.69] So after they stopped me out the market reversed massively and I achieved my target
+[05:31.89 - 05:36.11] Okay, so look at the market reverse and I achieved my target, but I
+[05:36.45 - 05:41.61] Was stopped out first before the market now dropped finally so that is what happened guys
+[05:41.71 - 05:45.09] So I got stopped out and then boom the market just dropped to the downside
+[05:45.09 - 05:53.25] What this means is that my analysis is still even correct, but the liquidation happened in the market and also if I close it earlier
+[05:53.25 - 05:58.71] I wouldn't have like hold till when I lost my account. So that those are the two things that happen
+[05:58.73 - 06:01.03] So it is time to find the game and try again
+[06:01.65 - 06:07.37] After losing the account that decided to fund again and now I have a buy setup on XAUUSD right now   {ctx}
+[06:07.41 - 06:13.93] So let me explain the reason for this buy setup. So looking at the previous trend
+[06:13.93 - 06:16.69] we can see that the market have been dropping to the downside
+[06:16.69 - 06:21.31] right so the market have been dropping to the downside and then there is this strong
+[06:22.57 - 06:23.61] resistance
+[06:23.61 - 06:30.52] There is this strong levels that the market decided to start breaking so the market broke this level straight to the upside
+[06:30.52 - 06:33.96] You see we can see that when the market came to this level there is no reaction
+[06:34.28 - 06:39.64] No confirmation for us to enter sales like it just kept going to the upside straight and now
+[06:39.64 - 06:46.50] It came back to test on this one. So that's the reason why I entered the buy day in few minutes later
+[06:46.50 - 06:51.00] I was up over $40 in profit. So I decided to close all the position
+[06:52.32 - 06:58.34] boom I close all position and my balance became 52 point 29 us dollars
+[06:58.50 - 07:02.00] We use so the market just reacted to the level perfectly
+[07:02.00 - 07:06.32] I saw a new buy setup on gold and I started stacking my buys immediately   {ctx}
+[07:06.32 - 07:12.82] Okay, and now let me explain the reasons behind this buy setup. So looking at the market, the
+[07:12.82 - 07:18.52] market was dropping and then later it turned to an uptrend, right? So it turned to an uptrend
+[07:18.52 - 07:23.74] and this was around where we made a buy, we took a buy from here, right? So then the
+[07:23.74 - 07:30.32] market now dropped to the downside to hit the, this previous support level and then
+[07:30.32 - 07:34.06] it started going to the upside. I didn't enter trade deal or place any pending trade
+[07:34.06 - 07:38.94] because I want to enter after confirmation so it started going to the upside
+[07:38.94 - 07:42.66] we consulted around the outside going to the upside so I saw this candlestick
+[07:42.66 - 07:46.34] pattern this bullish engulfing candlestick pattern so and whenever this
+[07:46.34 - 07:49.62] happened after a confirmation it means that it's going to be a fire and we
+[07:49.62 - 07:53.54] shouldn't expect a drawdown okay so I think you guys should learn a lot about
+[07:53.54 - 07:58.90] go and learn about candlestick patterns so after this strong bullish
+[07:58.90 - 08:02.98] engulfing that is why I decided to enter my buy trade and now I'm up
+[08:02.98 - 08:07.62] $80 plus right now. So I'm gonna be closing this trade soon. I don't want to repeat the mistake
+[08:07.62 - 08:12.60] I did the other time so I don't want to be repeating mistakes. So I'm going to be closing the trade soon   {ctx}
+[08:13.18 - 08:15.28] So this is the stop loss for the trade   {ctx}
+[08:15.48 - 08:19.72] This is the stop loss for the trade and then the take profit is going to be the nearest   {ctx}
+[08:20.34 - 08:21.98] resistance levels
+[08:21.98 - 08:25.47] So let me show you guys the the take profit level of these trades
+[08:25.55 - 08:28.11] So this is the take profit level this nearest
+[08:28.11 - 08:32.43] If the market reaches there, I will close it.
+[08:32.43 - 08:36.47] I don't need to wait for it to go to this upper level.
+[08:36.47 - 08:40.11] But there is a high chance that the market is still going to go there.
+[08:40.11 - 08:43.11] But the fact that the high chance is still going to go there doesn't mean that I'm going
+[08:43.11 - 08:45.51] to hold this trade down till that place.
+[08:45.51 - 08:49.99] So sometimes you just have to like scalp and like take something from the market and
+[08:49.99 - 08:50.99] just run.
+[08:50.99 - 08:54.11] Okay, so like don't stay for too long in case they will find you.
+[08:54.11 - 08:56.30] Just take something and go.
+[08:56.30 - 08:57.30] Boom.
+[08:57.30 - 09:03.78] my take profit is hit successfully look at this close it boom so guys I'm up
+[09:03.78 - 09:11.90] 207.38 dollars at this point so 207.38 dollars from 14 dollars and this is a
+[09:11.90 - 09:17.88] very sweet journey but you remember I told you guys my target is thousands so
+[09:17.88 - 09:22.34] I'm only going to stop if I can get to thousand and if I just lose this account
+[09:22.34 - 09:26.34] it is totally fine this is money that I can afford to lose I mean
+[09:26.34 - 09:34.34] I'm a millionaire in dollars, so um, [I can afford to lose this account], that's why I'm risking it all.   {cap,ctx}
+[09:34.34 - 09:41.34] I entered new buys around the same place I closed it the other time again, after some candles formed.   {ctx}
+[09:41.34 - 09:48.34] And let me explain what happened. So the same reason why I entered the previous trade is the same reason why I entered this one too.
+[09:48.34 - 09:53.14] see the the the bullish engulfing that formed here again at around the same
+[09:53.14 - 09:57.46] um resistance level so this this tells us that the buyers are still in control of
+[09:57.46 - 10:00.74] the market and there's high probability this resistance is going to be broken
+[10:00.74 - 10:05.54] and is going to push to that resistance at the at the up okay so and there's
+[10:05.54 - 10:09.22] confirmation on this one and this confirmation means the market is not
+[10:09.22 - 10:13.14] going to drop anymore before it goes to the upside okay so that is the reason
+[10:13.14 - 10:17.06] why i entered so when whenever bullish engulfing happens like this
+[10:17.06 - 10:21.54] is the high probability the market is going to push to the upside at that moment.
+[10:21.54 - 10:27.14] Okay, so without going to the downside before going to the upside.
+[10:27.14 - 10:33.86] So that is why I pumped some buys right now and I'm going to be watching to see how the market react to this.
+[10:33.86 - 10:39.46] I'm up in good profit already. I'm running over $100 in profit already.
+[10:39.46 - 10:42.50] So the market just spiked to the upside and I don't know what is happening.
+[10:42.50 - 10:43.38] The market is dropping.
+[10:43.38 - 10:47.90] This means that the account is going to blue. Let's watch and see what actually happened
+[10:47.90 - 10:52.14] So the market came back to the entry right now and then boom. It just started going up. Boom
+[10:52.38 - 10:57.46] Let's close it. Let's quickly close it close close close close close close all position boom
+[10:57.46 - 11:02.42] So I close all the position and now I I was now open 730 point
+[11:02.46 - 11:04.10] 69 us dollars
+[11:04.10 - 11:08.42] Okay, so there's still a high probability that the market is going to eat that is not level but
+[11:08.42 - 11:15.26] Okay, just close your profit and leave the market. Okay, so that's it. Just snatch it and leave it
+[11:15.76 - 11:20.62] The market actually hit that take profit and it is back to retest at that same place
+[11:20.62 - 11:26.10] Okay, so you remember the that place which I told you guys I expect the market to to hit that resistance
+[11:26.10 - 11:31.50] It hit it broke out and now it is there and that is the reason for this current buys which I just entered
+[11:31.58 - 11:32.06] Okay
+[11:32.06 - 11:38.90] So the market is back to react to to retest at that resistant level after the breakout and we can see that the trend is very
+[11:38.90 - 11:42.90] Very strong right now. So if the trend is very very strong like this
+[11:42.90 - 11:46.90] Or you have to do is to wait for the market to pull back today to to tap in your
+[11:47.38 - 11:53.72] Resistance zone and then you enter buys and then you watch out for what happens always apply proper risk management   {cap}
+[11:53.72 - 11:58.08] Always okay, so proper risk management is applied. Let's watch and see how this is this good
+[11:58.08 - 12:01.82] I'm calling it up over five hundred dollars in profit right now already
+[12:02.06 - 12:05.50] So let's watch and keep observing and see how this is going to move.
+[12:07.43 - 12:10.95] Boom. It's going to find gold is flying gold is flying.
+[12:11.15 - 12:15.79] So at this point, I decided to close the trade because I don't want to be too greedy.
+[12:15.99 - 12:19.11] Remember, so greediness kills when it comes to trading.
+[12:19.31 - 12:20.91] So that's why I don't want to be too greedy.
+[12:21.11 - 12:23.99] And whenever the market just comes to the nearest support or resistance,
+[12:24.19 - 12:30.11] I just close the trade so the movement is not much, but it hits the target already.
+[12:30.31 - 12:32.34] And I made over one thousand dollars.
+[12:32.34 - 12:34.74] So this is more than enough for me to close the trade.
+[12:34.74 - 12:36.82] So I don't need to wait for it to still go up,
+[12:36.82 - 12:40.62] but there's actually a level of the which I expected to still go,
+[12:40.62 - 12:43.74] but I decided to close it because I don't want to be too greedy.
+[12:43.74 - 12:45.58] So when it comes to trading, don't be too greedy.
+[12:45.58 - 12:47.74] Always apply proper risk management.
+[12:47.74 - 12:50.98] Don't trade with anyone you cannot afford to lose.
+[12:50.98 - 12:51.82] Okay.
+[12:51.82 - 12:53.42] So and the broker which I'm using is Exness,   {ctx}
+[12:53.42 - 12:55.82] unlimited leverage, gives me unlimited leverage.   {ctx}
+[12:55.82 - 12:56.90] Check on the video description.
+[12:56.90 - 12:57.90] I'm gonna drop it there.
+[12:57.90 - 12:59.82] And I also got most of this trade
+[12:59.82 - 13:01.58] on my Telegram community.
+[13:01.58 - 13:03.02] So check the video description.
+[13:03.02 - 13:05.42] I'm gonna leave the link there too.
+[13:05.42 - 13:09.02] A few minutes later, I found a new sell setup.
+[13:09.02 - 13:13.29] So, and then I decided to make my sell trades.
+[13:13.29 - 13:16.57] So I entered some sell with one lot size.
+[13:16.57 - 13:19.57] And then let me show you what happened that caused this.
+[13:19.57 - 13:21.41] If you look at the bigger picture,
+[13:21.41 - 13:23.41] if you zoom in very well and look at bigger picture,
+[13:23.41 - 13:26.53] you can see that the market is currently a selling market.
+[13:26.53 - 13:28.49] So the market is in a downtrend.
+[13:28.49 - 13:31.17] If you look at it from the bigger picture, okay?
+[13:31.17 - 13:36.13] and then we have this resistance which got broken and it turned to an uptrend and which made us to buy   {cap}
+[13:36.13 - 13:40.61] but thank god i closed the trade and that's the nearest resistance left if not i would have lost
+[13:40.61 - 13:46.37] this account already okay because that was a fake out and the market decided to drop into the zone
+[13:46.37 - 13:54.29] already so what i learned from the other account that blew is what helped me to to make this profit
+[13:54.29 - 13:59.73] okay so look at the market came down and broke the support level and now went back up there to
+[13:59.73 - 14:04.93] retested so now this shows us that the market is going to drop okay so that was a
+[14:04.93 - 14:08.17] fake out and the real direction is going to be a sell so that's the reason why I   {ctx}
+[14:08.17 - 14:14.37] entered this sell okay so and I expected to drop to the downside I saw an   {ctx}
+[14:14.37 - 14:20.23] engulfing pattern and I added another few sells again so look at after the entry   {ctx}
+[14:20.23 - 14:23.95] it just dropped to the downside immediately that like it spiked to the
+[14:23.95 - 14:27.83] downside and then formed a new engulfing pattern but immediately after
+[14:27.83 - 14:32.07] the engulfing pattern closed, the market started to pull back immediately which made me to add
+[14:32.07 - 14:37.91] another position since I found my favorite candlestick pattern. So I added some few sell   {ctx}
+[14:37.91 - 14:42.23] position and then the market started to consolidate and now it dropped. So I want to just close
+[14:42.23 - 14:48.15] it now and just like go to my broker and make some withdrawals right now. So I'm going to close
+[14:48.15 - 14:53.99] all the position immediately if there's a new fuel drop right now. So I'm monitoring boom I've
+[14:53.99 - 14:55.99] closed all my position and
+[14:56.11 - 14:59.39] After closing all my position my new balance became
+[14:59.91 - 15:04.87] 5351.11 so this is how this happened guys
+[15:04.87 - 15:11.59] And I was able to to scale from $14 to over $5,000 on my second attempt
+[15:11.59 - 15:17.95] This does not happen overnight. I've been trading since 2019 so I've been treating since early 2019
+[15:17.95 - 15:20.35] So I have over like several have seven years
+[15:20.35 - 15:24.39] standard 7 years plus experience. If you check on my youtube channel you will see
+[15:24.39 - 15:28.51] that I've been teaching this advanced price action since around 2022 so I
+[15:28.51 - 15:31.99] started making videos about this strategy. So I've mastered it very well. So
+[15:31.99 - 15:35.19] before you trade like this you should also make sure you practice it and
+[15:35.19 - 15:38.47] master it very well. I drop most of this trade on my telegram community.
+[15:38.47 - 15:42.31] Check on the video description, join us and let's keep making trials together.
+[15:42.31 - 15:45.75] There's no harm in trying. If you enjoyed watching this video make sure to
+[15:45.75 - 15:48.91] smash like button and subscribe to the channel and tell me what you think
+[15:48.91 - 15:53.95] about this video and what which video do you want me to make next and what do you want me to clarify
+[15:53.95 - 15:58.11] you on so the reason why I've been showing my take showing you guys my take profit and my stop
+[15:58.11 - 16:03.47] loss very well is because um someone made a comment that should be showing where my stop loss
+[16:03.47 - 16:08.67] and take profit is so most times I don't usually like show them on the chart but I already   {ctx}
+[16:08.67 - 16:12.27] know the lot size which I'm using before I enter it and I already know how much I'm risking   {ctx}
+
+# segments=224 segments_with_fixes=25

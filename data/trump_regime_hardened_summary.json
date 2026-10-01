@@ -1,0 +1,21 @@
+{
+  "regime": "Trump Administration (Jan 21, 2025 to Sep 20, 2026)",
+  "total_calendar_days": 473,
+  "initial_starting_balance": 60.0,
+  "final_retained_balance": 4837.39,
+  "total_cash_vaulted": 27087.86,
+  "total_wealth_generated": 31925.25,
+  "wealth_multiplier": 532.09,
+  "total_trades": 1115,
+  "wins": 585,
+  "losses": 530,
+  "win_rate_pct": 52.47,
+  "profit_factor": 2.36,
+  "profitable_days": 194,
+  "losing_days": 279,
+  "flat_days": 0,
+  "daily_win_rate_pct": 41.0,
+  "average_daily_profit": 67.37,
+  "daily_report_csv": "/Users/mac/Desktop/TBT-Engine/data/trump_regime_daily_report.csv",
+  "daily_report_json": "/Users/mac/Desktop/TBT-Engine/data/trump_regime_daily_report.json"
+}

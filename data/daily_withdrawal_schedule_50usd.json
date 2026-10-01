@@ -1,0 +1,542 @@
+[
+  {
+    "Day": 1,
+    "Date": "2026-03-20",
+    "Starting_Balance_USD": 50.0,
+    "Daily_Trading_Profit_USD": 9849.11,
+    "Cash_Withdrawn_Today_USD": 2954.73,
+    "Retained_Trading_Balance_USD": 6944.38,
+    "Cumulative_Cash_Withdrawn_USD": 2954.73
+  },
+  {
+    "Day": 2,
+    "Date": "2026-03-21",
+    "Starting_Balance_USD": 6944.38,
+    "Daily_Trading_Profit_USD": 91273.24,
+    "Cash_Withdrawn_Today_USD": 45636.62,
+    "Retained_Trading_Balance_USD": 52581.0,
+    "Cumulative_Cash_Withdrawn_USD": 48591.35
+  },
+  {
+    "Day": 3,
+    "Date": "2026-03-22",
+    "Starting_Balance_USD": 52581.0,
+    "Daily_Trading_Profit_USD": 52920.0,
+    "Cash_Withdrawn_Today_USD": 37044.0,
+    "Retained_Trading_Balance_USD": 68457.0,
+    "Cumulative_Cash_Withdrawn_USD": 85635.35
+  },
+  {
+    "Day": 4,
+    "Date": "2026-03-23",
+    "Starting_Balance_USD": 68457.0,
+    "Daily_Trading_Profit_USD": 63112.5,
+    "Cash_Withdrawn_Today_USD": 44178.75,
+    "Retained_Trading_Balance_USD": 87390.75,
+    "Cumulative_Cash_Withdrawn_USD": 129814.1
+  },
+  {
+    "Day": 5,
+    "Date": "2026-03-24",
+    "Starting_Balance_USD": 87390.75,
+    "Daily_Trading_Profit_USD": 90795.75,
+    "Cash_Withdrawn_Today_USD": 63557.02,
+    "Retained_Trading_Balance_USD": 114629.48,
+    "Cumulative_Cash_Withdrawn_USD": 193371.12
+  },
+  {
+    "Day": 6,
+    "Date": "2026-03-25",
+    "Starting_Balance_USD": 114629.48,
+    "Daily_Trading_Profit_USD": 64471.5,
+    "Cash_Withdrawn_Today_USD": 45130.05,
+    "Retained_Trading_Balance_USD": 133970.93,
+    "Cumulative_Cash_Withdrawn_USD": 238501.17
+  },
+  {
+    "Day": 7,
+    "Date": "2026-03-26",
+    "Starting_Balance_USD": 133970.93,
+    "Daily_Trading_Profit_USD": 27237.75,
+    "Cash_Withdrawn_Today_USD": 19066.43,
+    "Retained_Trading_Balance_USD": 142142.25,
+    "Cumulative_Cash_Withdrawn_USD": 257567.6
+  },
+  {
+    "Day": 8,
+    "Date": "2026-03-27",
+    "Starting_Balance_USD": 142142.25,
+    "Daily_Trading_Profit_USD": 46645.5,
+    "Cash_Withdrawn_Today_USD": 32651.85,
+    "Retained_Trading_Balance_USD": 156135.9,
+    "Cumulative_Cash_Withdrawn_USD": 290219.45
+  },
+  {
+    "Day": 9,
+    "Date": "2026-03-28",
+    "Starting_Balance_USD": 156135.9,
+    "Daily_Trading_Profit_USD": 20912.25,
+    "Cash_Withdrawn_Today_USD": 14638.58,
+    "Retained_Trading_Balance_USD": 162409.57,
+    "Cumulative_Cash_Withdrawn_USD": 304858.03
+  },
+  {
+    "Day": 10,
+    "Date": "2026-03-29",
+    "Starting_Balance_USD": 162409.57,
+    "Daily_Trading_Profit_USD": 66705.0,
+    "Cash_Withdrawn_Today_USD": 46693.5,
+    "Retained_Trading_Balance_USD": 182421.07,
+    "Cumulative_Cash_Withdrawn_USD": 351551.53
+  },
+  {
+    "Day": 11,
+    "Date": "2026-03-30",
+    "Starting_Balance_USD": 182421.07,
+    "Daily_Trading_Profit_USD": 62499.75,
+    "Cash_Withdrawn_Today_USD": 43749.83,
+    "Retained_Trading_Balance_USD": 201170.99,
+    "Cumulative_Cash_Withdrawn_USD": 395301.36
+  },
+  {
+    "Day": 12,
+    "Date": "2026-03-31",
+    "Starting_Balance_USD": 201170.99,
+    "Daily_Trading_Profit_USD": 74865.75,
+    "Cash_Withdrawn_Today_USD": 52406.02,
+    "Retained_Trading_Balance_USD": 223630.72,
+    "Cumulative_Cash_Withdrawn_USD": 447707.38
+  },
+  {
+    "Day": 13,
+    "Date": "2026-04-01",
+    "Starting_Balance_USD": 223630.72,
+    "Daily_Trading_Profit_USD": 83989.5,
+    "Cash_Withdrawn_Today_USD": 58792.65,
+    "Retained_Trading_Balance_USD": 248827.57,
+    "Cumulative_Cash_Withdrawn_USD": 506500.03
+  },
+  {
+    "Day": 14,
+    "Date": "2026-04-02",
+    "Starting_Balance_USD": 248827.57,
+    "Daily_Trading_Profit_USD": 108878.25,
+    "Cash_Withdrawn_Today_USD": 76214.78,
+    "Retained_Trading_Balance_USD": 281491.04,
+    "Cumulative_Cash_Withdrawn_USD": 582714.81
+  },
+  {
+    "Day": 15,
+    "Date": "2026-04-03",
+    "Starting_Balance_USD": 281491.04,
+    "Daily_Trading_Profit_USD": 28221.0,
+    "Cash_Withdrawn_Today_USD": 19754.7,
+    "Retained_Trading_Balance_USD": 289957.34,
+    "Cumulative_Cash_Withdrawn_USD": 602469.51
+  },
+  {
+    "Day": 16,
+    "Date": "2026-04-04",
+    "Starting_Balance_USD": 289957.34,
+    "Daily_Trading_Profit_USD": 96083.25,
+    "Cash_Withdrawn_Today_USD": 67258.27,
+    "Retained_Trading_Balance_USD": 318782.32,
+    "Cumulative_Cash_Withdrawn_USD": 669727.78
+  },
+  {
+    "Day": 17,
+    "Date": "2026-04-05",
+    "Starting_Balance_USD": 318782.32,
+    "Daily_Trading_Profit_USD": 39710.25,
+    "Cash_Withdrawn_Today_USD": 27797.18,
+    "Retained_Trading_Balance_USD": 330695.39,
+    "Cumulative_Cash_Withdrawn_USD": 697524.96
+  },
+  {
+    "Day": 18,
+    "Date": "2026-04-06",
+    "Starting_Balance_USD": 330695.39,
+    "Daily_Trading_Profit_USD": 47090.25,
+    "Cash_Withdrawn_Today_USD": 32963.18,
+    "Retained_Trading_Balance_USD": 344822.46,
+    "Cumulative_Cash_Withdrawn_USD": 730488.14
+  },
+  {
+    "Day": 19,
+    "Date": "2026-04-07",
+    "Starting_Balance_USD": 344822.46,
+    "Daily_Trading_Profit_USD": 76406.25,
+    "Cash_Withdrawn_Today_USD": 53484.37,
+    "Retained_Trading_Balance_USD": 367744.34,
+    "Cumulative_Cash_Withdrawn_USD": 783972.51
+  },
+  {
+    "Day": 20,
+    "Date": "2026-04-08",
+    "Starting_Balance_USD": 367744.34,
+    "Daily_Trading_Profit_USD": 77031.75,
+    "Cash_Withdrawn_Today_USD": 53922.22,
+    "Retained_Trading_Balance_USD": 390853.87,
+    "Cumulative_Cash_Withdrawn_USD": 837894.73
+  },
+  {
+    "Day": 21,
+    "Date": "2026-04-09",
+    "Starting_Balance_USD": 390853.87,
+    "Daily_Trading_Profit_USD": 61673.25,
+    "Cash_Withdrawn_Today_USD": 43171.27,
+    "Retained_Trading_Balance_USD": 409355.85,
+    "Cumulative_Cash_Withdrawn_USD": 881066.0
+  },
+  {
+    "Day": 22,
+    "Date": "2026-04-10",
+    "Starting_Balance_USD": 409355.85,
+    "Daily_Trading_Profit_USD": 76813.5,
+    "Cash_Withdrawn_Today_USD": 53769.45,
+    "Retained_Trading_Balance_USD": 432399.9,
+    "Cumulative_Cash_Withdrawn_USD": 934835.45
+  },
+  {
+    "Day": 23,
+    "Date": "2026-04-11",
+    "Starting_Balance_USD": 432399.9,
+    "Daily_Trading_Profit_USD": 39724.5,
+    "Cash_Withdrawn_Today_USD": 27807.15,
+    "Retained_Trading_Balance_USD": 444317.25,
+    "Cumulative_Cash_Withdrawn_USD": 962642.6
+  },
+  {
+    "Day": 24,
+    "Date": "2026-04-12",
+    "Starting_Balance_USD": 444317.25,
+    "Daily_Trading_Profit_USD": 89908.5,
+    "Cash_Withdrawn_Today_USD": 62935.95,
+    "Retained_Trading_Balance_USD": 471289.8,
+    "Cumulative_Cash_Withdrawn_USD": 1025578.55
+  },
+  {
+    "Day": 25,
+    "Date": "2026-04-13",
+    "Starting_Balance_USD": 471289.8,
+    "Daily_Trading_Profit_USD": 79071.75,
+    "Cash_Withdrawn_Today_USD": 55350.23,
+    "Retained_Trading_Balance_USD": 495011.32,
+    "Cumulative_Cash_Withdrawn_USD": 1080928.78
+  },
+  {
+    "Day": 26,
+    "Date": "2026-04-14",
+    "Starting_Balance_USD": 495011.32,
+    "Daily_Trading_Profit_USD": 61597.5,
+    "Cash_Withdrawn_Today_USD": 43118.25,
+    "Retained_Trading_Balance_USD": 513490.57,
+    "Cumulative_Cash_Withdrawn_USD": 1124047.03
+  },
+  {
+    "Day": 27,
+    "Date": "2026-04-15",
+    "Starting_Balance_USD": 513490.57,
+    "Daily_Trading_Profit_USD": 59943.0,
+    "Cash_Withdrawn_Today_USD": 41960.1,
+    "Retained_Trading_Balance_USD": 531473.47,
+    "Cumulative_Cash_Withdrawn_USD": 1166007.13
+  },
+  {
+    "Day": 28,
+    "Date": "2026-04-16",
+    "Starting_Balance_USD": 531473.47,
+    "Daily_Trading_Profit_USD": 47520.75,
+    "Cash_Withdrawn_Today_USD": 33264.53,
+    "Retained_Trading_Balance_USD": 545729.69,
+    "Cumulative_Cash_Withdrawn_USD": 1199271.66
+  },
+  {
+    "Day": 29,
+    "Date": "2026-04-17",
+    "Starting_Balance_USD": 545729.69,
+    "Daily_Trading_Profit_USD": 64494.75,
+    "Cash_Withdrawn_Today_USD": 45146.32,
+    "Retained_Trading_Balance_USD": 565078.12,
+    "Cumulative_Cash_Withdrawn_USD": 1244417.98
+  },
+  {
+    "Day": 30,
+    "Date": "2026-04-18",
+    "Starting_Balance_USD": 565078.12,
+    "Daily_Trading_Profit_USD": 52150.5,
+    "Cash_Withdrawn_Today_USD": 36505.35,
+    "Retained_Trading_Balance_USD": 580723.27,
+    "Cumulative_Cash_Withdrawn_USD": 1280923.33
+  },
+  {
+    "Day": 31,
+    "Date": "2026-04-19",
+    "Starting_Balance_USD": 580723.27,
+    "Daily_Trading_Profit_USD": 36099.0,
+    "Cash_Withdrawn_Today_USD": 25269.3,
+    "Retained_Trading_Balance_USD": 591552.97,
+    "Cumulative_Cash_Withdrawn_USD": 1306192.63
+  },
+  {
+    "Day": 32,
+    "Date": "2026-04-20",
+    "Starting_Balance_USD": 591552.97,
+    "Daily_Trading_Profit_USD": 87833.25,
+    "Cash_Withdrawn_Today_USD": 61483.28,
+    "Retained_Trading_Balance_USD": 617902.94,
+    "Cumulative_Cash_Withdrawn_USD": 1367675.91
+  },
+  {
+    "Day": 33,
+    "Date": "2026-04-21",
+    "Starting_Balance_USD": 617902.94,
+    "Daily_Trading_Profit_USD": 66606.0,
+    "Cash_Withdrawn_Today_USD": 46624.2,
+    "Retained_Trading_Balance_USD": 637884.74,
+    "Cumulative_Cash_Withdrawn_USD": 1414300.11
+  },
+  {
+    "Day": 34,
+    "Date": "2026-04-22",
+    "Starting_Balance_USD": 637884.74,
+    "Daily_Trading_Profit_USD": 58292.25,
+    "Cash_Withdrawn_Today_USD": 40804.57,
+    "Retained_Trading_Balance_USD": 655372.42,
+    "Cumulative_Cash_Withdrawn_USD": 1455104.68
+  },
+  {
+    "Day": 35,
+    "Date": "2026-04-23",
+    "Starting_Balance_USD": 655372.42,
+    "Daily_Trading_Profit_USD": 64851.0,
+    "Cash_Withdrawn_Today_USD": 45395.7,
+    "Retained_Trading_Balance_USD": 674827.72,
+    "Cumulative_Cash_Withdrawn_USD": 1500500.38
+  },
+  {
+    "Day": 36,
+    "Date": "2026-04-24",
+    "Starting_Balance_USD": 674827.72,
+    "Daily_Trading_Profit_USD": 56274.0,
+    "Cash_Withdrawn_Today_USD": 39391.8,
+    "Retained_Trading_Balance_USD": 691709.92,
+    "Cumulative_Cash_Withdrawn_USD": 1539892.18
+  },
+  {
+    "Day": 37,
+    "Date": "2026-04-25",
+    "Starting_Balance_USD": 691709.92,
+    "Daily_Trading_Profit_USD": 85073.25,
+    "Cash_Withdrawn_Today_USD": 59551.27,
+    "Retained_Trading_Balance_USD": 717231.9,
+    "Cumulative_Cash_Withdrawn_USD": 1599443.45
+  },
+  {
+    "Day": 38,
+    "Date": "2026-04-26",
+    "Starting_Balance_USD": 717231.9,
+    "Daily_Trading_Profit_USD": 67203.75,
+    "Cash_Withdrawn_Today_USD": 47042.63,
+    "Retained_Trading_Balance_USD": 737393.02,
+    "Cumulative_Cash_Withdrawn_USD": 1646486.08
+  },
+  {
+    "Day": 39,
+    "Date": "2026-04-27",
+    "Starting_Balance_USD": 737393.02,
+    "Daily_Trading_Profit_USD": 68216.25,
+    "Cash_Withdrawn_Today_USD": 47751.38,
+    "Retained_Trading_Balance_USD": 757857.89,
+    "Cumulative_Cash_Withdrawn_USD": 1694237.46
+  },
+  {
+    "Day": 40,
+    "Date": "2026-04-28",
+    "Starting_Balance_USD": 757857.89,
+    "Daily_Trading_Profit_USD": 71992.5,
+    "Cash_Withdrawn_Today_USD": 50394.75,
+    "Retained_Trading_Balance_USD": 779455.64,
+    "Cumulative_Cash_Withdrawn_USD": 1744632.21
+  },
+  {
+    "Day": 41,
+    "Date": "2026-04-29",
+    "Starting_Balance_USD": 779455.64,
+    "Daily_Trading_Profit_USD": 23482.5,
+    "Cash_Withdrawn_Today_USD": 16437.75,
+    "Retained_Trading_Balance_USD": 786500.39,
+    "Cumulative_Cash_Withdrawn_USD": 1761069.96
+  },
+  {
+    "Day": 42,
+    "Date": "2026-04-30",
+    "Starting_Balance_USD": 786500.39,
+    "Daily_Trading_Profit_USD": 66864.0,
+    "Cash_Withdrawn_Today_USD": 46804.8,
+    "Retained_Trading_Balance_USD": 806559.59,
+    "Cumulative_Cash_Withdrawn_USD": 1807874.76
+  },
+  {
+    "Day": 43,
+    "Date": "2026-05-01",
+    "Starting_Balance_USD": 806559.59,
+    "Daily_Trading_Profit_USD": 16690.5,
+    "Cash_Withdrawn_Today_USD": 11683.35,
+    "Retained_Trading_Balance_USD": 811566.74,
+    "Cumulative_Cash_Withdrawn_USD": 1819558.11
+  },
+  {
+    "Day": 44,
+    "Date": "2026-05-02",
+    "Starting_Balance_USD": 811566.74,
+    "Daily_Trading_Profit_USD": 77917.5,
+    "Cash_Withdrawn_Today_USD": 54542.25,
+    "Retained_Trading_Balance_USD": 834941.99,
+    "Cumulative_Cash_Withdrawn_USD": 1874100.36
+  },
+  {
+    "Day": 45,
+    "Date": "2026-05-03",
+    "Starting_Balance_USD": 834941.99,
+    "Daily_Trading_Profit_USD": 35861.25,
+    "Cash_Withdrawn_Today_USD": 25102.88,
+    "Retained_Trading_Balance_USD": 845700.36,
+    "Cumulative_Cash_Withdrawn_USD": 1899203.24
+  },
+  {
+    "Day": 46,
+    "Date": "2026-05-04",
+    "Starting_Balance_USD": 845700.36,
+    "Daily_Trading_Profit_USD": 39714.75,
+    "Cash_Withdrawn_Today_USD": 27800.32,
+    "Retained_Trading_Balance_USD": 857614.79,
+    "Cumulative_Cash_Withdrawn_USD": 1927003.56
+  },
+  {
+    "Day": 47,
+    "Date": "2026-05-05",
+    "Starting_Balance_USD": 857614.79,
+    "Daily_Trading_Profit_USD": 28829.25,
+    "Cash_Withdrawn_Today_USD": 20180.48,
+    "Retained_Trading_Balance_USD": 866263.56,
+    "Cumulative_Cash_Withdrawn_USD": 1947184.04
+  },
+  {
+    "Day": 48,
+    "Date": "2026-05-06",
+    "Starting_Balance_USD": 866263.56,
+    "Daily_Trading_Profit_USD": 45501.75,
+    "Cash_Withdrawn_Today_USD": 31851.23,
+    "Retained_Trading_Balance_USD": 879914.08,
+    "Cumulative_Cash_Withdrawn_USD": 1979035.27
+  },
+  {
+    "Day": 49,
+    "Date": "2026-05-07",
+    "Starting_Balance_USD": 879914.08,
+    "Daily_Trading_Profit_USD": 82939.5,
+    "Cash_Withdrawn_Today_USD": 58057.65,
+    "Retained_Trading_Balance_USD": 904795.93,
+    "Cumulative_Cash_Withdrawn_USD": 2037092.92
+  },
+  {
+    "Day": 50,
+    "Date": "2026-05-08",
+    "Starting_Balance_USD": 904795.93,
+    "Daily_Trading_Profit_USD": 34855.5,
+    "Cash_Withdrawn_Today_USD": 24398.85,
+    "Retained_Trading_Balance_USD": 915252.58,
+    "Cumulative_Cash_Withdrawn_USD": 2061491.77
+  },
+  {
+    "Day": 51,
+    "Date": "2026-05-09",
+    "Starting_Balance_USD": 915252.58,
+    "Daily_Trading_Profit_USD": 70461.0,
+    "Cash_Withdrawn_Today_USD": 49322.7,
+    "Retained_Trading_Balance_USD": 936390.88,
+    "Cumulative_Cash_Withdrawn_USD": 2110814.47
+  },
+  {
+    "Day": 52,
+    "Date": "2026-05-10",
+    "Starting_Balance_USD": 936390.88,
+    "Daily_Trading_Profit_USD": 79360.5,
+    "Cash_Withdrawn_Today_USD": 55552.35,
+    "Retained_Trading_Balance_USD": 960199.03,
+    "Cumulative_Cash_Withdrawn_USD": 2166366.82
+  },
+  {
+    "Day": 53,
+    "Date": "2026-05-11",
+    "Starting_Balance_USD": 960199.03,
+    "Daily_Trading_Profit_USD": 72270.75,
+    "Cash_Withdrawn_Today_USD": 50589.53,
+    "Retained_Trading_Balance_USD": 981880.25,
+    "Cumulative_Cash_Withdrawn_USD": 2216956.35
+  },
+  {
+    "Day": 54,
+    "Date": "2026-05-12",
+    "Starting_Balance_USD": 981880.25,
+    "Daily_Trading_Profit_USD": 81069.75,
+    "Cash_Withdrawn_Today_USD": 56748.82,
+    "Retained_Trading_Balance_USD": 1006201.18,
+    "Cumulative_Cash_Withdrawn_USD": 2273705.17
+  },
+  {
+    "Day": 55,
+    "Date": "2026-05-13",
+    "Starting_Balance_USD": 1006201.18,
+    "Daily_Trading_Profit_USD": 65046.75,
+    "Cash_Withdrawn_Today_USD": 45532.73,
+    "Retained_Trading_Balance_USD": 1025715.2,
+    "Cumulative_Cash_Withdrawn_USD": 2319237.9
+  },
+  {
+    "Day": 56,
+    "Date": "2026-05-14",
+    "Starting_Balance_USD": 1025715.2,
+    "Daily_Trading_Profit_USD": 51878.25,
+    "Cash_Withdrawn_Today_USD": 36314.77,
+    "Retained_Trading_Balance_USD": 1041278.68,
+    "Cumulative_Cash_Withdrawn_USD": 2355552.67
+  },
+  {
+    "Day": 57,
+    "Date": "2026-05-15",
+    "Starting_Balance_USD": 1041278.68,
+    "Daily_Trading_Profit_USD": 31937.25,
+    "Cash_Withdrawn_Today_USD": 22356.07,
+    "Retained_Trading_Balance_USD": 1050859.86,
+    "Cumulative_Cash_Withdrawn_USD": 2377908.74
+  },
+  {
+    "Day": 58,
+    "Date": "2026-05-16",
+    "Starting_Balance_USD": 1050859.86,
+    "Daily_Trading_Profit_USD": 36649.5,
+    "Cash_Withdrawn_Today_USD": 25654.65,
+    "Retained_Trading_Balance_USD": 1061854.71,
+    "Cumulative_Cash_Withdrawn_USD": 2403563.39
+  },
+  {
+    "Day": 59,
+    "Date": "2026-05-17",
+    "Starting_Balance_USD": 1061854.71,
+    "Daily_Trading_Profit_USD": 57608.25,
+    "Cash_Withdrawn_Today_USD": 40325.77,
+    "Retained_Trading_Balance_USD": 1079137.19,
+    "Cumulative_Cash_Withdrawn_USD": 2443889.16
+  },
+  {
+    "Day": 60,
+    "Date": "2026-05-18",
+    "Starting_Balance_USD": 1079137.19,
+    "Daily_Trading_Profit_USD": 51051.0,
+    "Cash_Withdrawn_Today_USD": 35735.7,
+    "Retained_Trading_Balance_USD": 1094452.49,
+    "Cumulative_Cash_Withdrawn_USD": 2479624.86
+  }
+]

@@ -22,8 +22,8 @@ logger = logging.getLogger("bark_integration")
 
 DEFAULT_BARK_SERVER = "https://api.day.app"
 DEFAULT_NTFY_URL = "https://ntfy.sh"
-DASHBOARD_URL = "http://82.115.21.155:8088/"
-ICON_URL = "http://82.115.21.155:8088/icon-180.png"
+DASHBOARD_URL = os.getenv("SCALPER_DASHBOARD_URL", "https://82-115-21-155.sslip.io/")
+ICON_URL = os.getenv("SCALPER_ICON_URL", "https://82-115-21-155.sslip.io/icon-180.png")
 
 
 def _read_env_value(key: str) -> str:
@@ -99,22 +99,34 @@ def get_bark_keys() -> List[str]:
 
 
 def _push_ntfy_fallback(title: str, message: str, priority: str = "high") -> bool:
-    """Fallback dispatcher to ntfy only if Bark key is not set."""
-    topic = os.getenv("NTFY_TOPIC") or _read_env_value("NTFY_TOPIC") or "tbt-gold-scalper"
-    url = f"{DEFAULT_NTFY_URL}/{topic}"
-    try:
-        encoded_title = Header(title, "utf-8", maxlinelen=1000).encode().replace("\r", "").replace("\n", "")
-        req = urllib.request.Request(
-            url,
-            data=message.encode("utf-8"),
-            headers={"Title": encoded_title, "Priority": priority},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
-            return resp.status in (200, 201)
-    except Exception as e:
-        logger.debug("ntfy fallback failed: %s", e)
-        return False
+    """Always-connected multi-topic dispatcher for ntfy alerts."""
+    raw_topics = (
+        os.getenv("NTFY_TOPIC")
+        or _read_env_value("NTFY_TOPIC")
+        or "tbt-96c0dc08c297676b"
+    )
+    shared = os.getenv("NTFY_TOPIC_SHARED") or _read_env_value("NTFY_TOPIC_SHARED") or ""
+    all_topics = list(dict.fromkeys([t.strip() for t in (raw_topics + "," + shared).split(",") if t.strip()]))
+    if not all_topics:
+        all_topics = ["tbt-96c0dc08c297676b"]
+
+    success = False
+    for topic in all_topics:
+        url = f"{DEFAULT_NTFY_URL}/{topic}"
+        try:
+            encoded_title = Header(title, "utf-8", maxlinelen=1000).encode().replace("\r", "").replace("\n", "")
+            req = urllib.request.Request(
+                url,
+                data=message.encode("utf-8"),
+                headers={"Title": encoded_title, "Priority": priority},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=4.0) as resp:
+                if resp.status in (200, 201):
+                    success = True
+        except Exception as e:
+            logger.debug("ntfy fallback to %s failed: %s", topic, e)
+    return success
 
 
 def push_bark(
@@ -218,6 +230,9 @@ async def push_bark_async(
     )
 
 
+DISCONNECT_BARK_NTFY = False
+
+
 def send_alert(
     title: str,
     message: str,
@@ -228,37 +243,13 @@ def send_alert(
     icon: str = ICON_URL,
 ) -> bool:
     """
-    Primary notification gateway. Uses Bark as the primary notification provider.
-    Maps priority to Bark sound and level.
+    Primary notification gateway.
+    Bark is 100% disconnected per user directive.
+    NTFY is the sole active push notification provider.
     """
-    if priority in ("urgent", "max", "emergency"):
-        level = "timeSensitive"
-        chosen_sound = sound or "alarm"
-    elif priority in ("high", "alert"):
-        level = "timeSensitive"
-        chosen_sound = sound or "minuet"
-    elif priority in ("low", "min"):
-        level = "passive"
-        chosen_sound = sound or "glass"
-    else:
-        level = "active"
-        chosen_sound = sound or "chime"
-
-    keys = get_bark_keys()
-    if keys:
-        return push_bark(
-            title=title,
-            message=message,
-            group=group,
-            sound=chosen_sound,
-            level=level,
-            url=url,
-            icon=icon,
-        )
-
-    # If no Bark key configured yet, log warning and fallback to ntfy
-    logger.warning("BARK_KEY is not set in .env. Falling back to ntfy for alert: %s", title)
-    return _push_ntfy_fallback(title=title, message=message, priority=priority)
+    ntfy_ok = _push_ntfy_fallback(title=title, message=message, priority=priority)
+    logger.info("Dispatched alert '%s' -> Ntfy: %s (Bark disconnected)", title, ntfy_ok)
+    return ntfy_ok
 
 
 async def send_alert_async(

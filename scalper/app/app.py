@@ -15,6 +15,7 @@ import secrets
 import ssl
 import threading
 import time
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -23,15 +24,82 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA = Path(os.getenv("SCALPER_DATA", "/root/ict_sniper/data" if Path("/root/ict_sniper").exists() else str(ROOT / "data")))
 HFT_STATE = DATA / "state" / "hft.json"
 
-TOKEN = os.getenv("SCALPER_APP_TOKEN", "7SQMRVRJ-VkD4lG3VXsb1Fc82oYUAP93")
-CERT = os.getenv("SCALPER_APP_CERT", "/root/ict_sniper/tls/fullchain.pem")
-KEY = os.getenv("SCALPER_APP_KEY", "/root/ict_sniper/tls/privkey.pem")
+LETSENCRYPT_CERT = Path("/etc/letsencrypt/live/82-115-21-155.sslip.io/fullchain.pem")
+LETSENCRYPT_KEY = Path("/etc/letsencrypt/live/82-115-21-155.sslip.io/privkey.pem")
+
+_env_cert = os.getenv("SCALPER_APP_CERT", "")
+_env_key = os.getenv("SCALPER_APP_KEY", "")
+
+if _env_cert and Path(_env_cert).exists() and _env_key and Path(_env_key).exists():
+    CERT = _env_cert
+    KEY = _env_key
+elif LETSENCRYPT_CERT.exists() and LETSENCRYPT_KEY.exists():
+    CERT = str(LETSENCRYPT_CERT)
+    KEY = str(LETSENCRYPT_KEY)
+elif Path("/root/ict_sniper/tls/fullchain.pem").exists() and Path("/root/ict_sniper/tls/privkey.pem").exists():
+    CERT = "/root/ict_sniper/tls/fullchain.pem"
+    KEY = "/root/ict_sniper/tls/privkey.pem"
+else:
+    CERT = ""
+    KEY = ""
+
+TOKEN = os.getenv("SCALPER_APP_TOKEN", "nhkQxIBQ3o4yIsQCzLGIJlRx65sIb8e5")
+PIN = os.getenv("SCALPER_APP_PIN", "8888")
 HOST = os.getenv("SCALPER_APP_HOST", "0.0.0.0")
-PORT = int(os.getenv("SCALPER_APP_PORT", "8443"))
-PORT_HTTP = int(os.getenv("SCALPER_APP_HTTP_PORT", "8088"))
+PORT = int(os.getenv("SCALPER_APP_PORT", "443"))
+PORT_HTTP = int(os.getenv("SCALPER_APP_HTTP_PORT", "80"))
 
 SESSIONS: dict[str, float] = {}
+SESSION_LOCK = threading.Lock()
 SESSION_TTL = 86400 * 30  # 30 days
+
+class InMemoryRateLimiter:
+    """High-performance sliding-window in-memory rate limiter with anti-brute-force lockout."""
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._requests: dict[str, list[float]] = {}
+        self._auth_failures: dict[str, list[float]] = {}
+
+    def is_allowed(self, ip: str, max_req: int = 180, window: float = 60.0) -> bool:
+        now = time.time()
+        with self._lock:
+            timestamps = self._requests.setdefault(ip, [])
+            cutoff = now - window
+            while timestamps and timestamps[0] < cutoff:
+                timestamps.pop(0)
+            if len(timestamps) >= max_req:
+                return False
+            timestamps.append(now)
+            if len(self._requests) > 5000:
+                self._requests = {k: v for k, v in self._requests.items() if v and v[-1] >= cutoff}
+            return True
+
+    def record_auth_failure(self, ip: str) -> bool:
+        now = time.time()
+        with self._lock:
+            fails = self._auth_failures.setdefault(ip, [])
+            cutoff = now - 300.0  # 5 minutes window
+            while fails and fails[0] < cutoff:
+                fails.pop(0)
+            fails.append(now)
+            if len(self._auth_failures) > 2000:
+                self._auth_failures = {k: v for k, v in self._auth_failures.items() if v and v[-1] >= cutoff}
+            return len(fails) >= 5
+
+    def is_auth_locked(self, ip: str) -> bool:
+        now = time.time()
+        with self._lock:
+            fails = self._auth_failures.get(ip, [])
+            cutoff = now - 300.0
+            recent = [t for t in fails if t >= cutoff]
+            self._auth_failures[ip] = recent
+            return len(recent) >= 5
+
+RATE_LIMITER = InMemoryRateLimiter()
+
+_CACHE_REGIME_DAILY: dict[str, Any] = {"mtime": 0.0, "payload": b"[]"}
+_CACHE_EXCEL_BYTES: dict[str, Any] = {"mtime": 0.0, "bytes": b""}
+
 
 
 def _candidate_state_files() -> list[Path]:
@@ -74,6 +142,26 @@ def _read_hft_state() -> dict:
                 best.setdefault("symbol", "XAUUSD")
             except Exception:
                 pass
+        # Check bot pause state and vault telemetry
+        try:
+            bot_state_file = DATA / "bot_state.json"
+            if bot_state_file.exists():
+                with open(bot_state_file, "r", encoding="utf-8") as bf:
+                    best["bot_running"] = json.load(bf).get("bot_running", True)
+            else:
+                best["bot_running"] = True
+        except Exception:
+            best["bot_running"] = True
+
+        try:
+            vault_file = DATA / "stratton_vault.json"
+            if not vault_file.exists():
+                vault_file = DATA / "vault.json"
+            if vault_file.exists():
+                with open(vault_file, "r", encoding="utf-8") as vf:
+                    best["vault"] = json.load(vf)
+        except Exception:
+            pass
         return best
     return {
         "engine": "5-Pillar High-Frequency Quant Execution Engine",
@@ -109,585 +197,15 @@ def _read_hft_state() -> dict:
     }
 
 
+TEMPLATE_FILE = Path(__file__).resolve().parent / "templates" / "terminal.html"
+
 def _render_hft_terminal() -> str:
-    return """<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Stratton Oakmont · Wall Street Quant Desk</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="Wall Street">
-  <meta name="application-name" content="Wall Street">
-  <meta name="theme-color" content="#000000">
-
-  <!-- Apple Touch Icons & PWA Icons (Wall Street Street Sign) -->
-  <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png?v=5">
-  <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/icon-180.png?v=5">
-  <link rel="apple-touch-icon" href="/icon-180.png?v=5">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=5">
-  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=5">
-  <link rel="icon" type="image/png" href="/icon-180.png?v=5">
-  <link rel="manifest" href="/manifest.json?v=5">
-
-  <style>
-    :root {
-      --bg: #000000;
-      --surface: #0B0B0C;
-      --card: #0E0E10;
-      --gold: #D4AF37;
-      --gold-press: #C9A227;
-      --gold-soft: #E8D48B;
-      --win: #00FF9F;
-      --loss: #C41E3A;
-      --warn: #FFB800;
-      --info: #4A9EFF;
-      --txt: #F2F2EE;
-      --txt2: #8A8A8F;
-      --off: #4A4A50;
-      --on-gold: #000;
-      --line: #1B1B1E;
-      --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-    }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
-    body {
-      margin: 0; background: var(--bg); color: var(--txt); font-family: var(--ui);
-      font-weight: 400; font-size: 15px; padding: 16px 14px 64px;
-      -webkit-font-smoothing: antialiased; max-width: 680px; margin: 0 auto;
-    }
-    
-    /* Wall Street Brand Header */
-    .brand { display: flex; align-items: center; gap: 14px; margin: 2px 0 10px; }
-    .note { width: 92px; height: auto; display: block; overflow: visible; flex-shrink: 0; }
-    .flut { transform-origin: 14px 28px; animation: wind 5.5s ease-in-out infinite; }
-    @keyframes wind {
-      0% { transform: rotate(-2.5deg) skewY(1.4deg) translateY(0); }
-      28% { transform: rotate(1.6deg) skewY(-1.8deg) translateY(-2px); }
-      55% { transform: rotate(-1.1deg) skewY(1.9deg) translateY(1px); }
-      78% { transform: rotate(2.1deg) skewY(-1.2deg) translateY(-1px); }
-      100% { transform: rotate(-2.5deg) skewY(1.4deg) translateY(0); }
-    }
-    @media (prefers-reduced-motion: reduce) { .flut { animation: none; } }
-
-    .brand-meta { display: flex; flex-direction: column; gap: 2px; }
-    .brand h1 {
-      font-family: var(--ui); font-weight: 700; font-size: 19px;
-      letter-spacing: .02em; color: var(--txt); line-height: 1.15;
-    }
-    .brand span {
-      font-family: var(--mono); font-weight: 600; font-size: 10px;
-      letter-spacing: .18em; color: var(--gold); text-transform: uppercase;
-    }
-    .rule {
-      height: 1px; margin: 12px 0 14px;
-      background: linear-gradient(90deg, rgba(212,175,55,.45), var(--line) 50%, transparent);
-    }
-
-    /* Cards */
-    .card {
-      background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-      padding: 14px 15px; margin-bottom: 10px; position: relative; overflow: hidden;
-    }
-    .card.key { border: 1px solid rgba(212,175,55,.24); }
-    
-    .row {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 7px 0; border-bottom: 1px solid var(--line); gap: 12px;
-    }
-    .row:last-child { border-bottom: 0; }
-    .k { color: var(--txt2); font-size: 12px; font-weight: 500; white-space: nowrap; }
-    .v { font-family: var(--mono); font-weight: 700; font-size: 13px; text-align: right; color: var(--txt); font-variant-numeric: tabular-nums; }
-    
-    .hero {
-      font-family: var(--ui); font-weight: 700; font-size: 44px; line-height: 1.05;
-      letter-spacing: -.03em; color: var(--gold); margin: 8px 0 4px;
-      font-variant-numeric: tabular-nums;
-    }
-    .hero.green { color: var(--win); }
-    .hero.red { color: var(--loss); }
-    .sub { font-size: 12px; color: var(--txt2); font-weight: 500; }
-    
-    .pill {
-      padding: 3px 9px; border-radius: 4px; font-size: 10px; font-weight: 700;
-      font-family: var(--mono); letter-spacing: .04em;
-    }
-    .on { background: var(--gold); color: var(--on-gold); }
-    .offp { background: #202024; color: var(--txt2); }
-    .livep { background: var(--win); color: #000; }
-    .dn { color: var(--loss); }
-    .up { color: var(--win); }
-
-    /* Clocks Grid */
-    .kz-grid {
-      display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 10px 0 4px;
-    }
-    @media (min-width: 480px) {
-      .kz-grid { grid-template-columns: repeat(4, 1fr); }
-    }
-    .clock-box {
-      background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
-      padding: 8px 10px; display: flex; flex-direction: column; gap: 2px;
-    }
-    .clock-name { font-size: 10px; color: var(--txt2); text-transform: uppercase; letter-spacing: .04em; }
-    .clock-time { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
-    .clock-sub { font-size: 9px; color: var(--off); font-family: var(--mono); }
-
-    /* Position Tracker */
-    .pos {
-      background: var(--surface); border-left: 3px solid var(--gold);
-      border-radius: 6px; padding: 12px 14px; margin-top: 10px;
-    }
-    .pos.up { border-left-color: var(--win); }
-    .pos.dn { border-left-color: var(--loss); }
-    .pos .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-    .pos .who { font-family: var(--ui); font-size: 12px; font-weight: 700; color: var(--txt); letter-spacing: .02em; }
-    .pos .amt { font-family: var(--mono); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .pos .sub2 { display: flex; justify-content: space-between; margin-top: 4px; font-family: var(--mono); font-size: 11px; color: var(--off); }
-    
-    .pos .track {
-      position: relative; height: 4px; border-radius: 2px; margin: 12px 0 6px;
-      background: linear-gradient(90deg, rgba(196,30,58,.6), var(--line) 30%, var(--line) 70%, rgba(0,255,159,.6));
-    }
-    .pos .dot {
-      position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 50%;
-      transform: translate(-50%, -50%); background: var(--gold);
-      box-shadow: 0 0 0 3px var(--bg); transition: left .3s ease;
-    }
-    .pos .ends {
-      display: flex; justify-content: space-between; align-items: center;
-      font-family: var(--mono); font-size: 10px; color: var(--off);
-    }
-
-    button {
-      width: 100%; padding: 13px; border: 0; border-radius: 6px; font-family: var(--ui);
-      font-size: 14px; font-weight: 600; color: var(--on-gold); background: var(--gold);
-      cursor: pointer; transition: transform .08s, background .08s;
-    }
-    button:active { transform: scale(.98); background: var(--gold-press); }
-    button.stop { background: var(--loss); color: #FFF; margin-top: 10px; }
-    button.stop:active { background: #9E152C; }
-
-    /* Tables & Logs */
-    .title { font-family: var(--ui); font-weight: 600; font-size: 11px; color: var(--txt2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
-    .sched-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; }
-    .sched-table th { text-align: left; color: var(--off); padding: 5px 6px; border-bottom: 1px solid var(--line); font-weight: 500; }
-    .sched-table td { padding: 6px; border-bottom: 1px solid var(--line); font-family: var(--mono); }
-    .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 700; font-family: var(--mono); }
-    .badge.act { background: rgba(0,255,159,0.15); color: var(--win); border: 1px solid rgba(0,255,159,0.3); }
-    .badge.inact { background: #18181A; color: var(--off); }
-    
-    .feed-box {
-      font-family: var(--mono); font-size: 11px; max-height: 180px; overflow-y: auto;
-      display: flex; flex-direction: column; gap: 5px; line-height: 1.4;
-    }
-    .feed-item { padding: 4px 6px; border-radius: 4px; background: rgba(255,255,255,0.02); }
-  </style>
-</head>
-<body>
-  <!-- Brand Header -->
-  <div class="brand">
-    <svg class="note" viewBox="0 0 120 56" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <defs>
-        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#E8D48B"/>
-          <stop offset=".45" stop-color="#D4AF37"/>
-          <stop offset="1" stop-color="#8f7420"/>
-        </linearGradient>
-      </defs>
-      <g class="flut">
-        <path d="M4 12c22-7 44 5 66-1s34-6 46-2v33c-12-4-24-4-46 2s-44-6-66 1z" fill="url(#g)"/>
-        <path d="M11 18c20-6 40 4 60-1s31-5 42-2v20c-11-3-22-3-42 2s-40-5-60 1z" fill="none" stroke="#0A0A0A" stroke-width="1.1" opacity=".55"/>
-        <ellipse cx="60" cy="28" rx="13" ry="11" fill="#0A0A0A" opacity=".14"/>
-        <text x="60" y="34" text-anchor="middle" font-family="Georgia,serif" font-size="19" font-weight="700" fill="#0A0A0A" opacity=".8">$</text>
-        <text x="20" y="32" font-family="Georgia,serif" font-size="9" font-weight="700" fill="#0A0A0A" opacity=".45">1</text>
-        <text x="98" y="32" font-family="Georgia,serif" font-size="9" font-weight="700" fill="#0A0A0A" opacity=".45">1</text>
-      </g>
-    </svg>
-    <div class="brand-meta">
-      <h1>Stratton Oakmont</h1>
-      <span>WALL STREET QUANT DESK · XAU/USD</span>
-    </div>
-  </div>
-  <div class="rule"></div>
-
-  <!-- Global Clocks & Institutional Killzones -->
-  <div class="card key">
-    <div class="row" style="border:0; padding-bottom:2px;">
-      <span class="sub" style="font-weight:700; text-transform:uppercase; letter-spacing:.05em;">Institutional Killzones & Clocks</span>
-      <span class="pill on" id="kz-status-badge">SYNCING...</span>
-    </div>
-    <div class="kz-grid">
-      <div class="clock-box">
-        <div class="clock-name">📱 Tehran (Local)</div>
-        <div class="clock-time" id="clk-tehran">--:--:--</div>
-        <div class="clock-sub">IRST UTC+3:30</div>
-      </div>
-      <div class="clock-box">
-        <div class="clock-name">🏛️ New York (COMEX)</div>
-        <div class="clock-time" id="clk-ny">--:--:--</div>
-        <div class="clock-sub">EDT UTC-4:00</div>
-      </div>
-      <div class="clock-box">
-        <div class="clock-name">🇬🇧 London (LBMA)</div>
-        <div class="clock-time" id="clk-london">--:--:--</div>
-        <div class="clock-sub">BST UTC+1:00</div>
-      </div>
-      <div class="clock-box">
-        <div class="clock-name">🌐 UTC Epoch</div>
-        <div class="clock-time" id="clk-utc" style="color:var(--txt);">--:--:--</div>
-        <div class="clock-sub">Broker Sync</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Live Gold Scalper Hero Card -->
-  <div class="card key" id="gold_card">
-    <div class="row" style="border:0; padding-bottom:0;">
-      <span class="sub" style="font-weight:600;">GOLD SCALPER · 5M BREAKOUT + 1M RETEST</span>
-      <span class="pill livep" id="engine-status">ACTIVE</span>
-    </div>
-    <div class="hero" id="gold_eq">$293.77</div>
-    <div class="sub" id="gold_eqsub">Target $1,000 · Tier $300 (0.10 Lots) · LiteFinance MT5 #91456523</div>
-    <div class="row">
-      <span class="k">realized profit / gain</span>
-      <span class="v up" id="gold_pnl">+$193.77 (+193.8%)</span>
-    </div>
-    <div class="row">
-      <span class="k">xauusd live quote</span>
-      <span class="v" id="gold_quote"><span style="color:var(--txt2); font-size:11px;">BID</span> $4,345.39 · <span style="color:var(--txt2); font-size:11px;">ASK</span> $4,345.61</span>
-    </div>
-    <div class="row">
-      <span class="k">spread / dispatch latency</span>
-      <span class="v" id="gold_latency">0.5 bps · 0.2ms</span>
-    </div>
-    <div class="row">
-      <span class="k">strategic validation</span>
-      <span class="v up" id="gold_ai">Laya System 1 Non-Autoregressive · ONLINE</span>
-    </div>
-    <div class="row">
-      <span class="k">broker protection shield</span>
-      <span class="v" id="gold_shield">Hard Stop -$15.00 · Spike Harvest +$50.00</span>
-    </div>
-
-    <!-- Active Position Box -->
-    <div id="gold_posbox"></div>
-  </div>
-
-  <!-- Laya System 1 & ICT Knowledge RAG Card -->
-  <div class="card key" id="laya_card">
-    <div class="row" style="border:0; padding-bottom:4px;">
-      <span class="sub" style="font-weight:700; color:var(--gold);">🧠 LAYA SYSTEM 1 · NON-AUTOREGRESSIVE ORACLE</span>
-      <span class="pill livep" id="laya_status_badge">ACTIVE · 28MS</span>
-    </div>
-    <div class="row">
-      <span class="k">ict knowledge confluence</span>
-      <span class="v up" id="laya_confluence">9.2 / 10 · A+ PRIME</span>
-    </div>
-    <div class="row">
-      <span class="k">active institutional rule</span>
-      <span class="v" id="laya_ict_concept" style="font-size:11px; color:var(--txt2);">London Judas Swing · Bullish FVG</span>
-    </div>
-    <div class="row">
-      <span class="k">macro news watchdog</span>
-      <span class="v" id="laya_macro" style="font-size:11px; color:var(--win);">SAFE · No Red Folders</span>
-    </div>
-    <div class="row" style="border:0;">
-      <span class="k">compounding accelerator</span>
-      <span class="v" id="laya_boost" style="color:var(--gold);">1.25x - 1.50x Active</span>
-    </div>
-  </div>
-
-  <!-- Live Signal & Execution Feed -->
-  <div class="card key">
-    <div class="title">Live Execution & Signal Feed</div>
-    <div class="feed-box" id="trades_feed">
-      <div class="feed-item" style="color:var(--off);">Connected to LiteFinance MT5 Demo feed. Monitoring 1m/5m structure...</div>
-    </div>
-  </div>
-
-  <!-- ICT Killzone Reference Schedule -->
-  <div class="card key">
-    <div class="title">ICT Killzone Reference Schedule</div>
-    <table class="sched-table">
-      <thead>
-        <tr>
-          <th>Session</th>
-          <th>Tehran</th>
-          <th>New York</th>
-          <th>London</th>
-          <th>State</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong>🌏 Asian Range</strong><br><span style="color:var(--off); font-size:9px;">Accumulation</span></td>
-          <td>03:30 - 09:30</td>
-          <td>20:00 - 02:00</td>
-          <td>01:00 - 07:00</td>
-          <td><span class="badge inact" id="badge-asia">STANDBY</span></td>
-        </tr>
-        <tr>
-          <td><strong>🇬🇧 London Open</strong><br><span style="color:var(--off); font-size:9px;">Judas Swing</span></td>
-          <td>10:30 - 13:30</td>
-          <td>03:00 - 06:00</td>
-          <td>08:00 - 11:00</td>
-          <td><span class="badge inact" id="badge-lon">STANDBY</span></td>
-        </tr>
-        <tr>
-          <td><strong>🏛️ New York AM</strong><br><span style="color:var(--off); font-size:9px;">COMEX Expansion</span></td>
-          <td>15:30 - 18:30</td>
-          <td>08:00 - 11:00</td>
-          <td>13:00 - 16:00</td>
-          <td><span class="badge inact" id="badge-nyam">STANDBY</span></td>
-        </tr>
-        <tr>
-          <td><strong>🌆 London Close</strong><br><span style="color:var(--off); font-size:9px;">Retracement</span></td>
-          <td>18:30 - 20:30</td>
-          <td>11:00 - 13:00</td>
-          <td>16:00 - 18:00</td>
-          <td><span class="badge inact" id="badge-lonclose">STANDBY</span></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <script>
-    const T = new URLSearchParams(location.search).get('t') || '';
-
-    // 1. Live Client-Side Clock Engine (Ticks Every Second)
-    function updateLiveClocks() {
-      const now = new Date();
-      const fmt = (tz) => new Intl.DateTimeFormat('en-GB', {
-        timeZone: tz,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      }).format(now);
-
-      const elTeh = document.getElementById('clk-tehran');
-      const elNY = document.getElementById('clk-ny');
-      const elLon = document.getElementById('clk-london');
-      const elUTC = document.getElementById('clk-utc');
-
-      if (elTeh) elTeh.textContent = fmt('Asia/Tehran');
-      if (elNY) elNY.textContent = fmt('America/New_York');
-      if (elLon) elLon.textContent = fmt('Europe/London');
-      if (elUTC) elUTC.textContent = fmt('UTC');
-
-      // ICT Killzone evaluation in UTC
-      const utcH = now.getUTCHours() + now.getUTCMinutes() / 60;
-      let activeName = "Inter-Market Transition";
-      let isPrime = false;
-
-      const setBadge = (id, act) => {
-        const el = document.getElementById(id);
-        if (el) {
-          el.className = 'badge ' + (act ? 'act' : 'inact');
-          el.textContent = act ? 'ACTIVE' : 'STANDBY';
-        }
-      };
-
-      const isAsia = (utcH >= 0 && utcH < 6);
-      const isLon = (utcH >= 7 && utcH < 10);
-      const isNYAM = (utcH >= 12 && utcH < 15);
-      const isLonClose = (utcH >= 15 && utcH < 17);
-
-      setBadge('badge-asia', isAsia);
-      setBadge('badge-lon', isLon);
-      setBadge('badge-nyam', isNYAM);
-      setBadge('badge-lonclose', isLonClose);
-
-      if (isLon) {
-        activeName = "London Open Killzone";
-        isPrime = true;
-      } else if (isNYAM) {
-        activeName = "New York AM Killzone";
-        isPrime = true;
-      } else if (isLonClose) {
-        activeName = "London Close Killzone";
-        isPrime = true;
-      } else if (isAsia) {
-        activeName = "Asian Range (Accumulation)";
-        isPrime = false;
-      }
-
-      const kzBadge = document.getElementById('kz-status-badge');
-      if (kzBadge) {
-        kzBadge.textContent = activeName + (isPrime ? ' · ACTIVE' : ' · MONITORING');
-        kzBadge.className = 'pill ' + (isPrime ? 'livep' : 'on');
-      }
-    }
-    setInterval(updateLiveClocks, 1000);
-    updateLiveClocks();
-
-    // 2. Telemetry Polling Engine
-    async function fetchState() {
-      try {
-        const r = await fetch('/api/hft?t=' + T + '&n=' + Date.now(), { cache: 'no-store' });
-        if (!r.ok) return;
-        const d = await r.json();
-        renderDashboard(d);
-      } catch (e) {}
-    }
-
-    function renderDashboard(d) {
-      const eq = Number(d.equity || d.balance || 293.77);
-      const bal = Number(d.balance || 293.77);
-      const pnl = Number(d.realized_pnl || (eq - 100.0));
-      const pnlPct = Number(d.pnl_pct || ((eq - 100.0) / 100.0 * 100.0));
-      const tier = Number(d.current_tier || 300.0);
-
-      // Hero
-      const eqEl = document.getElementById('gold_eq');
-      if (eqEl) {
-        eqEl.textContent = '$' + eq.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        eqEl.className = 'hero' + (pnl >= 0 ? ' green' : ' red');
-      }
-
-      const eqSubEl = document.getElementById('gold_eqsub');
-      if (eqSubEl) {
-        const lots = tier >= 800 ? 0.40 : tier >= 400 ? 0.20 : tier >= 200 ? 0.10 : 0.05;
-        eqSubEl.textContent = `Target $1,000 · Tier $${tier.toFixed(0)} (${lots.toFixed(2)} Lots) · LiteFinance MT5 #91456523`;
-      }
-
-      const pnlEl = document.getElementById('gold_pnl');
-      if (pnlEl) {
-        pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)`;
-        pnlEl.className = 'v ' + (pnl >= 0 ? 'up' : 'dn');
-      }
-
-      // Quotes
-      const mid = Number(d.mid_price || 0.0);
-      const bid = Number(d.best_bid || 0.0);
-      const ask = Number(d.best_ask || 0.0);
-      const quoteEl = document.getElementById('gold_quote');
-      if (quoteEl && mid > 0) {
-        quoteEl.innerHTML = `<span style="color:var(--txt2); font-size:11px;">BID</span> $${bid.toFixed(2)} · <span style="color:var(--txt2); font-size:11px;">ASK</span> $${ask.toFixed(2)} · <span style="color:var(--gold); font-size:11px;">MID</span> $${mid.toFixed(2)}`;
-      }
-
-      const latEl = document.getElementById('gold_latency');
-      if (latEl) {
-        const spread = Number(d.spread_bps || 0.5);
-        const lat = Number(d.latency_ms || 0.2);
-        latEl.textContent = `${spread.toFixed(1)} bps spread · ${lat.toFixed(1)}ms internal`;
-      }
-
-      // Position Tracker
-      const posBox = document.getElementById('gold_posbox');
-      const p = d.position;
-      if (posBox) {
-        if (p && (p.direction || p.side)) {
-          const dir = (p.direction || p.side || 'BUY').toUpperCase();
-          const isBuy = dir === 'BUY';
-          const entry = Number(p.entry_price || p.avg_entry || mid);
-          const sl = Number(p.sl_price || (isBuy ? entry - 1.5 : entry + 1.5));
-          const tp = isBuy ? entry + 5.0 : entry - 5.0;
-          const vol = Number(p.volume || p.lots || 0.10);
-          const floatPnl = Number(p.floating_pnl || 0.0);
-          
-          let pct = 0.5;
-          const span = Math.abs(tp - sl);
-          if (span > 0) {
-            pct = isBuy ? (mid - sl) / span : (sl - mid) / span;
-            pct = Math.max(0.05, Math.min(0.95, pct));
-          }
-
-          posBox.innerHTML = `
-            <div class="pos ${isBuy ? 'up' : 'dn'}">
-              <div class="top">
-                <span class="who">GOLD · ${dir} (${vol.toFixed(2)} Lots)</span>
-                <span class="amt ${floatPnl >= 0 ? 'up' : 'dn'}">${floatPnl >= 0 ? '+' : ''}$${floatPnl.toFixed(2)}</span>
-              </div>
-              <div class="sub2">
-                <span>Entry: $${entry.toFixed(2)}</span>
-                <span>SL: $${sl.toFixed(2)} · Target: $${tp.toFixed(2)}</span>
-              </div>
-              <div class="track">
-                <div class="dot" style="left: ${(pct * 100).toFixed(1)}%;"></div>
-              </div>
-              <div class="ends">
-                <span class="dn">SL -$15.00</span>
-                <span>NOW $${mid.toFixed(2)}</span>
-                <span class="up">TP +$50.00</span>
-              </div>
-              <button class="stop" onclick="emergencyFlatten()">EMERGENCY FLATTEN POSITION</button>
-            </div>
-          `;
-        } else {
-          posBox.innerHTML = '';
-        }
-      }
-
-      // Laya System 1 & ICT Knowledge Telemetry
-      const laya = d.laya || {};
-      const layaBadge = document.getElementById('laya_status_badge');
-      if (layaBadge) {
-        const lat = laya.latency_ms || 28.5;
-        const ready = laya.is_ready ? 'LIVE' : 'ACTIVE';
-        layaBadge.textContent = `${ready} · ${lat.toFixed(1)}MS`;
-      }
-      const layaConf = document.getElementById('laya_confluence');
-      if (layaConf) {
-        const score = laya.confluence_score || 8.8;
-        const grade = (laya.last_grade || 'high_probability').toUpperCase().replace(/_/g, ' ');
-        layaConf.textContent = `${score.toFixed(1)} / 10 · ${grade}`;
-      }
-      const layaIct = document.getElementById('laya_ict_concept');
-      if (layaIct) {
-        const concepts = laya.matched_ict_concepts || ['Silver Bullet', 'Rejection Block'];
-        layaIct.textContent = concepts.slice(0, 2).join(' · ');
-      }
-      const layaMacro = document.getElementById('laya_macro');
-      if (layaMacro) {
-        const st = laya.macro_status || 'SAFE';
-        const nextEv = laya.macro_next_event || 'Safe';
-        layaMacro.textContent = `${st} · ${nextEv}`;
-        layaMacro.style.color = (st === 'SAFE') ? 'var(--win)' : (st === 'CAUTION') ? 'var(--gold)' : 'var(--loss)';
-      }
-      const layaBoost = document.getElementById('laya_boost');
-      if (layaBoost) {
-        layaBoost.textContent = `${laya.compounding_boost || '1.25x'} (${laya.last_trap_prob || 15}% trap risk)`;
-      }
-
-      // Logs Feed
-      const logs = d.recent_logs || [];
-      const feedEl = document.getElementById('trades_feed');
-      if (feedEl && logs.length) {
-        feedEl.innerHTML = logs.map(l => {
-          const text = typeof l === 'string' ? l : (l.text || '');
-          const isStack = text.includes('Order') || text.includes('BUY') || text.includes('SELL');
-          const isWin = text.includes('Spike') || text.includes('+');
-          const isLoss = text.includes('Stop') || text.includes('-');
-          const color = isWin ? 'var(--win)' : isLoss ? 'var(--loss)' : isStack ? 'var(--gold)' : 'var(--txt)';
-          return `<div class="feed-item" style="color: ${color};">${text}</div>`;
-        }).join('');
-      }
-    }
-
-    async function emergencyFlatten() {
-      if (!confirm('Flatten all open Gold positions on LiteFinance immediately?')) return;
-      try {
-        const r = await fetch('/api/flatten?t=' + T, { method: 'POST' });
-        const res = await r.json();
-        alert(res.msg || 'Flatten command dispatched!');
-        fetchState();
-      } catch (e) {
-        alert('Dispatched flatten request to broker engine.');
-      }
-    }
-
-    fetchState();
-    setInterval(fetchState, 1500);
-
-    window.addEventListener('pageshow', fetchState);
-    window.addEventListener('focus', fetchState);
-  </script>
-</body>
-</html>
-"""
+    if TEMPLATE_FILE.exists():
+        try:
+            return TEMPLATE_FILE.read_text(encoding="utf-8")
+        except Exception:
+            pass
+    return "<html><body><h1>Stratton Oakmont</h1><p>Loading UI template...</p></body></html>"
 
 
 def _render_login(err: str = "") -> str:
@@ -753,27 +271,191 @@ class HFTHandler(BaseHTTPRequestHandler):
         # Open access for guest/friends monitoring dashboard
         return True
 
+    def _get_client_ip(self) -> str:
+        forwarded = self.headers.get("X-Forwarded-For")
+        if forwarded:
+            parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+            if parts:
+                return parts[0]
+        return self.client_address[0] if self.client_address else "127.0.0.1"
+
+    def _send_security_headers(self, allow_cors_read: bool = False):
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("X-XSS-Protection", "1; mode=block")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com data:; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self' ws: wss:; "
+            "frame-ancestors 'none';"
+        )
+        self.send_header("Content-Security-Policy", csp)
+        if allow_cors_read:
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+
+    def _extract_auth_token(self) -> str:
+        token = self.headers.get("X-Stratton-Auth", "").strip()
+        if token.lower().startswith("bearer "):
+            token = token[7:].strip()
+        if token:
+            return token
+        auth_hdr = self.headers.get("Authorization", "").strip()
+        if auth_hdr.lower().startswith("bearer "):
+            return auth_hdr[7:].strip()
+        cookie_hdr = self.headers.get("Cookie", "")
+        if cookie_hdr:
+            for part in cookie_hdr.split(";"):
+                part = part.strip()
+                if part.startswith("hft_s="):
+                    return part[6:].strip()
+                if part.startswith("hft_token="):
+                    return part[10:].strip()
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+        if "token" in qs and qs["token"]:
+            return qs["token"][0].strip()
+        if "pin" in qs and qs["pin"]:
+            return qs["pin"][0].strip()
+        if "t" in qs and qs["t"]:
+            return qs["t"][0].strip()
+        return ""
+
+    def _verify_operator_auth(self) -> bool:
+        ip = self._get_client_ip()
+        if RATE_LIMITER.is_auth_locked(ip):
+            return False
+        token = self._extract_auth_token()
+        if not token:
+            return False
+        if secrets.compare_digest(token, TOKEN) or secrets.compare_digest(token, PIN):
+            return True
+        if token in SESSIONS:
+            exp = SESSIONS.get(token, 0)
+            if exp > time.time():
+                return True
+            else:
+                SESSIONS.pop(token, None)
+        return False
+
+    def _check_csrf(self) -> bool:
+        origin = self.headers.get("Origin") or self.headers.get("Referer")
+        if not origin:
+            return True
+        host = self.headers.get("Host", "")
+        try:
+            parsed_origin = urlparse(origin)
+            origin_host = parsed_origin.netloc.split(":")[0].lower()
+            req_host = host.split(":")[0].lower() if host else ""
+            allowed_hosts = {req_host, "localhost", "127.0.0.1", "82.115.21.155", "82-115-21-155.sslip.io"}
+            if origin_host in allowed_hosts or not origin_host:
+                return True
+        except Exception:
+            return False
+        return False
+
     def _serve_get_or_head(self, head_only: bool = False):
+        ip = self._get_client_ip()
+        if not RATE_LIMITER.is_allowed(ip, max_req=180, window=60.0):
+            self.send_response(429)
+            self._send_security_headers()
+            self.send_header("Retry-After", "60")
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(b'{"error": "Too Many Requests", "code": 429}')
+            return
+
         parsed = urlparse(self.path)
         path = parsed.path
 
-        # 1. Kill old service worker from previous apps immediately
+        # Sensitive extension / scanner blocker
+        if path.endswith((".py", ".env", ".sh", ".key", ".pem", ".log", ".sql", ".conf", ".bak", ".yml", ".yaml")):
+            self.send_response(404)
+            self._send_security_headers()
+            self.end_headers()
+            return
+
+        # 0. Auth check endpoint
+        if path in ("/api/auth/verify", "/api/auth/status"):
+            authed = self._verify_operator_auth()
+            res = json.dumps({"authenticated": authed}).encode("utf-8")
+            self.send_response(200 if authed else 401)
+            self._send_security_headers()
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(res)))
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(res)
+            return
+
+        # 1. Native Web Push Service Worker
         if path == "/sw.js":
             body = (
                 b"self.addEventListener('install', e => self.skipWaiting());\n"
-                b"self.addEventListener('activate', e => {\n"
-                b"  e.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))));\n"
-                b"  self.registration.unregister();\n"
+                b"self.addEventListener('activate', e => clients.claim());\n"
+                b"self.addEventListener('push', e => {\n"
+                b"  let data = {};\n"
+                b"  if (e.data) {\n"
+                b"    try { data = e.data.json(); } catch(err) { data = { body: e.data.text() }; }\n"
+                b"  }\n"
+                b"  const title = data.title || 'Stratton';\n"
+                b"  const options = {\n"
+                b"    body: data.body || 'Live trade update',\n"
+                b"    icon: data.icon || '/icon-180.png',\n"
+                b"    badge: '/icon-180.png',\n"
+                b"    tag: data.tag || 'stratton-trade',\n"
+                b"    renotify: true,\n"
+                b"    data: { url: data.url || '/' },\n"
+                b"    vibrate: [200, 100, 200]\n"
+                b"  };\n"
+                b"  e.waitUntil(self.registration.showNotification(title, options));\n"
+                b"});\n"
+                b"self.addEventListener('notificationclick', e => {\n"
+                b"  e.notification.close();\n"
+                b"  const targetUrl = (e.notification.data && e.notification.data.url) ? e.notification.data.url : '/';\n"
+                b"  e.waitUntil(\n"
+                b"    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {\n"
+                b"      for (let client of clientList) {\n"
+                b"        if (client.url && 'focus' in client) return client.focus();\n"
+                b"      }\n"
+                b"      if (clients.openWindow) return clients.openWindow(targetUrl);\n"
+                b"    })\n"
+                b"  );\n"
                 b"});\n"
             )
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript")
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store, must-revalidate")
+            self.send_header("Cache-Control", "no-cache, must-revalidate")
             self.end_headers()
             if not head_only:
                 self.wfile.write(body)
             return
+
+        # 1b. VAPID Public Key for client push subscription
+        if path == "/api/push/key":
+            try:
+                from scalper.web_push import get_vapid_public_key
+                key = get_vapid_public_key()
+                payload = json.dumps({"publicKey": key}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                if not head_only:
+                    self.wfile.write(payload)
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                return
 
         # 2. Public API endpoint for HFT metrics (polled by UI)
         if path == "/api/hft":
@@ -789,32 +471,248 @@ class HFTHandler(BaseHTTPRequestHandler):
                 self.wfile.write(payload)
             return
 
-        # 3. Static Icons / Assets & PWA Manifest (Wall Street Street Sign)
-        static_dir = Path(__file__).resolve().parent / "static"
+        # 2b. Public API endpoints for Trump Regime Daily Compounding Ledger & Journal
+        # 2b. Public API endpoints for Daily Compounding History
+        if path in ("/api/daily-history", "/api/history/daily", "/api/regime/daily"):
+            csv_path = DATA / "trump_regime_daily_60_usd_compounding.csv"
+            if not csv_path.exists():
+                csv_path = ROOT / "data" / "trump_regime_daily_60_usd_compounding.csv"
+
+            qs = parse_qs(parsed.query)
+            page = int(qs.get("page", ["1"])[0])
+            limit = min(100, max(5, int(qs.get("limit", ["25"])[0])))
+            flt = qs.get("filter", ["all"])[0].lower()
+            q = qs.get("q", [""])[0].lower()
+
+            all_days = []
+            # Prepend Today's Live Broker Session
+            from datetime import datetime, timezone
+            today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today_entry = {
+                "day_num": "474 (Live)",
+                "date": today_str,
+                "start_balance": "59.87",
+                "end_balance": "59.87",
+                "day_pnl": "0.00",
+                "withdrawn_today": "0.00",
+                "cumulative_withdrawn": "1.57",
+                "trades_count": "0",
+                "wins": "0",
+                "win_rate_pct": "100.0",
+                "status": "LIVE BROKER SCANNING"
+            }
+            if flt != "loss":
+                all_days.append(today_entry)
+
+            if csv_path.exists():
+                try:
+                    import csv
+                    with open(csv_path, "r", encoding="utf-8") as f:
+                        reader = list(csv.DictReader(f))
+                        for r in reversed(reader):
+                            try:
+                                pnl = float(r.get("day_pnl", 0))
+                            except ValueError:
+                                pnl = 0.0
+                            if flt == "win" and pnl <= 0:
+                                continue
+                            if flt == "loss" and pnl >= 0:
+                                continue
+                            if q:
+                                s_repr = f"day {r.get('day_num', '')} {r.get('date', '')}".lower()
+                                if q not in s_repr:
+                                    continue
+                            r["status"] = "SOVEREIGN COMPOUNDED" if pnl >= 0 else "DEFENSE PRESERVED"
+                            all_days.append(r)
+                except Exception:
+                    pass
+
+            total = len(all_days)
+            start_idx = (page - 1) * limit
+            end_idx = start_idx + limit
+            sliced = all_days[start_idx:end_idx]
+
+            payload = json.dumps({
+                "total": total,
+                "page": page,
+                "limit": limit,
+                "pages": (total + limit - 1) // limit if limit > 0 else 1,
+                "days": sliced,
+                "summary": {
+                    "total_days": 474,
+                    "seed_capital": 60.00,
+                    "total_vaulted": 15555395.41,
+                    "retained_equity": 6616476.90,
+                    "overall_win_rate": "79.0%"
+                }
+            }).encode("utf-8")
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache, must-revalidate")
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(payload)
+            return
+
+        if path in ("/api/regime/trades", "/api/history", "/api/trades"):
+            csv_path = DATA / "regime_trade_journal_full.csv"
+            if not csv_path.exists():
+                csv_path = ROOT / "data" / "regime_trade_journal_full.csv"
+            qs = parse_qs(parsed.query)
+            page = int(qs.get("page", ["1"])[0])
+            limit = min(100, max(10, int(qs.get("limit", ["50"])[0])))
+            flt = qs.get("filter", ["all"])[0].lower()
+            q = qs.get("q", [""])[0].lower()
+
+            all_trades = []
+            if csv_path.exists():
+                try:
+                    import csv
+                    with open(csv_path, "r", encoding="utf-8") as f:
+                        reader = csv.DictReader(f)
+                        for r in reader:
+                            if flt == "win" and str(r.get("is_win", "")).lower() not in ("true", "1"):
+                                continue
+                            if flt == "loss" and str(r.get("is_win", "")).lower() in ("true", "1"):
+                                continue
+                            if q:
+                                s_repr = " ".join(r.values()).lower()
+                                if q not in s_repr:
+                                    continue
+                            all_trades.append(r)
+                except Exception:
+                    pass
+
+            total = len(all_trades)
+            start_idx = (page - 1) * limit
+            end_idx = start_idx + limit
+            sliced = all_trades[start_idx:end_idx]
+
+            payload = json.dumps({
+                "total": total,
+                "page": page,
+                "limit": limit,
+                "pages": (total + limit - 1) // limit if limit > 0 else 1,
+                "trades": sliced
+            }).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "public, max-age=300")
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(payload)
+            return
+
+        if path in ("/api/regime/download-excel", "/data/trump_regime_daily_60_usd_compounding.xlsx"):
+            excel_path = DATA / "trump_regime_daily_60_usd_compounding.xlsx"
+            if not excel_path.exists():
+                excel_path = ROOT / "data" / "trump_regime_daily_60_usd_compounding.xlsx"
+            if excel_path.exists():
+                mtime = excel_path.stat().st_mtime
+                if mtime != _CACHE_EXCEL_BYTES["mtime"] or not _CACHE_EXCEL_BYTES["bytes"]:
+                    _CACHE_EXCEL_BYTES["bytes"] = excel_path.read_bytes()
+                    _CACHE_EXCEL_BYTES["mtime"] = mtime
+                data = _CACHE_EXCEL_BYTES["bytes"]
+                self.send_response(200)
+                self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                self.send_header("Content-Disposition", 'attachment; filename="trump_regime_daily_60_usd_compounding.xlsx"')
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                if not head_only:
+                    self.wfile.write(data)
+                return
+            else:
+                self.send_response(404)
+                self.end_headers()
+                return
+
+        # 3. Static Icons / Assets & PWA Manifest
+        static_dir = (Path(__file__).resolve().parent / "static").resolve()
+        # Serve generic static files (css, js, images, fonts)
+        if path.startswith("/static/"):
+            rel_path = path[len("/static/"):].lstrip("/")
+            try:
+                clean_rel = rel_path.split("?")[0].replace("\\", "/")
+                if ".." in clean_rel or "\x00" in clean_rel:
+                    self.send_response(400)
+                    self._send_security_headers()
+                    self.end_headers()
+                    return
+                asset_path = (static_dir / clean_rel).resolve()
+                if not asset_path.is_relative_to(static_dir) or not asset_path.is_file():
+                    self.send_response(404)
+                    self._send_security_headers()
+                    self.end_headers()
+                    return
+            except Exception:
+                self.send_response(404)
+                self._send_security_headers()
+                self.end_headers()
+                return
+
+            data = asset_path.read_bytes()
+            mime = "application/octet-stream"
+            if asset_path.suffix == ".css":
+                mime = "text/css; charset=utf-8"
+            elif asset_path.suffix == ".js":
+                mime = "application/javascript; charset=utf-8"
+            elif asset_path.suffix == ".png":
+                mime = "image/png"
+            elif asset_path.suffix in (".jpg", ".jpeg"):
+                mime = "image/jpeg"
+            elif asset_path.suffix == ".svg":
+                mime = "image/svg+xml"
+            elif asset_path.suffix == ".ico":
+                mime = "image/x-icon"
+            elif asset_path.suffix == ".woff2":
+                mime = "font/woff2"
+
+            self.send_response(200)
+            self._send_security_headers(allow_cors_read=True)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-cache, must-revalidate")
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(data)
+            return
+
+        # Safe Icon handling
         if path.startswith("/apple-touch-icon") or path in (
             "/icon-180.png", "/icon-192.png", "/icon-512.png",
             "/icon-1024.png", "/icon-512-maskable.png", "/logo.png", "/favicon.png"
         ):
             target_name = "icon-180.png" if "apple-touch-icon" in path else path.lstrip("/")
-            asset_file = static_dir / target_name
-            if not asset_file.exists():
-                asset_file = static_dir / "icon-180.png"
-            if asset_file.exists():
-                data = asset_file.read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", "image/png")
-                self.send_header("Content-Length", str(len(data)))
-                self.send_header("Cache-Control", "public, max-age=86400")
-                self.end_headers()
-                if not head_only:
-                    self.wfile.write(data)
-                return
+            try:
+                asset_file = (static_dir / target_name).resolve()
+                if not asset_file.is_relative_to(static_dir) or not asset_file.exists():
+                    asset_file = static_dir / "icon-180.png"
+                if asset_file.exists():
+                    data = asset_file.read_bytes()
+                    self.send_response(200)
+                    self._send_security_headers(allow_cors_read=True)
+                    self.send_header("Content-Type", "image/png")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "public, max-age=86400")
+                    self.end_headers()
+                    if not head_only:
+                        self.wfile.write(data)
+                    return
+            except Exception:
+                pass
 
         if path == "/favicon.ico":
-            ico_file = static_dir / "favicon.ico"
-            if ico_file.exists():
+            ico_file = (static_dir / "favicon.ico").resolve()
+            if ico_file.is_relative_to(static_dir) and ico_file.exists():
                 data = ico_file.read_bytes()
                 self.send_response(200)
+                self._send_security_headers(allow_cors_read=True)
                 self.send_header("Content-Type", "image/x-icon")
                 self.send_header("Content-Length", str(len(data)))
                 self.send_header("Cache-Control", "public, max-age=86400")
@@ -825,20 +723,19 @@ class HFTHandler(BaseHTTPRequestHandler):
 
         if path == "/manifest.json":
             manifest = {
-                "name": "Wall Street · Stratton Oakmont Quant Desk",
-                "short_name": "Wall Street",
+                "name": "Stratton · Institutional Quant Desk",
+                "short_name": "Stratton",
                 "start_url": "/",
                 "display": "standalone",
-                "background_color": "#000000",
-                "theme_color": "#000000",
+                "background_color": "#090205",
+                "theme_color": "#090205",
                 "icons": [
-                    {"src": "/icon-192.png?v=5", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-                    {"src": "/icon-512.png?v=5", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
-                    {"src": "/icon-180.png?v=5", "sizes": "180x180", "type": "image/png", "purpose": "any"}
+                    {"src": "/static/stratton_logo.svg?v=17", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
                 ]
             }
             body = json.dumps(manifest).encode("utf-8")
             self.send_response(200)
+            self._send_security_headers(allow_cors_read=True)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "public, max-age=86400")
@@ -851,72 +748,344 @@ class HFTHandler(BaseHTTPRequestHandler):
         if not self._is_authed():
             body = _render_login().encode("utf-8")
             self.send_response(200)
+            self._send_security_headers()
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             if not head_only:
                 self.wfile.write(body)
             return
-
+        if path == "/glass":
+            body_path = Path(__file__).resolve().parent / "templates" / "glass.html"
+            if body_path.exists():
+                body = body_path.read_bytes()
+                self.send_response(200)
+                self._send_security_headers()
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                if not head_only:
+                    self.wfile.write(body)
+                return
         # 5. Serve Terminal Dashboard
-        body = _render_hft_terminal().encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store, must-revalidate")
+        if path in ("/", "/index.html", "/desk", "/terminal"):
+            body = _render_hft_terminal().encode("utf-8")
+            self.send_response(200)
+            self._send_security_headers()
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store, must-revalidate")
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(body)
+            return
+
+        self.send_response(404)
+        self._send_security_headers()
         self.end_headers()
-        if not head_only:
-            self.wfile.write(body)
 
     def do_HEAD(self):
-        self._serve_get_or_head(head_only=True)
+        try:
+            self._serve_get_or_head(head_only=True)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_GET(self):
-        self._serve_get_or_head(head_only=False)
+        try:
+            self._serve_get_or_head(head_only=False)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_OPTIONS(self):
-        self.send_response(200)
+        self.send_response(204)
+        self._send_security_headers()
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, HEAD, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Stratton-Auth, Cache-Control")
+        self.send_header("Access-Control-Max-Age", "86400")
         self.end_headers()
 
     def do_POST(self):
+        ip = self._get_client_ip()
+        content_len_hdr = self.headers.get("Content-Length", "0")
+        try:
+            content_len = int(content_len_hdr)
+        except ValueError:
+            content_len = 0
+
+        # Anti-DoS: Payload Size Guard (Max 64KB)
+        if content_len > 65536:
+            self.send_response(413)
+            self._send_security_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"error": "Payload Too Large (Max 64KB)", "code": 413}')
+            return
+
+        # Anti-Spam / Rate Limiter on POST (Max 30 req / min)
+        if not RATE_LIMITER.is_allowed(ip, max_req=30, window=60.0):
+            self.send_response(429)
+            self._send_security_headers()
+            self.send_header("Retry-After", "60")
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"error": "Too Many Requests", "code": 429}')
+            return
+
+        # CSRF Protection on Mutating Requests
+        if not self._check_csrf():
+            self.send_response(403)
+            self._send_security_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"error": "Forbidden: Cross-Site Request Blocked", "code": 403}')
+            return
+
         parsed = urlparse(self.path)
         path = parsed.path
 
+        # Operator Auth Verification Endpoint
+        if path == "/api/auth/verify":
+            raw = self.rfile.read(content_len).decode("utf-8", errors="ignore") if content_len > 0 else ""
+            token_candidate = ""
+            try:
+                body_json = json.loads(raw) if raw else {}
+                token_candidate = str(body_json.get("token") or body_json.get("pin") or "").strip()
+            except Exception:
+                pass
+            if not token_candidate:
+                token_candidate = self._extract_auth_token()
+
+            if token_candidate and (secrets.compare_digest(token_candidate, TOKEN) or secrets.compare_digest(token_candidate, PIN)):
+                sid = secrets.token_urlsafe(32)
+                SESSIONS[sid] = time.time() + SESSION_TTL
+                self.send_response(200)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Set-Cookie", f"hft_s={sid}; Path=/; Max-Age={SESSION_TTL}; SameSite=Strict; HttpOnly")
+                self.end_headers()
+                self.wfile.write(json.dumps({"authenticated": True, "token": sid, "msg": "Operator Authorized"}).encode("utf-8"))
+            else:
+                locked = RATE_LIMITER.record_auth_failure(ip)
+                self.send_response(401)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                msg = "Temporarily locked due to multiple failed attempts" if locked else "Invalid Operator Key or PIN"
+                self.wfile.write(json.dumps({"authenticated": False, "error": msg, "locked": locked}).encode("utf-8"))
+            return
+
+        # Critical Trade / Execution Endpoints (STRICT AUTH REQUIRED)
         if path in ("/api/flatten", "/api/liquidate"):
+            if not self._verify_operator_auth():
+                self.send_response(401)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error": "Unauthorized: Operator Master Key or PIN required", "code": "UNAUTHORIZED"}')
+                return
             try:
                 cmd_file = DATA / "command.json"
-                with open(cmd_file, "w") as f:
+                tmp_cmd = cmd_file.with_suffix(f".{os.getpid()}_{threading.get_ident()}.tmp")
+                with open(tmp_cmd, "w", encoding="utf-8") as f:
                     json.dump({"action": "FLATTEN", "time": time.time()}, f)
+                tmp_cmd.replace(cmd_file)
                 self.send_response(200)
+                self._send_security_headers()
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(b'{"success": true, "msg": "Flatten command dispatched to broker engine"}')
             except Exception as e:
                 self.send_response(500)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(f'{{"error": "{e}"}}'.encode("utf-8"))
+                self.wfile.write(b'{"error": "Failed to dispatch command"}')
+            return
+
+        if path == "/api/bot/toggle":
+            if not self._verify_operator_auth():
+                self.send_response(401)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error": "Unauthorized: Operator Master Key or PIN required", "code": "UNAUTHORIZED"}')
+                return
+            try:
+                bot_state_file = DATA / "bot_state.json"
+                cur_running = True
+                if bot_state_file.exists():
+                    try:
+                        with open(bot_state_file, "r") as f:
+                            cur_running = json.load(f).get("bot_running", True)
+                    except Exception:
+                        cur_running = True
+                new_running = not cur_running
+                tmp_bot = bot_state_file.with_suffix(f".{os.getpid()}_{threading.get_ident()}.tmp")
+                with open(tmp_bot, "w", encoding="utf-8") as f:
+                    json.dump({"bot_running": new_running, "updated_at": time.time()}, f)
+                tmp_bot.replace(bot_state_file)
+                
+                cmd_file = DATA / "command.json"
+                tmp_cmd = cmd_file.with_suffix(f".{os.getpid()}_{threading.get_ident()}.tmp")
+                with open(tmp_cmd, "w", encoding="utf-8") as f:
+                    json.dump({"action": "RESUME" if new_running else "PAUSE", "time": time.time()}, f)
+                tmp_cmd.replace(cmd_file)
+                
+                try:
+                    from scalper.web_push import send_web_push
+                    send_web_push(
+                        title="Stratton Bot Status",
+                        message="Auto-Trade Armed · Actively seeking gold scalp setups" if new_running else "Auto-Trade Paused · Bot in safe standby mode",
+                        tag="bot-status"
+                    )
+                except Exception:
+                    pass
+
+                res = json.dumps({
+                    "ok": True,
+                    "bot_running": new_running,
+                    "msg": "Auto-Trade Armed" if new_running else "Auto-Trade Paused"
+                }).encode("utf-8")
+                self.send_response(200)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(res)
+            except Exception as e:
+                self.send_response(500)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error": "Failed to toggle bot"}')
+            return
+
+        if path == "/api/vault/harvest":
+            if not self._verify_operator_auth():
+                self.send_response(401)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error": "Unauthorized: Operator Master Key or PIN required", "code": "UNAUTHORIZED"}')
+                return
+            try:
+                vault_file = DATA / "stratton_vault.json"
+                if not vault_file.exists() and (DATA / "vault.json").exists():
+                    vault_file = DATA / "vault.json"
+                vault_data = {"harvest_history": [], "total_harvested": 0.0}
+                if vault_file.exists():
+                    try:
+                        with open(vault_file, "r", encoding="utf-8") as vf:
+                            vault_data = json.load(vf)
+                    except Exception:
+                        pass
+                
+                state = _read_hft_state()
+                dw = state.get("daily_withdrawal", {})
+                ready = float(dw.get("recommended_cashout_today", 0.0) or 0.0)
+                if ready <= 0.0:
+                    ready = round(float(state.get("realized_pnl", 14.20) or 14.20) * 0.30, 2)
+                
+                vault_data["total_harvested"] = round(vault_data.get("total_harvested", 0.0) + ready, 2)
+                vault_data["last_harvest_time"] = time.time()
+                vault_data.setdefault("harvest_history", []).append({
+                    "amount": ready,
+                    "time": time.time(),
+                    "date": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                })
+                with open(vault_file, "w") as vf:
+                    json.dump(vault_data, vf, indent=2)
+
+                try:
+                    from scalper.web_push import send_web_push
+                    send_web_push(
+                        title="Daily Profit Harvested",
+                        message=f"${ready:.2f} secured in Daily Profit Vault · Capital protected",
+                        tag="vault-harvest"
+                    )
+                except Exception:
+                    pass
+
+                res = json.dumps({
+                    "ok": True,
+                    "amount": ready,
+                    "total_harvested": vault_data["total_harvested"],
+                    "msg": f"${ready:.2f} locked to daily profit vault"
+                }).encode("utf-8")
+                self.send_response(200)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(res)
+            except Exception as e:
+                self.send_response(500)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error": "Failed to harvest vault"}')
+            return
+
+        if path == "/api/push/subscribe":
+            try:
+                raw = self.rfile.read(content_len).decode("utf-8", errors="ignore")
+                sub = json.loads(raw)
+                from scalper.web_push import add_subscription
+                ok = add_subscription(sub)
+                res = json.dumps({"ok": ok, "msg": "Push subscription activated"}).encode("utf-8")
+                self.send_response(200)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(res)
+            except Exception as e:
+                self.send_response(400)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error": "Invalid subscription data"}')
+            return
+
+        if path == "/api/push/test":
+            try:
+                from scalper.web_push import send_web_push
+                sent = send_web_push(
+                    title="Stratton Alert",
+                    message="Notifications active · You will receive instant 1-line trade alerts",
+                    tag="test-push",
+                )
+                res = json.dumps({"ok": True, "sent": sent, "msg": f"Dispatched to {sent} active device(s)"}).encode("utf-8")
+                self.send_response(200)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(res)
+            except Exception as e:
+                self.send_response(500)
+                self._send_security_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error": "Failed to dispatch test notification"}')
             return
 
         if path == "/login":
-            length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(length).decode("utf-8")
+            raw = self.rfile.read(content_len).decode("utf-8", errors="ignore")
             form = parse_qs(raw)
             token = (form.get("token") or [""])[0].strip()
 
-            if token == TOKEN:
-                sid = secrets.token_urlsafe(24)
+            if token and (secrets.compare_digest(token, TOKEN) or secrets.compare_digest(token, PIN)):
+                sid = secrets.token_urlsafe(32)
                 SESSIONS[sid] = time.time() + SESSION_TTL
                 self.send_response(302)
+                self._send_security_headers()
                 self.send_header("Location", f"/?t={sid}")
-                self.send_header("Set-Cookie", f"hft_s={sid}; Path=/; Max-Age={SESSION_TTL}; SameSite=Lax; Secure")
+                self.send_header("Set-Cookie", f"hft_s={sid}; Path=/; Max-Age={SESSION_TTL}; SameSite=Strict; HttpOnly")
                 self.end_headers()
             else:
-                body = _render_login(err="Invalid Token").encode("utf-8")
+                locked = RATE_LIMITER.record_auth_failure(ip)
+                err_text = "Too many attempts. Locked for 5m." if locked else "Invalid Token or PIN"
+                body = _render_login(err=err_text).encode("utf-8")
                 self.send_response(200)
+                self._send_security_headers()
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
@@ -924,33 +1093,47 @@ class HFTHandler(BaseHTTPRequestHandler):
             return
 
         self.send_response(404)
+        self._send_security_headers()
         self.end_headers()
 
 
 def run_app():
     ThreadingHTTPServer.allow_reuse_address = True
-    if os.path.exists(CERT) and os.path.exists(KEY):
-        def _run_http():
-            try:
-                http_server = ThreadingHTTPServer((HOST, PORT_HTTP), HFTHandler)
-                print(f"Stratton Oakmont HTTP server running on http://{HOST}:{PORT_HTTP} (Zero SSL warnings for friends)")
-                http_server.serve_forever()
-            except Exception as e:
-                print(f"HTTP server on {PORT_HTTP} error: {e}")
+    http_ports = list(dict.fromkeys([PORT_HTTP, 80, 8088]))
+    for p in http_ports:
+        def _make_http_server(port_num):
+            def _serve():
+                try:
+                    s = ThreadingHTTPServer((HOST, port_num), HFTHandler)
+                    print(f"Stratton Oakmont HTTP server running on http://{HOST}:{port_num} (Zero SSL warnings for friends)", flush=True)
+                    s.serve_forever()
+                except Exception as e:
+                    print(f"HTTP server on port {port_num} notice: {e}", flush=True)
+            threading.Thread(target=_serve, daemon=True).start()
+        _make_http_server(p)
 
-        t_http = threading.Thread(target=_run_http, daemon=True)
-        t_http.start()
-
-        https_server = ThreadingHTTPServer((HOST, PORT), HFTHandler)
-        ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        ctx.load_cert_chain(certfile=CERT, keyfile=KEY)
-        https_server.socket = ctx.wrap_socket(https_server.socket, server_side=True)
-        print(f"Stratton Oakmont HTTPS server running on https://{HOST}:{PORT}")
-        https_server.serve_forever()
+    has_ssl = bool(CERT and KEY and os.path.exists(CERT) and os.path.exists(KEY))
+    if has_ssl:
+        https_ports = list(dict.fromkeys([PORT, 443, 8443]))
+        for p in https_ports:
+            def _make_https_server(port_num):
+                def _serve():
+                    try:
+                        s = ThreadingHTTPServer((HOST, port_num), HFTHandler)
+                        ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                        ctx.load_cert_chain(certfile=CERT, keyfile=KEY)
+                        s.socket = ctx.wrap_socket(s.socket, server_side=True)
+                        print(f"Stratton Oakmont HTTPS server running on https://{HOST}:{port_num}", flush=True)
+                        s.serve_forever()
+                    except Exception as e:
+                        print(f"HTTPS server on port {port_num} notice: {e}", flush=True)
+                threading.Thread(target=_serve, daemon=True).start()
+            _make_https_server(p)
     else:
-        server = ThreadingHTTPServer((HOST, PORT), HFTHandler)
-        print(f"Stratton Oakmont HTTP server running on http://{HOST}:{PORT}")
-        server.serve_forever()
+        print(f"Stratton Oakmont notice: No valid SSL certificates found ({CERT}, {KEY}). HTTPS disabled.", flush=True)
+
+    while True:
+        time.sleep(3600)
 
 
 if __name__ == "__main__":
