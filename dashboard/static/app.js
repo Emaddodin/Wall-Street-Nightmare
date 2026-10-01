@@ -41,6 +41,7 @@
   });
   const forecast = chart.addLineSeries({ color: C.gold, lineWidth: 2, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
   let last = null, loadedTf = null, first = 0;
+  const ovl = Object.assign({ kronos: true, scalper: true }, store.get("ovl", {}));
 
   async function loadCandles() {
     const want = tf;
@@ -51,7 +52,7 @@
     first = rows.length ? rows[0].time : 0;
     last = rows.length ? { ...rows[rows.length - 1] } : null;
     markerKey = ""; fcKey = "";
-    drawMarkers(); drawForecast();
+    drawMarkers(); drawForecast(); requestAnimationFrame(drawZones);
   }
 
   // live candle from the streamed bid, the same way the broker's chart builds it
@@ -77,8 +78,8 @@
   function drawMarkers() {
     if (!S || loadedTf !== tf) return;
     const sec = TFSEC[tf];
-    const list = (S.trades || []).slice(-40);
-    if (S.active) list.push(S.active);
+    const list = ovl.scalper ? (S.trades || []).slice(-40) : [];
+    if (ovl.scalper && S.active) list.push(S.active);
     const m = list.map((t) => ({
       time: t.t_bar - (t.t_bar % sec), position: t.dir === 1 ? "belowBar" : "aboveBar",
       color: t.dir === 1 ? C.buy : C.sell, shape: t.dir === 1 ? "arrowUp" : "arrowDown", text: t.dir === 1 ? "BUY" : "SELL",
@@ -91,8 +92,7 @@
   let fcKey = "";
   function drawForecast() {
     const k = S && S.kronos;
-    const ok = !!(tf === "M1" && loadedTf === tf && k && Array.isArray(k.path) && k.path.length && last);
-    $("legend").hidden = !ok;
+    const ok = !!(ovl.kronos && tf === "M1" && loadedTf === tf && k && Array.isArray(k.path) && k.path.length && last);
     const key = ok ? tf + k.t : "";
     if (key === fcKey) return;
     fcKey = key;
@@ -107,12 +107,67 @@
       if (p.sl) want.push([p.sl, C.down, "SL", 2]);
       if (p.tp) want.push([p.tp, C.up, "TP", 2]);
     }
+    const k = S.kronos;
+    if (ovl.kronos && k && k.path && Number.isFinite(+k.target)) want.push([+k.target, C.gold, `Kronos ${k.call || ""} ${k.minutes || ""}m`, 2]);
+    if (ovl.scalper) {
+      const a = S.active;
+      if (a) {
+        want.push([a.entry, C.dim, `${a.side} signal`, 1]);
+        if (a.sl) want.push([a.sl, C.down, "Signal SL", 1]);
+        if (a.tp1) want.push([a.tp1, C.up, "TP1", 1]);
+        if (a.tp2) want.push([a.tp2, C.up, "TP2", 1]);
+      }
+      const c = S.context;
+      if (c && c.sw_h) want.push([c.sw_h, "#6f6a60", "M15 swing high", 3]);
+      if (c && c.sw_l) want.push([c.sw_l, "#6f6a60", "M15 swing low", 3]);
+    }
     const key = JSON.stringify(want);
     if (key === linesKey) return;
     linesKey = key;
     lines.forEach((l) => series.removePriceLine(l));
     lines = want.map(([price, color, title, lineStyle]) => series.createPriceLine({ price, color, title, lineStyle, lineWidth: 1, axisLabelVisible: true }));
   }
+
+  // scalper FVG / order-block zones: boxes from the bar they formed to the right edge, drawn on a canvas over the chart
+  const zc = $("zones"), zx = zc.getContext("2d");
+  function drawZones() {
+    const r = zc.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    if (zc.width !== Math.round(r.width * dpr) || zc.height !== Math.round(r.height * dpr)) { zc.width = Math.round(r.width * dpr); zc.height = Math.round(r.height * dpr); }
+    zx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    zx.clearRect(0, 0, r.width, r.height);
+    if (!S || !ovl.scalper || loadedTf !== tf || !last) return;
+    const right = r.width - chart.priceScale("right").width();
+    const sec = TFSEC[tf], ts = chart.timeScale();
+    zx.font = "600 10px JetBrains Mono, ui-monospace, monospace";
+    for (const z of S.zones || []) {
+      const b = z.born - (z.born % sec);
+      if (b > last.time) continue;
+      let x = b < first ? 0 : ts.timeToCoordinate(b);
+      if (x == null) continue;
+      x = Math.max(0, x);
+      const y1 = series.priceToCoordinate(z.top), y2 = series.priceToCoordinate(z.bottom);
+      if (y1 == null || y2 == null || x >= right) continue;
+      const col = z.dir === 1 ? "47,123,245" : "229,83,60";
+      zx.fillStyle = `rgba(${col},.13)`;
+      zx.fillRect(x, y1, right - x, Math.max(1, y2 - y1));
+      zx.strokeStyle = `rgba(${col},.45)`;
+      zx.lineWidth = 1;
+      zx.strokeRect(x + .5, y1 + .5, right - x - 1, Math.max(1, y2 - y1) - 1);
+      if (y2 - y1 >= 11) { zx.fillStyle = `rgba(${col},.9)`; zx.fillText(z.kind, x + 4, y1 + 10); }
+    }
+  }
+  chart.timeScale().subscribeVisibleLogicalRangeChange(() => requestAnimationFrame(drawZones));
+  new ResizeObserver(() => requestAnimationFrame(drawZones)).observe(zc);
+
+  document.querySelectorAll("#ovl button").forEach((b) => {
+    b.classList.toggle("on", !!ovl[b.dataset.o]);
+    b.addEventListener("click", () => {
+      ovl[b.dataset.o] = !ovl[b.dataset.o]; store.set("ovl", ovl);
+      b.classList.toggle("on", ovl[b.dataset.o]);
+      markerKey = ""; fcKey = "x";
+      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); }
+    });
+  });
 
   document.querySelectorAll("#tfs button").forEach((b) => {
     b.classList.toggle("on", b.dataset.tf === tf);
@@ -240,6 +295,14 @@
 
   // ---------------------------------------------------------------- signals
   // Kronos arrives as state.kronos: {status, error, and once it has forecast: t, last, target, move, atr, dir, call, minutes, model, path}
+  // state.kronos.backtest: {status: "running"|"done", lines: ["Direction right: ...", "Trades ...", "Verdict: ..."], progress}
+  function btHtml(bt) {
+    if (!bt) return "";
+    if (bt.status !== "done") return `<div class="bt"><b>Gold backtest · running</b><span class="num">${esc(bt.progress || "starting")}</span></div>`;
+    return `<div class="bt"><b>Gold backtest</b>${(bt.lines || []).map((l) => {
+      return /^Verdict/.test(l) ? `<span class="v">${esc(l)}</span>` : `<span>${esc(l)}</span>`;
+    }).join("")}</div>`;
+  }
   function renderKronos() {
     const k = S.kronos, el = $("kronos");
     if (!k) {
@@ -249,7 +312,7 @@
     }
     if (!k.path) {
       el.innerHTML = `<span class="name">Kronos forecast</span><span></span><span class="call flat">${k.status === "off" ? "Off" : "Loading"}</span><span></span>
-        <span class="meta">${esc(k.error || (k.status === "loading model" ? "Loading the model. The first run downloads it." : "Waiting for the next closed 1m candle."))}</span>`;
+        <span class="meta">${esc(k.error || (k.status === "loading model" ? "Loading the model. The first run downloads it." : "Waiting for the next closed 1m candle."))}</span>${btHtml(k.backtest)}`;
       return;
     }
     const d = k.dir;
@@ -258,7 +321,7 @@
     el.innerHTML = `<span class="name">Kronos · next ${esc(k.minutes)} min</span><span></span>
       <span class="call ${d > 0 ? "up" : d < 0 ? "down" : "flat"}">${d > 0 ? "▲ UP" : d < 0 ? "▼ DOWN" : "— FLAT"} <span class="num" style="font-size:14px">${fmt(k.target)} (${k.move >= 0 ? "+" : ""}${fmt(k.move)})</span></span><span></span>
       ${strength != null ? `<span class="meter"><i style="width:${strength}%;background:${d > 0 ? C.up : d < 0 ? C.down : C.dim}"></i></span>` : ""}
-      <span class="meta">${esc(k.model || "Kronos")} forecast, gold dashed line on the 1m chart. Not proven on gold yet.${k.error ? " " + esc(k.error) : ""}</span>`;
+      <span class="meta">${esc(k.model || "Kronos")} forecast, gold dashed line on the 1m chart. ${k.backtest && k.backtest.status === "done" ? "" : " Not proven on gold yet."}${k.error ? " " + esc(k.error) : ""}</span>${btHtml(k.backtest)}`;
   }
   function renderScalper() {
     const s = S.active;
@@ -329,6 +392,7 @@
     drawMarkers();
     drawLines();
     drawForecast();
+    drawZones();
   }
 
   let refreshing = false;
