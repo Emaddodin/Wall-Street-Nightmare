@@ -25,12 +25,12 @@ main() {
 
   say "2/5  Installing the LiteFinance browser driver"
   python3 -m pip install -q --user --upgrade playwright
-  python3 -m playwright install chromium
+  python3 -m playwright install chromium   # shows its own download progress
 
   say "3/5  Installing Kronos (forecast model). This one is big, give it a few minutes."
   [ -d "$APP/Kronos/.git" ] || git clone -q --depth 1 https://github.com/shiyu-coder/Kronos.git "$APP/Kronos"
   mkdir -p "$CONF"
-  if python3 -m pip install -q --user torch "einops==0.8.1" huggingface_hub safetensors pandas tqdm; then
+  if python3 -m pip install --user --progress-bar on torch "einops==0.8.1" huggingface_hub safetensors pandas tqdm; then
     kronos=small
   else
     echo "Kronos could not be installed. Gold Desk will run without it."
