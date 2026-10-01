@@ -74,6 +74,7 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .ovl button.on { background: var(--raise); color: var(--fg); }
 .ovl button i { width: 14px; height: 0; border-top: 2px dashed var(--gold); }
 .ovl button i.z { height: 10px; border: 1px solid rgba(47,123,245,.8); background: rgba(47,123,245,.25); border-radius: 2px; }
+.ovl button i.b { width: 0; height: 0; border: 5px solid transparent; border-bottom: 9px solid var(--up); border-top: 0; }
 .ovl button:not(.on) i { opacity: .35; }
 .tfs { display: flex; gap: 2px; background: rgba(21,23,26,.92); padding: 3px; border-radius: 9px; border: 1px solid var(--line); }
 .tfs button { padding: 4px 11px; border-radius: 6px; color: var(--dim); font: 600 13px var(--label); }
@@ -167,6 +168,13 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 .bt { grid-column: 1 / -1; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; font-size: 12px; color: var(--dim); display: grid; gap: 2px; }
 .bt b { font: 600 11px var(--label); letter-spacing: .1em; text-transform: uppercase; }
 .bt .v { color: var(--fg); }
+.card.boom.live { border-width: 1.5px; }
+.card.boom.live.up { border-color: var(--up); background: rgba(47,182,124,.07); }
+.card.boom.live.down { border-color: var(--down); background: rgba(229,72,77,.07); }
+.untested { justify-self: end; font: 700 10px var(--label); letter-spacing: .12em; color: var(--warn); border: 1px solid rgba(232,178,58,.5); border-radius: 999px; padding: 2px 8px; }
+.card .lvls { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 13px; color: var(--dim); margin-top: 2px; }
+.card .lvls b { font-weight: 700; color: var(--fg); }
+.card .lvls b.up { color: var(--up); } .card .lvls b.down { color: var(--down); }
 .meter { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--raise); overflow: hidden; }
 .meter i { display: block; height: 100%; border-radius: 2px; }
 
@@ -203,8 +211,8 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
   <div class="left">
     <div class="chartwrap">
       <div class="chartbar">
-        <div class="tfs" id="tfs"><button data-tf="M1">1m</button><button data-tf="M5">5m</button><button data-tf="M15">15m</button><button data-tf="H1">1h</button></div>
-        <div class="ovl" id="ovl"><button data-o="kronos" title="Kronos forecast path and target"><i></i>Kronos</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button></div>
+        <div class="tfs" id="tfs"><button data-tf="M1">1m</button><button data-tf="M5">5m</button><button data-tf="M15">15m</button><button data-tf="H1">1h</button><button data-tf="H4">4h</button></div>
+        <div class="ovl" id="ovl"><button data-o="kronos" title="Kronos forecast path and target"><i></i>Kronos</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button><button data-o="boom" title="Boom / Crash calls: arrows, entry, SL and TP"><i class="b"></i>Boom/Crash</button></div>
       </div>
       <div id="chart"></div>
       <canvas id="zones"></canvas>
@@ -245,6 +253,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 
     <div class="sig">
       <div class="eyebrow">Signals</div>
+      <div class="card boom" id="boom" hidden></div>
       <div class="card" id="kronos"></div>
       <div class="card" id="scalper"></div>
     </div>
