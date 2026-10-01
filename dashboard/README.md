@@ -52,6 +52,8 @@ python3 server.py --litefinance --account demo
 
 [Kronos](https://github.com/shiyu-coder/Kronos) is a pretrained candlestick model (MIT licence). Gold Desk can run it in the background: after each closed 5-minute candle it forecasts the next 2 hours, draws that path as a yellow dashed line and shows UP / DOWN / FLAT. It never places orders and never slows a click.
 
+Like the [Kronos BTC demo](https://shiyu-coder.github.io/Kronos-demo/), Gold Desk draws many separate sample paths (10 on M5, 30 for the day view) and shows what they say together: the **upside probability** (share of paths that end above the last close), the **volatility amplification probability** (share of paths that move more, bar to bar, than the last as many real bars did) and the range the paths cover. After every closed hour it also forecasts the next **24 hours on H1 bars**, as the demo does for BTC (`state.kronos.day`). Every forecast is scored once its last bar has closed: direction right, and whether price ended inside the paths' range (`state.kronos.track`, kept in `~/.golddesk/kronos_track.json`).
+
 **Boom / Crash** (`boom.py`, `state.boom` on the page) are short scalp calls for when Kronos and the indicator agree: Kronos expects at least 0.6 ATR within 30 minutes on a clean path, and the H4 trend, the H1 structure or the indicator's own entry signal points the same way (trend and structure not both against). BOOM buys, CRASH sells, at the live price; stop 1 ATR, target 0.8 to 1.5 ATR, over after 30 minutes. One at a time. They are the same rules as the BOOM / CRASH box on the VPS Kronos chart. Every finished call is scored (spread included) and saved to `~/.golddesk/boom_calls.csv`. They are untested signals, not trades.
 
 ```
