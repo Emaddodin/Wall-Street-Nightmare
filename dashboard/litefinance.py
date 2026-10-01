@@ -140,12 +140,97 @@ FETCH_JS = """async (u) => {
   return {status: r.status, text: await r.text()};
 }"""
 
-ACCOUNT_JS = """() => {
-  const t = (document.querySelector('.portfolio, .bottom_bar, [class*="portfolio"], header') || document.body).innerText || '';
-  const num = (re) => { const m = t.match(re); return m ? parseFloat(m[1].replace(/[\\s,]/g, '')) : null; };
-  return {balance: num(/Balance[^0-9-]*(-?[0-9][0-9\\s,]*\\.?[0-9]*)/i),
-          equity: num(/Equity[^0-9-]*(-?[0-9][0-9\\s,]*\\.?[0-9]*)/i)};
+# LiteFinance's Portfolio bar shows "10 000.00 USD" with "ASSETS, TOTAL" under it, then ASSETS USED, AVAILABLE and
+# CURRENT CHANGE. Find each label once, then the one number that belongs to it, and remember both boxes.
+ACCOUNT_JS = r"""() => {
+  const LABELS = {
+    total: /^(assets,?\s*total|total\s*assets|equity)\s*:?$/i,
+    balance: /^balance\s*:?$/i,
+    used: /^(assets\s*used|used\s*assets|used\s*margin)\s*:?$/i,
+    free: /^(available|free\s*margin)\s*:?$/i,
+    change: /^(current\s*change|floating(\s*(p\/?l|profit))?)\s*:?$/i,
+  };
+  const NUM = /[-+−]?(?:\d{1,3}(?:[   ,]\d{3})+|\d+)(?:\.\d+)?/g;
+  const flat = (s) => (s || '').replace(/\s+/g, ' ').trim();
+  const nums = (s) => flat(s).match(NUM) || [];
+  const val = (s) => parseFloat(s.replace(/[   ,]/g, '').replace('−', '-'));
+  const shown = (el) => el.checkVisibility ? el.checkVisibility() : el.getClientRects().length > 0;
+  const read = (m) => {
+    if (!m.label.isConnected || !m.box.isConnected) return null;
+    const n = nums(flat(m.box.textContent).replace(m.text, ' '));
+    return n.length === 1 ? val(n[0]) : null;
+  };
+  const memo = window.__gdAccount = window.__gdAccount || {};
+  const out = {}, near = {};
+  const take = () => {
+    for (const k of Object.keys(memo)) {
+      const v = read(memo[k]);
+      if (v === null || !isFinite(v)) { delete memo[k]; window.__gdAccountScan = 0; continue; }   // re-drawn: look again
+      out[k] = v; near[k] = flat(memo[k].box.textContent).slice(0, 60);
+    }
+  };
+  take();
+  const missing = Object.keys(LABELS).filter((k) => !(k in out));
+  const every = 'total' in out || 'balance' in out ? 300000 : 10000;       // a full look costs a moment: not every read
+  if (missing.length && Date.now() - (window.__gdAccountScan || 0) > every) {
+    window.__gdAccountScan = Date.now();
+    const found = {}, numbers = [];
+    for (const el of document.querySelectorAll('body *')) {
+      if (el.closest('script, style, .js_trade_form, form')) continue;
+      const own = flat(Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' '));
+      if (!own || own.length > 40) continue;
+      const text = flat(own.replace(NUM, ' ').replace(/\b(usd|eur|gbp)\b|[$\u20ac\u00a3]/gi, ' '));   // "Balance: 10.00 USD" -> "Balance:"
+      for (const k of missing) {
+        if (!text || !LABELS[k].test(text)) continue;
+        const vis = shown(el);
+        if (!found[k] || (vis && !found[k].vis)) found[k] = {el, text, vis};
+      }
+      if (!el.children.length && /^[-+−]?\$?\s?[\d   ,.]+\s?(USD|\$)?$/i.test(own) && nums(own).length === 1) numbers.push(el);
+    }
+    for (const k of Object.keys(found)) {
+      const {el, text} = found[k];
+      let box = null;
+      for (let p = el, up = 0; p && up < 5; p = p.parentElement, up++) {   // the closest box with one number in it
+        const n = nums(flat(p.textContent).replace(text, ' '));
+        if (n.length === 1) { box = p; break; }
+        if (n.length > 1) break;
+      }
+      if (!box) {             // the numbers sit in a row of their own: take the one right above, below or beside it
+        const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        let best = 1e9;
+        for (const ne of numbers) {
+          const q = ne.getBoundingClientRect();
+          if (!q.width || !q.height) continue;
+          const dx = Math.abs(q.left + q.width / 2 - cx), dy = Math.abs(q.top + q.height / 2 - cy);
+          const d = dx < 90 && dy < 90 ? dx + dy : (dy < 8 && q.left >= r.right && q.left - r.right < 200 ? q.left - r.right : 1e9);
+          if (d < best) { best = d; box = ne; }
+        }
+      }
+      if (box) memo[k] = {label: el, box, text};
+    }
+    take();
+  }
+  const res = {found: out, near};
+  if (!Object.keys(out).length)        // nothing found: the lines that mention money, to map the page later
+    res.probe = (document.body.innerText || '').split('\n').map(flat)
+      .filter((s) => s.length < 80 && /\d/.test(s) && /USD|\$|balance|equity|assets|margin/i.test(s)).slice(0, 8);
+  return res;
 }"""
+
+
+def account_figures(f: dict) -> tuple:
+    """(balance, equity) from the figures found on the LiteFinance page; None where unknown.
+    Its "Assets, total" already holds the open profit when total = used + available."""
+    total, bal, used, free, chg = (f.get(k) for k in ("total", "balance", "used", "free", "change"))
+    if total is None:
+        return bal, (round(bal + chg, 2) if bal is not None and chg is not None else bal)
+    if bal is not None:
+        return bal, total
+    if not chg:
+        return total, total
+    if used is not None and free is not None and abs(total - used - free) > 0.05 >= abs(total + chg - used - free):
+        return total, round(total + chg, 2)          # here "total" is the balance
+    return round(total - chg, 2), total
 
 
 def parse_history(text: str) -> list:
@@ -457,10 +542,22 @@ class LiteFinanceSource:
                 pass
 
     def _read_account(self) -> None:
-        r = self.page.evaluate(ACCOUNT_JS)
-        a = self._acct
-        a.update({"balance": r.get("balance") or a.get("balance") or 0.0,
-                  "equity": r.get("equity") or r.get("balance") or a.get("equity") or 0.0, "at": time.time()})
+        r = self.page.evaluate(ACCOUNT_JS) or {}
+        bal, eq = account_figures(r.get("found") or {})
+        a, now = self._acct, time.time()
+        if bal is None and eq is None:
+            if now - a.get("ok_at", 0.0) < 30:         # a moment of re-drawing on their page: keep the last figures
+                return
+            a.update({"balance": None, "equity": None, "seen": {}, "probe": r.get("probe") or []})
+            if not a.get("said_missing"):
+                a["said_missing"], a["said_found"] = True, False
+                print("LiteFinance balance and equity not found on its page. Lines there that mention money: "
+                      + (" | ".join(a["probe"]) or "none"), flush=True)
+            return
+        a.update({"balance": bal, "equity": eq, "at": now, "ok_at": now, "seen": r.get("near") or {}, "probe": None})
+        if not a.get("said_found"):
+            a["said_found"], a["said_missing"] = True, False
+            print(f"Account read from LiteFinance: balance {bal}, equity {eq} ({a['seen']})", flush=True)
 
     def _call(self, fn, timeout: float = 30.0):
         if not self.connected:
@@ -610,8 +707,9 @@ class LiteFinanceSource:
         return Spec(point=0.01, digits=2, vpu=100.0, min_lot=0.01, lot_step=0.01, max_lot=100.0)
 
     def account(self) -> dict:
-        a = self._acct                     # refreshed by the browser thread every 3 s
-        return {"balance": a.get("balance", 0.0), "equity": a.get("equity", 0.0), "currency": "USD",
+        a = self._acct                     # refreshed by the browser thread every 3 s; None until it is read
+        return {"balance": a.get("balance"), "equity": a.get("equity"), "currency": "USD",
+                "seen": a.get("seen") or {}, "probe": a.get("probe"),
                 "server": "LiteFinance web", "company": "LiteFinance",
                 "mode": self.account_type or "unknown",   # never guessed: a wrong "demo" badge is worse than none
                 "trade_allowed": True, "ping_ms": None, "note": self.note}
