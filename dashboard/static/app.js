@@ -48,7 +48,7 @@
     const rows = await get(`/api/candles?tf=${want}&count=1200`).catch(() => null);
     if (!Array.isArray(rows) || want !== tf) return;
     series.setData(rows);
-    if (rows.length > 160) chart.timeScale().setVisibleLogicalRange({ from: rows.length - 150, to: rows.length + 10 });   // open on recent bars
+    if (rows.length > 160) chart.timeScale().setVisibleLogicalRange({ from: rows.length - 150, to: rows.length + 28 });   // recent bars, room for the forecast
     loadedTf = want;
     first = rows.length ? rows[0].time : 0;
     last = rows.length ? { ...rows[rows.length - 1] } : null;
@@ -100,12 +100,18 @@
     if (key !== markerKey) { series.setMarkers(m); markerKey = key; }
   }
 
-  // Kronos forecast path (state.kronos.path: M1 bars on the broker clock), shown on 1m and 5m; on 5m each point is the
-  // forecast close of that 5m bar
+  // Kronos forecasts: state.kronos is the entry-timeframe (M5) one, state.kronos.day the 24 h H1 one. The 1m and 5m charts
+  // show the M5 forecast, the 1h chart the 24 h one: average path as a dashed line, spread of the sample paths as shading.
+  function chartForecast() {
+    const k = S && S.kronos;
+    if (!k) return null;
+    const f = tf === "H1" ? k.day : (tf === "M1" || tf === "M5") ? k : null;
+    return f && Array.isArray(f.path) && f.path.length ? f : null;
+  }
   let fcKey = "";
   function drawForecast() {
-    const k = S && S.kronos;
-    const ok = !!(ovl.kronos && (tf === "M1" || tf === "M5") && loadedTf === tf && k && Array.isArray(k.path) && k.path.length && last);
+    const k = chartForecast();
+    const ok = !!(ovl.kronos && loadedTf === tf && k && last);
     const key = ok ? tf + k.t : "";
     if (key === fcKey) return;
     fcKey = key;
@@ -124,7 +130,8 @@
       if (p.tp) want.push([p.tp, C.up, "TP", 2]);
     }
     const k = S.kronos;
-    if (ovl.kronos && k && k.path && Number.isFinite(+k.target)) want.push([+k.target, C.gold, `Kronos ${k.call || ""} ${k.minutes || ""}m`, 2]);
+    const kf = chartForecast();
+    if (ovl.kronos && kf && Number.isFinite(+kf.target)) want.push([+kf.target, C.gold, `Kronos ${kf.call || ""} ${horizon(kf.minutes)}`, 2]);
     const ba = S.boom && S.boom.active;
     if (ovl.boom && ba) {
       want.push([ba.entry, C.gold, `${ba.kind} entry`, 0]);
@@ -157,9 +164,11 @@
     if (zc.width !== Math.round(r.width * dpr) || zc.height !== Math.round(r.height * dpr)) { zc.width = Math.round(r.width * dpr); zc.height = Math.round(r.height * dpr); }
     zx.setTransform(dpr, 0, 0, dpr, 0, 0);
     zx.clearRect(0, 0, r.width, r.height);
-    if (!S || !ovl.scalper || loadedTf !== tf || !last) return;
+    if (!S || loadedTf !== tf || !last) return;
     const right = r.width - chart.priceScale("right").width();
     const sec = TFSEC[tf], ts = chart.timeScale();
+    drawBand(right, sec, ts);
+    if (!ovl.scalper) return;
     zx.font = "600 10px JetBrains Mono, ui-monospace, monospace";
     for (const z of S.zones || []) {
       const b = z.born - (z.born % sec);
@@ -177,6 +186,24 @@
       zx.strokeRect(x + .5, y1 + .5, right - x - 1, Math.max(1, y2 - y1) - 1);
       if (y2 - y1 >= 11) { zx.fillStyle = `rgba(${col},.9)`; zx.fillText(z.kind, x + 4, y1 + 10); }
     }
+  }
+  // the Kronos sample-path spread: outer shade = lowest to highest path, inner shade = middle half (p25 to p75)
+  function drawBand(right, sec, ts) {
+    const k = chartForecast();
+    if (!ovl.kronos || !k || !Array.isArray(k.band) || !k.band.length) return;
+    const start = k.t - (k.t % sec), byBar = new Map([[start, { lo: k.last, hi: k.last, p25: k.last, p75: k.last }]]);
+    for (const b of k.band) byBar.set(b.time - (b.time % sec), b);
+    const pts = [...byBar].sort((a, b) => a[0] - b[0]).map(([t, b]) => ({ x: ts.timeToCoordinate(t), b })).filter((p) => p.x != null && p.x <= right);
+    if (pts.length < 2) return;
+    const y = (v) => series.priceToCoordinate(v);
+    const shade = (lo, hi, fill) => {
+      zx.beginPath();
+      pts.forEach((p, i) => (i ? zx.lineTo(p.x, y(p.b[hi])) : zx.moveTo(p.x, y(p.b[hi]))));
+      for (let i = pts.length - 1; i >= 0; i--) zx.lineTo(pts[i].x, y(pts[i].b[lo]));
+      zx.closePath(); zx.fillStyle = fill; zx.fill();
+    };
+    shade("lo", "hi", "rgba(214,173,82,.10)");
+    shade("p25", "p75", "rgba(214,173,82,.20)");
   }
   chart.timeScale().subscribeVisibleLogicalRangeChange(() => requestAnimationFrame(drawZones));
   new ResizeObserver(() => requestAnimationFrame(drawZones)).observe(zc);
@@ -326,6 +353,43 @@
       return /^Verdict/.test(l) ? `<span class="v">${esc(l)}</span>` : `<span>${esc(l)}</span>`;
     }).join("")}</div>`;
   }
+  const horizon = (m) => (!m ? "" : m >= 1440 && m % 1440 === 0 ? `${m / 1440 === 1 ? "24 h" : m / 1440 + " d"}` : m >= 120 ? `${Math.round(m / 60)} h` : `${m} min`);
+  const pct = (x) => (x == null || !Number.isFinite(+x) ? "-" : Math.round(x * 100) + "%");
+  let kView = store.get("kview", "short");
+  $("kronos").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-kv]");
+    if (!b) return;
+    kView = b.dataset.kv; store.set("kview", kView); renderKronos();
+  });
+
+  // forecast vs what happened, for the last forecast that has been scored: shaded spread, dashed forecast, solid actual
+  function miniChart(f) {
+    if (!f || !Array.isArray(f.path) || !f.path.length) return "";
+    const W = 300, H = 92, P = 4;
+    const ts = [f.t, ...f.path.map((p) => p.time)];
+    const band = new Map((f.band || []).map((b) => [b.time, b]));
+    const act = new Map((f.actual || []).map((a) => [a.time, a.value]));
+    const vals = [f.last, ...f.path.map((p) => p.value), ...(f.actual || []).map((a) => a.value),
+      ...(f.band || []).flatMap((b) => [b.lo, b.hi])].filter(Number.isFinite);
+    const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+    const X = (i) => P + (i * (W - 2 * P)) / (ts.length - 1), Y = (v) => P + ((hi - v) * (H - 2 * P)) / span;
+    const line = (pts) => pts.map(([i, v], n) => `${n ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+    const area = (a, b) => {
+      const top = ts.map((t, i) => [i, i ? (band.get(t) || {})[b] : f.last]).filter((p) => Number.isFinite(p[1]));
+      const bot = ts.map((t, i) => [i, i ? (band.get(t) || {})[a] : f.last]).filter((p) => Number.isFinite(p[1])).reverse();
+      return top.length > 1 ? `<path d="${line(top)}${line(bot).replace("M", "L")}Z" fill="${C.gold}" fill-opacity="${a === "lo" ? .12 : .22}"/>` : "";
+    };
+    const fpts = [[0, f.last], ...f.path.map((p, i) => [i + 1, p.value])];
+    const apts = [[0, f.last], ...ts.slice(1).map((t, i) => [i + 1, act.get(t)]).filter((p) => Number.isFinite(p[1]))];
+    return `<svg class="mini" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Last scored Kronos forecast against what price did">
+      ${area("lo", "hi")}${area("p25", "p75")}
+      <path d="${line(fpts)}" fill="none" stroke="${C.gold}" stroke-width="1.6" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
+      ${apts.length > 1 ? `<path d="${line(apts)}" fill="none" stroke="#ece8df" stroke-width="1.6" vector-effect="non-scaling-stroke"/>` : ""}
+    </svg>`;
+  }
+
+  // state.kronos: M5 forecast {t, last, target, move, dir, call, minutes, samples, up_prob, vol_amp_prob, band, range, path},
+  // plus day (the same for the next 24 h on H1), track {M5|H1: {resolved, direction_right, inside_range, waiting, last}}, backtest
   function renderKronos() {
     const k = S.kronos, el = $("kronos");
     if (!k) {
@@ -333,18 +397,27 @@
         <span class="meta">Start Gold Desk with --kronos to see its up or down call here.</span>`;
       return;
     }
-    if (!k.path) {
-      el.innerHTML = `<span class="name">Kronos forecast</span><span></span><span class="call flat">${k.status === "off" ? "Off" : "Loading"}</span><span></span>
-        <span class="meta">${esc(k.error || (k.status === "loading model" ? "Loading the model. The first run downloads it." : "Waiting for the next closed 1m candle."))}</span>${btHtml(k.backtest)}`;
+    const tfS = k.tf || S.entry_tf || "M5";
+    const f = kView === "day" ? k.day : (k.path ? k : null);
+    const tr = (k.track || {})[kView === "day" ? "H1" : tfS];
+    const tabs = `<span class="kv" role="tablist"><button data-kv="short" class="${kView !== "day" ? "on" : ""}">${k.path ? "Next " + horizon(k.minutes) : "Short"}</button><button data-kv="day" class="${kView === "day" ? "on" : ""}">Next 24 h</button></span>`;
+    if (!f) {
+      el.innerHTML = `<span class="name">Kronos forecast</span>${tabs}<span class="call flat">${k.status === "off" ? "Off" : "Loading"}</span><span></span>
+        <span class="meta">${esc(k.error || (k.status === "loading model" ? "Loading the model. The first run downloads it." :
+          kView === "day" ? "The 24 h forecast runs once an hour. The first one appears after the next hour closes." : "Waiting for the next closed candle."))}</span>${btHtml(k.backtest)}`;
       return;
     }
-    const d = k.dir;
-    const atr = +k.atr;
-    const strength = atr > 0 ? Math.min(100, Math.round(Math.abs(k.move) / atr * 50)) : null;   // a 2 ATR move fills the bar
-    el.innerHTML = `<span class="name">Kronos · next ${esc(k.minutes)} min</span><span></span>
-      <span class="call ${d > 0 ? "up" : d < 0 ? "down" : "flat"}">${d > 0 ? "▲ UP" : d < 0 ? "▼ DOWN" : "— FLAT"} <span class="num" style="font-size:14px">${fmt(k.target)} (${k.move >= 0 ? "+" : ""}${fmt(k.move)})</span></span><span></span>
-      ${strength != null ? `<span class="meter"><i style="width:${strength}%;background:${d > 0 ? C.up : d < 0 ? C.down : C.dim}"></i></span>` : ""}
-      <span class="meta">${esc(k.model || "Kronos")} forecast, gold dashed line on the 1m and 5m chart. ${k.backtest && k.backtest.status === "done" ? "" : " Not proven on gold yet."}${k.error ? " " + esc(k.error) : ""}</span>${btHtml(k.backtest)}`;
+    const d = f.dir, up = f.up_prob;
+    const rg = f.range;
+    el.innerHTML = `<span class="name">Kronos</span>${tabs}
+      <span class="call ${d > 0 ? "up" : d < 0 ? "down" : "flat"}">${d > 0 ? "▲ UP" : d < 0 ? "▼ DOWN" : "— FLAT"} <span class="num" style="font-size:14px">${fmt(f.target)} (${f.move >= 0 ? "+" : ""}${fmt(f.move)})</span></span><span></span>
+      ${up != null ? `<span class="odds"><span>Up <b class="up">${pct(up)}</b></span><span>Down <b class="down">${pct(1 - up)}</b></span><span>Volatility jump <b>${pct(f.vol_amp_prob)}</b></span></span>
+      <span class="split"><i style="width:${Math.round(up * 100)}%"></i></span>` : ""}
+      ${rg ? `<span class="meta num">${f.samples ? `${f.samples} paths · ` : ""}Ends between ${fmt(rg.lo)} and ${fmt(rg.hi)} · middle half ${fmt(rg.p25)} to ${fmt(rg.p75)}</span>` : ""}
+      ${tr ? `<div class="bt"><b>Forecast vs actual${tr.last ? ` · from ${clock(tr.last.t)}` : ""}</b>
+        ${tr.last ? miniChart(tr.last) + `<span class="mlegend"><span><i class="f"></i>forecast</span><span><i class="a"></i>actual</span><span><i class="s"></i>path spread</span></span>` : `<span>No forecast has finished yet.</span>`}
+        <span class="v">${tr.resolved ? `Direction right ${tr.direction_right} of ${tr.resolved} (${Math.round(tr.direction_pct)}%) · ended inside the range ${tr.inside_range} of ${tr.resolved}` : "Nothing scored yet"}${tr.waiting ? ` · ${tr.waiting} waiting` : ""}</span></div>` : ""}
+      <span class="meta">Gold dashed line and shading on the ${kView === "day" ? "1h" : "1m and 5m"} chart.${k.backtest && k.backtest.status === "done" ? "" : " Not proven on gold yet."}${k.error ? " " + esc(k.error) : ""}</span>${btHtml(k.backtest)}`;
   }
   // state.boom: {active: {kind, side, dir, entry, sl, tp, move, move_atr, minutes, expires, strong, why[]} | null,
   //              history: [...with exit, how, r, usd_001], stats: {calls, wins, losses, net_r, net_usd_001}, proven}
