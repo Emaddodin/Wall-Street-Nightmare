@@ -75,6 +75,7 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .ovl button i { width: 14px; height: 0; border-top: 2px dashed var(--gold); }
 .ovl button i.z { height: 10px; border: 1px solid rgba(47,123,245,.8); background: rgba(47,123,245,.25); border-radius: 2px; }
 .ovl button i.b { width: 0; height: 0; border: 5px solid transparent; border-bottom: 9px solid var(--up); border-top: 0; }
+.ovl button i.s { width: 12px; height: 10px; border: 0; border-top: 1px solid var(--warn); border-bottom: 1px dashed var(--fg); background: linear-gradient(rgba(229,72,77,.3) 50%, rgba(47,182,124,.3) 50%); }
 .ovl button:not(.on) i { opacity: .35; }
 .tfs { display: flex; gap: 2px; background: rgba(21,23,26,.92); padding: 3px; border-radius: 9px; border: 1px solid var(--line); }
 .tfs button { padding: 4px 11px; border-radius: 6px; color: var(--dim); font: 600 13px var(--label); }
@@ -120,6 +121,10 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 .lotbox button { background: var(--raise); border-radius: 7px; font: 600 16px var(--mono); color: var(--dim); height: 24px; }
 .lotbox button:hover { color: var(--fg); }
 .lotbox input { text-align: center; font: 700 19px var(--mono); padding: 4px 2px; border-radius: 7px; }
+#ticketWrap { display: flex; flex-direction: column; gap: 16px; }
+#ticketWrap.off .px { opacity: .55; }
+.tradeoff { margin-top: -6px; border: 1px solid rgba(229,72,77,.5); background: rgba(229,72,77,.1); color: #ffc9c4; border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.35; }
+.tradeoff b { color: #fff; }
 .spreadline { display: flex; justify-content: space-between; font: 500 13px var(--label); color: var(--dim); margin-top: -8px; }
 .spreadline b { font: 600 13px var(--mono); color: var(--fg); }
 
@@ -227,7 +232,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
     <div class="chartwrap">
       <div class="chartbar">
         <div class="tfs" id="tfs"><button data-tf="M1">1m</button><button data-tf="M5">5m</button><button data-tf="M15">15m</button><button data-tf="H1">1h</button><button data-tf="H4">4h</button></div>
-        <div class="ovl" id="ovl"><button data-o="kronos" title="Kronos forecast path and target"><i></i>Kronos</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button><button data-o="boom" title="Boom / Crash calls: arrows, entry, SL and TP"><i class="b"></i>Boom/Crash</button></div>
+        <div class="ovl" id="ovl"><button data-o="kronos" title="Kronos forecast path and target"><i></i>Kronos</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button><button data-o="boom" title="Boom / Crash calls: arrows, entry, SL and TP"><i class="b"></i>Boom/Crash</button><button data-o="smc" title="Smart Money / ICT: structure (BOS, CHoCH), liquidity, FVG, order blocks, premium / discount, OTE, killzones, key levels"><i class="s"></i>SMC/ICT</button></div>
       </div>
       <div id="chart"></div>
       <canvas id="zones"></canvas>
@@ -243,6 +248,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
   </div>
 
   <aside>
+    <div id="ticketWrap">
     <div class="ticket">
       <button class="big sell" id="sell"><small>SELL</small><span class="px" id="bid">-</span></button>
       <div class="lotbox">
@@ -253,6 +259,8 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
       <button class="big buy" id="buy"><small>BUY</small><span class="px" id="ask">-</span></button>
     </div>
     <div class="spreadline"><span>Spread <b id="spr">-</b></span><span>Lots <b id="lotsTxt">0.01</b> · one click sends</span></div>
+    </div>
+    <div class="tradeoff" id="tradeOff" role="status" hidden></div>
 
     <div class="chips" id="chips"><button>0.01</button><button>0.05</button><button>0.10</button><button>0.50</button><button>1.00</button></div>
 

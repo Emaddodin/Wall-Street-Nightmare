@@ -40,8 +40,8 @@
     priceFormat: { type: "price", precision: 2, minMove: 0.01 },
   });
   const forecast = chart.addLineSeries({ color: C.gold, lineWidth: 2, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-  let last = null, loadedTf = null, first = 0;
-  const ovl = Object.assign({ kronos: true, scalper: true, boom: true }, store.get("ovl", {}));
+  let last = null, loadedTf = null, first = 0, times = [];
+  const ovl = Object.assign({ kronos: true, scalper: false, boom: true, smc: true }, store.get("ovl2", {}));   // SMC/ICT covers the scalper's zones
 
   async function loadCandles() {
     const want = tf;
@@ -51,6 +51,7 @@
     if (rows.length > 160) chart.timeScale().setVisibleLogicalRange({ from: rows.length - 150, to: rows.length + 28 });   // recent bars, room for the forecast
     loadedTf = want;
     first = rows.length ? rows[0].time : 0;
+    times = rows.map((r) => r.time);
     last = rows.length ? { ...rows[rows.length - 1] } : null;
     markerKey = ""; fcKey = "";
     drawMarkers(); drawForecast(); requestAnimationFrame(drawZones);
@@ -62,6 +63,7 @@
     const sec = TFSEC[tf];
     const now = Date.now() / 1000 + ((S.clock && S.clock.utc_offset_h) || 0) * 3600;
     const bucket = now - (now % sec);
+    if (bucket > last.time && times[times.length - 1] < Math.floor(bucket)) times.push(Math.floor(bucket));
     if (bucket > last.time) last = { time: Math.floor(bucket), open: last.close, high: Math.max(last.close, bid), low: Math.min(last.close, bid), close: bid };
     else { last.high = Math.max(last.high, bid); last.low = Math.min(last.low, bid); last.close = bid; }
     series.update(last);
@@ -72,7 +74,10 @@
     const want = tf;
     const rows = await get(`/api/candles?tf=${want}&count=3`).catch(() => null);
     if (!Array.isArray(rows) || want !== tf || loadedTf !== want) return;
-    for (const r of rows) if (!last || r.time >= last.time) { series.update(r); last = { ...r }; }
+    for (const r of rows) if (!last || r.time >= last.time) {
+      series.update(r); last = { ...r };
+      if (!times.length || times[times.length - 1] < r.time) times.push(r.time);
+    }
   }
 
   let markerKey = "";
@@ -167,6 +172,7 @@
     if (!S || loadedTf !== tf || !last) return;
     const right = r.width - chart.priceScale("right").width();
     const sec = TFSEC[tf], ts = chart.timeScale();
+    if (ovl.smc) drawSmc(right, sec, ts);
     drawBand(right, sec, ts);
     if (!ovl.scalper) return;
     zx.font = "600 10px JetBrains Mono, ui-monospace, monospace";
@@ -187,6 +193,101 @@
       if (y2 - y1 >= 11) { zx.fillStyle = `rgba(${col},.9)`; zx.fillText(z.kind, x + 4, y1 + 10); }
     }
   }
+  // x for any time on the candle clock, also between bars, before the first one (clamped to 0) and in the future
+  function xOf(t, ts, sec) {
+    const n = times.length;
+    if (!n) return null;
+    const b = t - (t % sec);
+    let i;
+    if (b <= times[0]) i = b < times[0] ? -1 : 0;
+    else if (b >= times[n - 1]) i = n - 1 + (b - times[n - 1]) / sec;
+    else { let lo = 0, hi = n - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (times[m] <= b) lo = m; else hi = m; } i = lo + (b - times[lo]) / (times[hi] - times[lo]); }
+    if (i < 0) return 0;
+    const x = ts.logicalToCoordinate(i);
+    return x == null ? null : x;
+  }
+
+  // Smart Money / ICT layer, from state.smc (all times on the candle clock, all optional):
+  //  killzones [{name, start, end, high, low}]          session windows, shaded columns with their range
+  //  pd {high, low, eq, from_time}                        dealing range: premium (top half) / discount (bottom half)
+  //  ote [{dir, top, bottom, from_time}]                  optimal trade entry box (62-79% retracement)
+  //  fvg [{dir, top, bottom, from_time, to_time, kind}]   fair value gaps (kind FVG / IFVG / BPR); to_time = filled
+  //  ob  [{dir, top, bottom, from_time, to_time, kind}]   order blocks (kind OB / BB / MB)
+  //  liquidity [{price, kind, from_time, to_time, swept}] EQH / EQL / BSL / SSL pools; swept ones fade
+  //  structure [{kind, dir, price, from_time, time}]      BOS / CHoCH: the broken swing level, from swing to break
+  //  swings [{time, price, kind}]                         HH / HL / LH / LL labels
+  //  levels [{price, label, time}]                        PDH / PDL / PWH / PWL / midnight open ...
+  const KZ = { Asia: "120,110,230", London: "47,123,245", "NY AM": "214,173,82", "NY PM": "214,120,82", "NY Lunch": "142,138,128" };
+  function drawSmc(right, sec, ts) {
+    const m = S && S.smc;
+    if (!m) return;
+    const y = (v) => series.priceToCoordinate(v);
+    const X = (t) => (t == null ? right : Math.min(right, xOf(t, ts, sec) ?? right));
+    const H = zc.getBoundingClientRect().height;
+    const label = (txt, x, yy, col, align) => {
+      zx.font = "600 10px JetBrains Mono, ui-monospace, monospace";
+      zx.textAlign = align || "left"; zx.fillStyle = col; zx.fillText(txt, x, yy); zx.textAlign = "left";
+    };
+    const hline = (x1, x2, yy, col, dash) => {
+      zx.beginPath(); zx.setLineDash(dash || []); zx.strokeStyle = col; zx.lineWidth = 1;
+      zx.moveTo(x1, Math.round(yy) + .5); zx.lineTo(x2, Math.round(yy) + .5); zx.stroke(); zx.setLineDash([]);
+    };
+    const box = (b, rgb, a, txt) => {
+      const x1 = X(b.from_time), x2 = X(b.to_time), y1 = y(b.top), y2 = y(b.bottom);
+      if (x1 == null || y1 == null || y2 == null || x2 <= x1) return;
+      zx.fillStyle = `rgba(${rgb},${a})`; zx.fillRect(x1, y1, x2 - x1, Math.max(1, y2 - y1));
+      zx.strokeStyle = `rgba(${rgb},${a * 3})`; zx.strokeRect(x1 + .5, y1 + .5, x2 - x1 - 1, Math.max(1, y2 - y1) - 1);
+      if (txt && y2 - y1 >= 10) label(txt, x2 - 4, y1 + 10, `rgba(${rgb},.95)`, "right");
+    };
+    if (sec <= 900) for (const k of m.killzones || []) {            // sessions only make sense on 1m-15m
+      const x1 = X(k.start), x2 = X(k.end), rgb = KZ[k.name] || "142,138,128";
+      if (x1 == null || x2 <= x1) continue;
+      zx.fillStyle = `rgba(${rgb},.06)`; zx.fillRect(x1, 0, x2 - x1, H);
+      label(k.name, x1 + 4, H - 36, `rgba(${rgb},.9)`);
+      if (k.high && k.low) { hline(x1, x2, y(k.high), `rgba(${rgb},.6)`, [2, 2]); hline(x1, x2, y(k.low), `rgba(${rgb},.6)`, [2, 2]); }
+    }
+    const pd = m.pd;
+    if (pd && pd.high && pd.low) {
+      const x1 = X(pd.from_time) ?? 0, eq = pd.eq ?? (pd.high + pd.low) / 2, yh = y(pd.high), ye = y(eq), yl = y(pd.low);
+      if (yh != null && ye != null && yl != null) {
+        zx.fillStyle = "rgba(229,72,77,.05)"; zx.fillRect(x1, yh, right - x1, ye - yh);
+        zx.fillStyle = "rgba(47,182,124,.05)"; zx.fillRect(x1, ye, right - x1, yl - ye);
+        hline(x1, right, ye, "rgba(236,232,223,.35)", [6, 4]);
+        label("PREMIUM", right - 4, yh + 11, "rgba(229,72,77,.8)", "right");
+        label("EQ 50%", right - 4, ye - 3, "rgba(236,232,223,.6)", "right");
+        label("DISCOUNT", right - 4, yl - 4, "rgba(47,182,124,.8)", "right");
+      }
+    }
+    for (const o of m.ote || []) box(o, "214,173,82", .08, "OTE");
+    for (const g of m.fvg || []) box(g, g.dir === 1 ? "47,182,124" : "229,72,77", g.to_time ? .04 : .09, g.kind || "FVG");
+    for (const o of m.ob || []) box(o, o.dir === 1 ? "47,123,245" : "229,83,60", o.to_time ? .05 : .12, o.kind || "OB");
+    for (const l of m.liquidity || []) {
+      const x1 = X(l.from_time) ?? 0, x2 = X(l.to_time), yy = y(l.price);
+      if (yy == null) continue;
+      const col = l.swept ? "rgba(142,138,128,.45)" : "rgba(232,178,58,.85)";
+      hline(x1, x2, yy, col, [1, 3]);
+      label(`${l.kind || "LIQ"}${l.swept ? " ✕" : " $$$"}`, x2 - 4, yy + (/L$/.test(l.kind || "") ? 11 : -3), col, "right");
+    }
+    for (const b of m.structure || []) {
+      const x1 = X(b.from_time), x2 = X(b.time), yy = y(b.price);
+      if (x1 == null || yy == null) continue;
+      const col = b.kind === "CHoCH" ? "rgba(232,178,58,.95)" : b.dir === 1 ? "rgba(47,182,124,.9)" : "rgba(229,72,77,.9)";
+      hline(x1, x2, yy, col, b.kind === "CHoCH" ? [4, 3] : []);
+      label(b.kind || "BOS", (x1 + x2) / 2, yy + (b.dir === 1 ? -3 : 11), col, "center");
+    }
+    for (const w of m.swings || []) {
+      const xx = X(w.time), yy = y(w.price);
+      if (xx == null || yy == null || xx >= right) continue;
+      label(w.kind, xx, yy + (/H$/.test(w.kind) ? -6 : 14), "rgba(236,232,223,.7)", "center");
+    }
+    for (const l of m.levels || []) {
+      const x1 = l.time ? X(l.time) : 0, yy = y(l.price);
+      if (yy == null) continue;
+      hline(x1, right, yy, "rgba(236,232,223,.4)", [8, 4]);
+      label(`${l.label} ${fmt(l.price)}`, right - 4, yy - 3, "rgba(236,232,223,.75)", "right");
+    }
+  }
+
   // the Kronos sample-path spread: outer shade = lowest to highest path, inner shade = middle half (p25 to p75)
   function drawBand(right, sec, ts) {
     const k = chartForecast();
@@ -211,7 +312,7 @@
   document.querySelectorAll("#ovl button").forEach((b) => {
     b.classList.toggle("on", !!ovl[b.dataset.o]);
     b.addEventListener("click", () => {
-      ovl[b.dataset.o] = !ovl[b.dataset.o]; store.set("ovl", ovl);
+      ovl[b.dataset.o] = !ovl[b.dataset.o]; store.set("ovl2", ovl);
       b.classList.toggle("on", ovl[b.dataset.o]);
       markerKey = ""; fcKey = "x";
       if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); }
@@ -243,13 +344,36 @@
     };
     es.onerror = () => { es.close(); setTimeout(connectLive, 1000); };
   }
-  setInterval(() => {
-    const age = Date.now() - lastQuoteAt;
-    const on = age < 15000;
-    $("conn").classList.toggle("on", on);
-    $("connTxt").textContent = !lastQuoteAt ? "Connecting" : on ? "Live prices" : "Prices stopped";
-    $("buy").disabled = $("sell").disabled = !on;
-  }, 500);
+  // Buy / Sell work only with fresh prices and a connected broker page (state.caps.trading, state.broker)
+  function tradeState() {
+    const live = Date.now() - lastQuoteAt < 15000;
+    const br = (S && S.broker) || { connected: true, message: null };
+    const capOk = !(S && S.caps && S.caps.trading === false);
+    if (S && (!br.connected || !capOk)) return { ok: false, live, head: "Broker offline", why: br.message || "The broker page is not connected." };
+    if (!live) return { ok: false, live, head: lastQuoteAt ? "Prices stopped" : "Connecting", why: lastQuoteAt ? "No new prices for 15 seconds." : "Waiting for the first price." };
+    return { ok: true, live, head: "Live prices", why: "" };
+  }
+  function paintTrade() {
+    const t = tradeState();
+    $("conn").classList.toggle("on", t.ok);
+    $("connTxt").textContent = t.head;
+    $("conn").title = t.why;
+    $("buy").disabled = $("sell").disabled = !t.ok;
+    $("ticketWrap").classList.toggle("off", !t.ok);
+    const off = $("tradeOff");
+    off.hidden = t.ok || (!S && !lastQuoteAt);
+    if (!off.hidden) off.innerHTML = `<b>Buy and Sell are off.</b> ${esc(t.why)}${last ? " The chart still updates." : ""}`;
+    const want = t.ok ? "ready" : "off";
+    if (resultIdle && idleShown !== want && (S || lastQuoteAt)) {
+      idleShown = want;
+      if (t.ok) result("idle", "Ready to trade", "Click SELL or BUY. The order goes out at once, with no confirm box.", true);
+      else result("wait", "Waiting for the broker", "Buy and Sell come back by themselves once prices flow again.", true);
+    }
+    if (!t.live && last && !(S && S.tick)) {          // no live quote: show the last candle price, greyed out
+      $("bid").innerHTML = bigPx(last.close); $("ask").innerHTML = "-"; $("spr").textContent = "-";
+    }
+  }
+  setInterval(paintTrade, 500);
 
   // ---------------------------------------------------------------- lots
   const step = () => (S && S.spec && S.spec.lot_step) || 0.01;
@@ -281,7 +405,9 @@
 
   // ---------------------------------------------------------------- what just happened
   const ICON = { ok: "✓", bad: "!", wait: "…", idle: "✓" };
-  function result(kind, what, sub) {
+  let resultIdle = true, idleShown = "";
+  function result(kind, what, sub, idle) {
+    resultIdle = !!idle;
     const el = $("result");
     el.className = "result " + kind;
     el.innerHTML = `<span class="ico">${ICON[kind] || "✓"}</span><div class="what">${esc(what)}</div><div class="sub">${esc(sub || "")}</div>`;
