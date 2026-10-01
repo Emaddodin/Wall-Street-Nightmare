@@ -18,3 +18,10 @@ to the minutes after the bar it was made on, so it never looks ahead.
 
 A Dukascopy M1 backtest (Jan 2025 to Sep 2026) of these scalper rules found no edge (about 30%
 winners, profit factor 0.53 to 0.79). Treat the signals as a study.
+
+## Automatic lines from the VPS
+
+`pine_feed.py` runs next to the VPS Kronos chart service (it only reads that service's latest
+forecast; it never runs Kronos) and serves the recent forecasts as paste lines at
+`http://<vps>:8791/?k=<chart token>`. Open that link, copy everything, paste it into the
+indicator's Kronos box. Install with `kronos-pine-feed.service` after setting `SOURCE`.
