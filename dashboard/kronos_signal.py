@@ -131,4 +131,24 @@ class KronosWorker:
             time.sleep(1)
 
     def state(self) -> dict:
-        return {**(self.latest or {}), "status": self.status, "error": self.error}
+        return {**(self.latest or {}), "status": self.status, "error": self.error, "backtest": backtest_summary()}
+
+
+BACKTEST_FILE = Path.home() / ".golddesk" / "kronos_backtest.txt"
+_bt_cache: dict = {}
+
+
+def backtest_summary() -> dict | None:
+    """The last gold backtest the launcher ran: {status: running|done, lines: [...result lines]}."""
+    try:
+        st = BACKTEST_FILE.stat()
+    except OSError:
+        return None
+    if _bt_cache.get("mtime") != st.st_mtime:
+        text = BACKTEST_FILE.read_text(errors="replace")
+        keep = [ln.strip() for ln in text.splitlines() if ln.startswith(("Direction right", "Trades", "Verdict"))]
+        prog = text.replace("\r", "\n").strip().splitlines()
+        _bt_cache.update(mtime=st.st_mtime, value={
+            "status": "done" if any(ln.startswith("Verdict") for ln in keep) else "running",
+            "lines": keep, "progress": prog[-1].strip() if prog and not keep else None})
+    return _bt_cache["value"]

@@ -23,7 +23,17 @@ Options (add them after `start_dashboard.bat` in a terminal, or after `server.py
 | `--terminal "C:\...\terminal64.exe"` | Pick one MT5 install when you have several |
 | `--utc-offset 3` | Your broker's server clock if session times look wrong |
 
-## On a Mac: LiteFinance
+## On a Mac: one-time setup, then double-click
+
+Paste this once in Terminal:
+
+```
+curl -fsSL https://raw.githubusercontent.com/Emaddodin/Wall-Street-Nightmare/refs/heads/claude/project-thread-ild2ro/dashboard/mac/install.sh | bash
+```
+
+It puts Gold Desk in `~/GoldDesk`, installs the LiteFinance browser driver and Kronos, and adds a **Gold Desk** icon to your Desktop. Double-click that icon to trade: it updates Gold Desk to the latest version, stops any older copy, starts it with Kronos and the scalper on the chart, and opens the page. The first start also tests Kronos on the last 20 days of gold in the background and shows the result on the page. Settings (demo or real badge, Kronos size) are in `~/.golddesk/config.sh`.
+
+## On a Mac: LiteFinance (manual start)
 
 No MT5 needed. Gold Desk opens the LiteFinance web terminal in its own Chromium window and works through it: candles come from the same history feed the LiteFinance chart uses, bid and ask are read from its order ticket, and Buy / Sell fill that ticket (side, lots, stop loss, take profit) and press its button.
 
