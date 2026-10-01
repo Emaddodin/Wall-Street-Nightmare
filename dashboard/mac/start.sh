@@ -64,7 +64,7 @@ vps_mode() {
   echo "Gold Desk runs on your VPS around the clock. Keep this window open to see it here; closing it doesn't stop the VPS."
   while true; do
     ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
-        -L "$PORT:127.0.0.1:8765" "$VPS" &
+        -o LogLevel=QUIET -L "$PORT:127.0.0.1:8765" "$VPS" &       # quiet: no "open failed" lines while it starts
     local tunnel=$! i
     for i in $(seq 1 900); do                       # after a restart the VPS page needs a moment; the first start minutes
       curl -fs -m 2 -o /dev/null "$url/api/state" && break

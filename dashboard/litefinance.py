@@ -206,8 +206,10 @@ def find_browsers() -> list:
 
 
 class LiteFinanceSource:
+    """LiteFinance's web terminal in a Chromium page. Candles come straight from LiteFinance's public history,
+    so the dashboard runs even while the broker page can't open (no browser, logged out); the page keeps
+    retrying in the background and `broker` says why trading is off meanwhile."""
     kind = "litefinance"
-    caps = {"positions": False}
 
     def __init__(self, headless: bool = False, account_type: str | None = None, url: str = CHART,
                  session: Path = SESSION, chrome: str | None = None, dry_run: bool = False):
@@ -231,51 +233,84 @@ class LiteFinanceSource:
         self.note = ""          # last message LiteFinance showed after an order
         self.rows: list = []    # open trades as LiteFinance prints them
         self._note_at = 0.0
+        self.connected = False
+        self.browser = None
+        self._boot_err = "Opening the LiteFinance page..."
         ready = threading.Event()
-        self._boot_err = None
         threading.Thread(target=self._worker, args=(ready,), daemon=True).start()
-        ready.wait(90)
-        if self._boot_err:
-            raise RuntimeError(self._boot_err)
-        if not ready.is_set():
-            raise RuntimeError("LiteFinance page did not load within 90 seconds.")
+        ready.wait(25)                    # the dashboard starts after this either way; the page may connect later
+        if not self.connected:
+            print(f"Broker page not connected yet: {self._boot_err} (the dashboard runs; it keeps trying)", flush=True)
+
+    @property
+    def caps(self) -> dict:
+        return {"positions": False, "trading": self.connected}
+
+    def broker(self) -> dict:
+        return {"connected": self.connected, "message": None if self.connected else self._boot_err}
 
     # ------------------------------------------------------------ browser thread
+    def _launch(self, pw):
+        kw = {"headless": self.headless, "args": ["--disable-background-timer-throttling",
+                                                  "--disable-renderer-backgrounding",
+                                                  "--disable-backgrounding-occluded-windows"]}
+        exe = self.chrome or os.environ.get("GOLDDESK_CHROME")
+        errors = []
+        for cand in ([exe] if exe else []) + [None] + find_browsers():   # None = Playwright's own download
+            try:
+                browser = pw.chromium.launch(**kw, **({"executable_path": cand} if cand else {}))
+                if cand:
+                    print(f"Browser for LiteFinance: {cand}", flush=True)
+                return browser
+            except Exception as e:
+                errors.append(f"{cand or 'Playwright chromium'}: {str(e).splitlines()[0]}")
+        print("Browsers tried: " + " | ".join(errors), flush=True)
+        raise RuntimeError("no Chrome / Chromium could start on this machine")
+
+    def _open(self, pw) -> None:
+        """Browser, saved login, chart page with live prices. Raises with a plain reason."""
+        self.browser = self._launch(pw)
+        self.ctx = self.browser.new_context(storage_state=str(self.session), viewport={"width": 1366, "height": 850})
+        self.page = self.ctx.new_page()
+        self.page.goto(self.url, wait_until="domcontentloaded", timeout=45000)
+        try:
+            self.page.wait_for_selector(SEL["bid"], timeout=40000)
+        except Exception:
+            try:
+                HOME.mkdir(parents=True, exist_ok=True)
+                self.page.screenshot(path=str(HOME / "lf_boot.png"))     # what the page showed, for a look later
+                login = "login" in self.page.url or self.page.query_selector("input[type=password]") is not None
+            except Exception:
+                login = False
+            raise RuntimeError("LiteFinance asked to log in again: the saved login wasn't accepted here" if login
+                               else f"the LiteFinance chart showed no prices ({self.page.url})")
+        self._close_popups()
+
     def _worker(self, ready: threading.Event) -> None:
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
-            self._boot_err = "The playwright package is missing. Run: python3 -m pip install playwright"
+            self._boot_err = "the playwright package is missing (python3 -m pip install playwright)"
             ready.set()
             return
-        try:
-            pw = sync_playwright().start()
-            kw = {"headless": self.headless, "args": ["--disable-background-timer-throttling",
-                                                      "--disable-renderer-backgrounding",
-                                                      "--disable-backgrounding-occluded-windows"]}
-            exe = self.chrome or os.environ.get("GOLDDESK_CHROME")
-            self.browser, errors = None, []
-            for cand in ([exe] if exe else []) + [None] + find_browsers():   # None = Playwright's own download
+        pw, wait = None, 60
+        while True:                                # keep trying; the dashboard runs meanwhile
+            try:
+                pw = pw or sync_playwright().start()
+                self._open(pw)
+                break
+            except Exception as e:
+                self._boot_err = f"Broker page not connected: {str(e).splitlines()[0]}"
+                print(self._boot_err, flush=True)
                 try:
-                    self.browser = pw.chromium.launch(**kw, **({"executable_path": cand} if cand else {}))
-                    if cand:
-                        print(f"Browser for LiteFinance: {cand}", flush=True)
-                    break
-                except Exception as e:
-                    errors.append(f"{cand or 'Playwright chromium'}: {str(e).splitlines()[0]}")
-            if self.browser is None:
-                raise RuntimeError("No browser could start for LiteFinance. " + " | ".join(errors[:4]))
-            self.ctx = self.browser.new_context(storage_state=str(self.session), viewport={"width": 1366, "height": 850})
-            self.page = self.ctx.new_page()
-            self.page.goto(self.url, wait_until="domcontentloaded", timeout=45000)
-            self.page.wait_for_selector(SEL["bid"], timeout=40000)
-            self._close_popups()
-        except Exception as e:
-            msg = str(e).splitlines()[0]
-            self._boot_err = (f"LiteFinance chart did not open ({msg}). If you were logged out, run: "
-                              "python3 server.py --litefinance-login")
-            ready.set()
-            return
+                    if self.browser:
+                        self.browser.close()
+                except Exception:
+                    pass
+                self.browser = None
+                ready.set()
+                time.sleep(wait)
+                wait = min(wait * 2, 600)
         self._read_quote()
         self._read_account()
         try:
@@ -287,6 +322,7 @@ class LiteFinanceSource:
                 self.page.wait_for_selector(SEL["bid"], timeout=40000)
         except Exception:
             pass
+        self.connected, self._boot_err = True, None
         ready.set()
         acct_at = rows_at = time.time()
         while True:                                # orders first; between them, keep the quote fresh
@@ -337,6 +373,8 @@ class LiteFinanceSource:
                   "equity": r.get("equity") or r.get("balance") or a.get("equity") or 0.0, "at": time.time()})
 
     def _call(self, fn, timeout: float = 30.0):
+        if not self.connected:
+            raise RuntimeError(self._boot_err or "Broker page not connected")
         box, done = {}, threading.Event()
         self.jobs.put((fn, box, done))
         if not done.wait(timeout):
@@ -367,13 +405,15 @@ class LiteFinanceSource:
     def _get(self, path: str) -> str | None:
         """Candle history is public, so fetch it straight from Python on a kept-alive connection
         instead of queueing behind orders in the browser."""
-        if not self.base.startswith("https://"):
+        if not self.base.startswith(("https://", "http://")):
             return None
         with self.http_lock:
             for _ in range(2):
                 try:
                     if self._conn is None:
-                        self._conn = http.client.HTTPSConnection(self.base[8:], timeout=8)
+                        tls = self.base.startswith("https://")
+                        host = self.base.split("://", 1)[1]
+                        self._conn = (http.client.HTTPSConnection if tls else http.client.HTTPConnection)(host, timeout=8)
                     self._conn.request("GET", path, headers={"User-Agent": "Mozilla/5.0 GoldDesk",
                                                              "Accept": "application/json"})
                     r = self._conn.getresponse()
@@ -453,6 +493,8 @@ class LiteFinanceSource:
         return []    # positions panel not mapped yet; they show in the LiteFinance window
 
     def market(self, side: str, lots: float, sl: float, tp: float) -> dict:
+        if not self.connected:
+            return {"ok": False, "message": self._boot_err or "Broker page not connected", "ms": 0}
         t0 = time.perf_counter()
         args = {"sel": SEL, "side": side, "lots": float(lots), "sl": float(sl or 0), "tp": float(tp or 0),
                 "dry": self.dry_run}

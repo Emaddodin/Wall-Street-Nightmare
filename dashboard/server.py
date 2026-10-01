@@ -437,13 +437,22 @@ class Hub:
         if sides:
             self.radar = "BUY" if sides == [1] else ("SELL" if sides == [-1] else "BOTH")
 
+    def _quote(self) -> dict | None:
+        """The live quote, or (broker page not connected) the last price of the forming bar plus the usual spread."""
+        tk = self.tick_ or self.src.tick()
+        if tk or not self.forming:
+            return tk
+        px = self.forming["close"]
+        return {"bid": px, "ask": round(px + getattr(self.src, "spread", 0.22), self.spec.digits),
+                "time": self.forming["time"]}
+
     def on_kronos(self, fc: dict) -> None:
         """A Kronos forecast finished (worker thread): check it against the indicator for a Boom / Crash call."""
         with self.lock:
             eng = self.engine
             if not eng or not len(eng.m1) or fc.get("t") != eng.m1.t[-1] or eng.ctx is None:
                 return                                   # a newer bar closed meanwhile; the next forecast decides
-            sig = self.boom.on_forecast(fc, boom_setup(eng), self.tick_ or self.src.tick(), self.sec)
+            sig = self.boom.on_forecast(fc, boom_setup(eng), self._quote(), self.sec)
             if sig:
                 self._event("boom", sig["text"], sig["side"])
 
@@ -477,6 +486,7 @@ class Hub:
                 "events": self.events[-30:], "error": self.error,
                 "positions": self.src.positions(), "caps": getattr(self.src, "caps", {"positions": True}),
                 "broker_rows": getattr(self.src, "rows", []),
+                "broker": self.src.broker() if hasattr(self.src, "broker") else {"connected": True, "message": None},
                 "kronos": self.kronos.state() if self.kronos else None,
                 "boom": self.boom.state(),
                 "max_lots": min(self.max_lots, self.spec.max_lot),

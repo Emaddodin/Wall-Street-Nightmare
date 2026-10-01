@@ -40,11 +40,7 @@ main() {
     changed=1
   fi
   if [ ! -f "$CONF/.chromium_ok" ]; then
-    if "$PY" -m playwright install --with-deps chromium; then
-      touch "$CONF/.chromium_ok"
-    else
-      use_local_browser
-    fi
+    get_browser
   fi
 
   # Kronos code: the copy already on the VPS, else a fresh clone
@@ -102,12 +98,27 @@ UNIT
       && echo "Testing Kronos and Boom/Crash on the last 30 days of gold in the background (results show on the page)."
   fi
 }
-# Playwright's browser download fails on this VPS: use a Chrome that is already here instead
-# (install the Chrome .deb lying in /root if nothing is installed). Adds, never removes.
-use_local_browser() {
-  echo "The browser download failed. Looking for a Chrome already on the VPS..."
+# A browser for the broker page. cdn.playwright.dev is unreachable from this VPS, so in order:
+# a Chrome already installed here, Playwright's Microsoft mirror, the normal download, the Chrome .deb
+# lying in /root, any chrome binary on disk. Adds, never removes.
+get_browser() {
   local found
   found=$(cd "$APP/dashboard" && "$PY" -c 'import litefinance as l; b = l.find_browsers(); print(b[0] if b else "")' 2>/dev/null || true)
+  if [ -n "$found" ]; then
+    echo "Gold Desk will use the browser already on the VPS: $found"
+    printf '%s\n' "$found" > "$CONF/chrome_path"
+    touch "$CONF/.chromium_ok"
+    return 0
+  fi
+  echo "Downloading the browser for the broker page (once)..."
+  if PLAYWRIGHT_DOWNLOAD_HOST=https://playwright.download.prss.microsoft.com timeout 900 \
+       "$PY" -m playwright install chromium chromium-headless-shell \
+     || timeout 300 "$PY" -m playwright install chromium chromium-headless-shell; then
+    timeout 600 "$PY" -m playwright install-deps chromium >/dev/null 2>&1 || true
+    touch "$CONF/.chromium_ok"
+    return 0
+  fi
+  echo "The browser download failed. Looking for a Chrome already on the VPS..."
   if [ -z "$found" ]; then
     local deb
     deb=$(ls -t /root/*chrome*.deb /root/*/*chrome*.deb 2>/dev/null | head -1)
