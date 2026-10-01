@@ -166,6 +166,17 @@
     el.addEventListener("change", () => { store.set(id, el.type === "checkbox" ? el.checked : el.value); renderTicket(); });
   }
   ["manualSl", "manualTp", "riskPct", "fixedLots"].forEach((id) => $(id).addEventListener("input", () => renderTicket()));
+  function stepLots(dir) {
+    const st = (S && S.spec.lot_step) || 0.01, mn = (S && S.spec.min_lot) || 0.01;
+    const cur = num($("fixedLots").value) || mn;
+    $("fixedLots").value = Math.max(mn, +(cur + dir * st).toFixed(2)).toFixed(2);
+    $("lotMode").value = "fixed";
+    store.set("lotMode", "fixed"); store.set("fixedLots", $("fixedLots").value);
+    renderTicket();
+  }
+  $("volUp").addEventListener("click", () => stepLots(1));
+  $("volDown").addEventListener("click", () => stepLots(-1));
+  $("fixedLots").addEventListener("input", () => { if ($("lotMode").value !== "fixed") { $("lotMode").value = "fixed"; store.set("lotMode", "fixed"); } });
 
   function floorLots(x) {
     const st = S.spec.lot_step || 0.01;
@@ -225,6 +236,8 @@
     $("planSell").innerHTML = planHtml(ps);
     $("planBuy").innerHTML = planHtml(pb);
     const canTrade = !!(S.account && S.account.trade_allowed);
+    const shown = $("lotMode").value === "auto" ? (pb.ok ? pb : ps) : null;
+    $("volNote").textContent = shown && shown.ok ? `auto: ${shown.lots.toFixed(2)}` : "lots";
     $("btnSell").disabled = !ps.ok || !canTrade;
     $("btnBuy").disabled = !pb.ok || !canTrade;
   }
