@@ -175,6 +175,21 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 .card .lvls { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 13px; color: var(--dim); margin-top: 2px; }
 .card .lvls b { font-weight: 700; color: var(--fg); }
 .card .lvls b.up { color: var(--up); } .card .lvls b.down { color: var(--down); }
+.card.kron .call { grid-column: 1 / -1; }
+.kv { justify-self: end; display: flex; gap: 2px; background: var(--raise); border-radius: 7px; padding: 2px; }
+.kv button { padding: 2px 8px; border-radius: 5px; font: 600 12px var(--label); color: var(--dim); }
+.kv button.on { background: var(--panel); color: var(--fg); }
+.odds { grid-column: 1 / -1; display: flex; gap: 14px; font-size: 13px; color: var(--dim); margin-top: 2px; }
+.odds b { font: 700 14px var(--mono); color: var(--fg); }
+.odds b.up { color: var(--up); } .odds b.down { color: var(--down); }
+.split { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--down); overflow: hidden; }
+.split i { display: block; height: 100%; background: var(--up); }
+.mini { width: 100%; height: 92px; display: block; background: var(--panel); border-radius: 6px; margin: 2px 0; }
+.mlegend { display: flex; gap: 12px; font-size: 11px; }
+.mlegend span { display: inline-flex; align-items: center; gap: 5px; }
+.mlegend i { width: 14px; height: 0; border-top: 2px solid var(--fg); }
+.mlegend i.f { border-top: 2px dashed var(--gold); }
+.mlegend i.s { height: 8px; border: 0; background: rgba(214,173,82,.3); border-radius: 2px; }
 .meter { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--raise); overflow: hidden; }
 .meter i { display: block; height: 100%; border-radius: 2px; }
 
@@ -254,7 +269,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
     <div class="sig">
       <div class="eyebrow">Signals</div>
       <div class="card boom" id="boom" hidden></div>
-      <div class="card" id="kronos"></div>
+      <div class="card kron" id="kronos"></div>
       <div class="card" id="scalper"></div>
     </div>
 
