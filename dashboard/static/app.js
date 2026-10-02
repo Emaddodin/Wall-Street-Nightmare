@@ -67,7 +67,9 @@
     if (bucket > last.time) last = { time: Math.floor(bucket), open: last.close, high: Math.max(last.close, bid), low: Math.min(last.close, bid), close: bid };
     else { last.high = Math.max(last.high, bid); last.low = Math.min(last.low, bid); last.close = bid; }
     series.update(last);
+    if (tf === "M1") { drawForecast(); if (Date.now() - zonesAt > 1000) { zonesAt = Date.now(); requestAnimationFrame(drawZones); } }
   }
+  let zonesAt = 0;
 
   // server copy of the bar every few seconds (fixes any tick the stream missed)
   async function syncTail() {
@@ -120,9 +122,27 @@
     const ok = (f) => f && Array.isArray(f.path) && f.path.length ? f : null;
     if (tf === "H1") return ok(k && k.day);
     if (tf !== "M1" && tf !== "M5" && tf !== "M15") return null;
-    if (ok(c)) return { ...c, band: lineBand(c, k), mix: true };
+    if (ok(c)) { const f = tf === "M1" ? liveLine(c) : c; return { ...f, band: lineBand(f, k), mix: true }; }
     return tf === "M15" ? null : ok(k);
   }
+  // On 1m the gold line looks 10 minutes ahead, one point per candle. The reading is redone at every candle close;
+  // while a candle is forming the line starts from the live price, so it stays attached to the chart.
+  const LIVE_MIN = 10;
+  function liveLine(c) {
+    const pts = [[c.t, +c.last], ...c.path.map((p) => [p.time, p.value])].sort((a, b) => a[0] - b[0]);
+    const at = (x) => {
+      for (let i = 1; i < pts.length; i++) if (pts[i][0] >= x) {
+        const [t0, v0] = pts[i - 1], [t1, v1] = pts[i];
+        return t1 === t0 ? v1 : v0 + (v1 - v0) * (x - t0) / (t1 - t0);
+      }
+      return pts[pts.length - 1][1];
+    };
+    const path = [];
+    for (let m = 1; m <= LIVE_MIN; m++) path.push({ time: c.t + m * 60, value: +at(c.t + m * 60).toFixed(2) });
+    const now = last && loadedTf === "M1" && last.time >= c.t ? last.close : null;
+    return { ...c, path, minutes: LIVE_MIN, target: path[path.length - 1].value, last: now ?? c.last, live: true };
+  }
+  const candleClock = (sec) => new Date(sec * 1000).toISOString().slice(11, 16);
   // Shading for the trend line, the same two tones as Kronos's: around the line, as wide as Kronos's own sample
   // spread when a fresh Kronos run has one, else as wide as gold's usual M1 swing for that many minutes ahead.
   function lineBand(c, k) {
@@ -141,7 +161,7 @@
   function drawForecast() {
     const k = chartForecast();
     const ok = !!(ovl.kronos && loadedTf === tf && k && last);
-    const key = ok ? `${tf}${k.t}${k.mix ? "c" : "k"}${k.target}` : "";
+    const key = ok ? `${tf}${k.t}${k.mix ? "c" : "k"}${k.target}${k.live ? k.last : ""}` : "";
     if (key === fcKey) return;
     fcKey = key;
     if (!ok) { forecast.setData([]); return; }
@@ -796,9 +816,10 @@
   const tfName = (t) => t.replace(/^M(\d+)$/, "$1m").replace(/^H(\d+)$/, "$1h").replace(/^D1$/, "1D");
   const arrow = (v) => v > 0 ? `<b class="up">▲</b>` : v < 0 ? `<b class="down">▼</b>` : `<b>•</b>`;
   function renderTrend() {
-    const c = S.consensus, el = $("trend"), pill = $("tfRead");
-    el.hidden = !c; pill.hidden = !c || !ovl.kronos;
-    if (!c) return;
+    const c0 = S.consensus, el = $("trend"), pill = $("tfRead");
+    el.hidden = !c0; pill.hidden = !c0 || !ovl.kronos;
+    if (!c0) return;
+    const c = tf === "M1" && Array.isArray(c0.path) && c0.path.length ? liveLine(c0) : c0;
     const sc = `${c.score > 0 ? "+" : ""}${(+c.score).toFixed(2)}`, cls = c.bias > 0 ? "up" : c.bias < 0 ? "down" : "flat";
     const word = (c.label || "mixed").toUpperCase();
     pill.innerHTML = TF6.map((t) => `<span class="tfa">${tfName(t)}${arrow((c.tf || {})[t])}</span>`).join("") +
@@ -811,7 +832,7 @@
       <span class="tfs6">${TF6.map((t) => `<span>${tfName(t)}${arrow((c.tf || {})[t])}</span>`).join("")}</span>
       <span class="parts">${(c.parts || []).map((p) => { const v = Math.max(-1, Math.min(1, +p.score || 0));
         return `<span>${esc(p.name)}</span><span class="bar"><i style="${v >= 0 ? `left:50%;width:${v * 50}%;background:var(--up)` : `right:50%;width:${-v * 50}%;background:var(--down)`}"></i></span><span class="num ${tone(v)}">${v > 0 ? "+" : ""}${v.toFixed(2)}</span>`; }).join("")}</span>
-      <span class="meta">The gold line on the 1m to 15m chart leans this way for the next ${horizon(c.minutes || 120)}${c.kronos ? ", with Kronos mixed in" : " (Kronos not in it right now)"}.</span>
+      <span class="meta">${c.live ? `The gold line looks ${LIVE_MIN} minutes ahead and is redone at every 1m candle close · from the ${candleClock(c.t - 60)} candle` : `The gold line on the 1m to 15m chart leans this way for the next ${horizon(c.minutes || 120)}`}${c.kronos ? ", with Kronos mixed in" : " (Kronos not in it right now)"}.</span>
       <span class="meta">${esc(c.note || "Describes the chart, not a forecast.")}</span>`;
   }
   // state.mesh: live scoreboard. sources [{name, by_h {"30"|"60"|"120": {n, right, coin_band, beats_coin} | null}}],
