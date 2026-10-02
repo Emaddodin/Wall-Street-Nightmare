@@ -69,8 +69,9 @@ def play(m1: list, start: int, d: int, entry: float, sl: float, tp: float, sprea
 
 
 def run(m1: list, m5: Bars, trend: oc.Trend | None, a, kronos: dict, tp_r: float, confirm: str,
-        use_trend: bool, need: int = oc.NEED_SCORE, collect: list | None = None) -> list:
-    st = oc.Setups(300, confirm=confirm)
+        use_trend: bool, need: int = oc.NEED_SCORE, collect: list | None = None, session: bool = True,
+        kronos_cut: float | None = None, **setup_kw) -> list:
+    st = oc.Setups(300, confirm=confirm, **setup_kw)
     t1 = [r[0] for r in m1]
     from bisect import bisect_left
     trades, busy_until = [], 0
@@ -78,7 +79,7 @@ def run(m1: list, m5: Bars, trend: oc.Trend | None, a, kronos: dict, tp_r: float
         done = st.add(m5.t[j], m5.o[j], m5.h[j], m5.l[j], m5.c[j])
         t_close = m5.t[j] + 300
         for d, s in done.items():
-            if not oc.in_session(t_close):
+            if session and not oc.in_session(t_close):
                 continue
             if collect is not None:
                 collect.append(m5.t[j])
@@ -88,6 +89,10 @@ def run(m1: list, m5: Bars, trend: oc.Trend | None, a, kronos: dict, tp_r: float
             bias = oc.Trend.bias(v, need) if v else 0
             if use_trend and bias != d:
                 continue
+            if kronos_cut is not None:
+                up = kronos.get(m5.t[j])
+                if up is None or (up if d == 1 else 1 - up) < kronos_cut:
+                    continue
             k = bisect_left(t1, t_close)
             if k >= len(m1) or m1[k][0] - t_close > 600:
                 continue                              # market closed after the setup
@@ -157,7 +162,10 @@ def main() -> None:
     ap.add_argument("--out", default="boom_backtest_trades.csv")
     ap.add_argument("--no-scalper", action="store_true")
     ap.add_argument("--grid", action="store_true", help="also try other targets / confirmations")
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=N",
+                    help="setup layer setting, e.g. sweep_pivot=3 choch_within=24 (see orchestra.Setups)")
     a = ap.parse_args()
+    kw = {k: (int(v) if v.isdigit() else v) for k, v in (x.split("=", 1) for x in a.set)}
 
     m1 = load(a.csv)
     m5, h1, h4 = aggregate(m1, 300), aggregate(m1, 3600), aggregate(m1, 14400)
@@ -168,7 +176,7 @@ def main() -> None:
             for r in csv.DictReader(f):
                 kronos[int(float(r["time"]))] = float(r["up_prob"])
     span = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d")
-    print(f"{a.csv}: {len(m1)} M1 bars, {span(m1[0][0])} to {span(m1[-1][0])}; spread {a.spread}"
+    print((f"Setup settings: {kw}\n" if kw else "") + f"{a.csv}: {len(m1)} M1 bars, {span(m1[0][0])} to {span(m1[-1][0])}; spread {a.spread}"
           + (f"; {len(kronos)} Kronos forecasts" if kronos else ""))
     warm = m1[0][0] + 45 * 86400                     # the H4 EMA 200 needs about a month and a half
     cut = int(datetime.fromisoformat(a.split).replace(tzinfo=timezone.utc).timestamp()) if a.split else None
@@ -182,12 +190,15 @@ def main() -> None:
     collect = [] if a.dump else None
     results = {}
     for name, r, conf, use in variants:
-        results[name] = run(m1, m5, trend, a, kronos, r, conf, use, collect=collect if not results else None)
+        results[name] = run(m1, m5, trend, a, kronos, r, conf, use, collect=collect if not results else None, **kw)
     if kronos:
         k_only = [x for x in results[variants[0][0]] if x["kronos"] is not None]
         k_agree = [x for x in k_only if (x["kronos"] - 0.5) * x["dir"] > 0]
         results["  ...with a Kronos forecast"] = k_only
         results["  ...and Kronos agreeing (up_prob side)"] = k_agree
+        for cut in (0.5, 0.6, 0.7):
+            results[f"SMC setup + Kronos only, >= {cut:.0%} of paths"] = run(
+                m1, m5, trend, a, kronos, oc.TP_R, oc.CONFIRM, False, kronos_cut=cut, **kw)
     for label, lo, hi in periods:
         print(f"\n{label} ({span(lo)} to {span(min(hi, m1[-1][0]))}):")
         for name, tr in results.items():

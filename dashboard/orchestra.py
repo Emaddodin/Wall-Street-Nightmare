@@ -154,7 +154,7 @@ class Setups:
     def __init__(self, sec: int = 300, **kw):
         self.sec = sec
         self.cfg = {"confirm": CONFIRM, "tp_r": TP_R, "sweep_pivot": SWEEP_PIVOT, "choch_within": CHOCH_WITHIN,
-                    "return_within": RETURN_WITHIN, **kw}
+                    "return_within": RETURN_WITHIN, "sweep_age": SWEEP_AGE, **kw}
         self.o, self.h, self.l, self.c, self.t, self.atr = [], [], [], [], [], []
         self.liq = {1: [], -1: []}            # resting liquidity per side: [bar, price] (lows for 1, highs for -1)
         self.inner = {1: [], -1: []}          # internal swing highs for 1 (lows for -1): [bar, price]
@@ -199,7 +199,7 @@ class Setups:
             if self.l[k] == min(self.l[k - I:k + I + 1]):
                 self.inner[-1].append([k, -self.l[k]])
         for d in (1, -1):
-            self.liq[d] = [x for x in self.liq[d] if j - x[0] <= SWEEP_AGE][-12:]
+            self.liq[d] = [x for x in self.liq[d] if j - x[0] <= self.cfg["sweep_age"]][-12:]
             self.inner[d] = self.inner[d][-12:]
 
     def _step(self, d: int, j: int) -> dict | None:
