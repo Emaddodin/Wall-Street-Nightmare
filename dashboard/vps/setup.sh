@@ -99,6 +99,20 @@ UNIT
       && echo "Testing Kronos and Boom/Crash on the last 30 days of gold in the background (results show on the page)."
   fi
   research "$KREPO"
+  boom_kronos "$KREPO"
+}
+# Once, for the "Rebuild BOOM/CRASH" thread: does a Kronos vote improve the smart money BOOM / CRASH setups?
+# A year of Dukascopy gold (not LiteFinance, which rate-limits this VPS). Nice 19, one core, resumable, changes
+# no service. Results: /api/research/boom_kronos_*.txt (through the Mac's tunnel).
+boom_kronos() {
+  local P=$CONF/kronos_research/boom_kronos_progress.txt
+  [ "$KRONOS" = off ] && return 0
+  grep -q "All BOOM/CRASH" "$P" 2>/dev/null && return 0
+  systemctl is-active -q boom-kronos-test && { echo "BOOM/CRASH Kronos test: $(cat "$P" 2>/dev/null || echo starting)"; return 0; }
+  systemd-run -q --unit boom-kronos-test --collect -p Nice=19 -p CPUQuota=100% -p MemoryMax=2000M \
+    -p WorkingDirectory="$APP/dashboard" --setenv=HOME=/root \
+    /bin/sh vps/boom_kronos_test.sh "$PY" "$1" "$KRONOS" \
+    && echo "BOOM/CRASH Kronos test started on the VPS in the background (low priority)." || true
 }
 # Once, for the "Improve Kronos accuracy" thread: how often is Kronos's direction right, and which settings help?
 # Nice 19 with CPU and memory capped, resumable (each icon run restarts it if it stopped), changes no service.

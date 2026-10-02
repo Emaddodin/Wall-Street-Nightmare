@@ -787,7 +787,9 @@ class Handler(BaseHTTPRequestHandler):
             if u.path.startswith("/api/research/"):          # read-only copies of the test's own files
                 name = u.path.rsplit("/", 1)[1]
                 f = RESEARCH.parent / "kronos_research.log" if name == "log" else RESEARCH / name
-                if (name in RESEARCH_FILES or name == "log") and f.is_file():
+                ok = name in RESEARCH_FILES or name == "log" or (name.startswith("boom_kronos_") and name.endswith(".txt")
+                                                                   and "/" not in name and ".." not in name)
+                if ok and f.is_file():
                     return self._send(200, f.read_bytes(), "text/plain; charset=utf-8")
                 return self._send(404, b"not there (yet)", "text/plain")
             if u.path == "/api/backtest":
@@ -821,7 +823,7 @@ def research_state() -> dict:
             "done": bool(log and "All settings done" in log),
             "log_tail": log.replace("\r", "\n").splitlines()[-8:] if log else None,
             "report": rd(RESEARCH / "report.md"),
-            "files": sorted(f.name for f in RESEARCH.glob("*") if f.name in RESEARCH_FILES)}
+            "files": sorted(f.name for f in RESEARCH.glob("*") if f.name in RESEARCH_FILES or f.name.startswith("boom_kronos_"))}
 
 
 def poll_loop() -> None:
