@@ -122,13 +122,16 @@
     const ok = (f) => f && Array.isArray(f.path) && f.path.length ? f : null;
     if (tf === "H1") return ok(k && k.day);
     if (tf !== "M1" && tf !== "M5" && tf !== "M15") return null;
-    if (ok(c)) { const f = tf === "M1" ? liveLine(c) : c; return { ...f, band: lineBand(f, k), mix: true }; }
+    if (ok(c)) { const f = tf === "M1" ? liveLine(c) : c; return { ...f, band: Array.isArray(f.band) && f.band.length ? f.band : lineBand(f, k), mix: true }; }
     return tf === "M15" ? null : ok(k);
   }
   // On 1m the gold line looks 10 minutes ahead, one point per candle. The reading is redone at every candle close;
   // while a candle is forming the line starts from the live price, so it stays attached to the chart.
   const LIVE_MIN = 10;
   function liveLine(c) {
+    const lv = c.live, now0 = last && loadedTf === "M1" ? last : null;
+    if (lv && Array.isArray(lv.path) && lv.path.length)       // the backend's own 10-minute forecast, when it sends one
+      return { ...c, ...lv, target: lv.path[lv.path.length - 1].value, last: now0 && now0.time >= lv.t ? now0.close : lv.last, live: true };
     const pts = [[c.t, +c.last], ...c.path.map((p) => [p.time, p.value])].sort((a, b) => a[0] - b[0]);
     const at = (x) => {
       for (let i = 1; i < pts.length; i++) if (pts[i][0] >= x) {
@@ -498,7 +501,7 @@
       ovl[b.dataset.o] = !ovl[b.dataset.o]; store.set("ovl2", ovl);
       b.classList.toggle("on", ovl[b.dataset.o]);
       markerKey = ""; fcKey = "x";
-      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); renderSmcRead(); renderTrend(); }
+      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); renderSmcRead(); renderTrend(); renderDesks(); }
     });
   });
 
@@ -815,6 +818,20 @@
   const TF6 = ["D1", "H4", "H1", "M15", "M5", "M1"];
   const tfName = (t) => t.replace(/^M(\d+)$/, "$1m").replace(/^H(\d+)$/, "$1h").replace(/^D1$/, "1D");
   const arrow = (v) => v > 0 ? `<b class="up">▲</b>` : v < 0 ? `<b class="down">▼</b>` : `<b>•</b>`;
+  // state.timeframes: each timeframe's own desk (D1 bias down to M1 trigger), read top-down like ICT does
+  const deskDir = (t) => { const d = S.timeframes && S.timeframes[t]; return d ? d.bias : ((S.consensus && S.consensus.tf) || {})[t]; };
+  function renderDesks() {
+    const ds = S.timeframes || {}, el = $("desks"), rows = TF6.filter((t) => ds[t]);
+    el.hidden = !rows.length;
+    if (el.hidden) return;
+    el.innerHTML = `<span class="name">Top-down</span><span class="untested">NOT PROVEN</span>
+      <span class="rows">${rows.map((t) => { const d = ds[t], w = (d.why || [])[0], cls = d.bias > 0 ? "up" : d.bias < 0 ? "down" : "";
+        const sc = `${d.score > 0 ? "+" : ""}${(+d.score).toFixed(2)}`;
+        return `<span class="row${t === tf ? " here" : ""}"><span class="tf">${tfName(t)}</span><span class="role">${esc(d.role || "")}</span>
+          <span class="rd ${cls}">${d.bias > 0 ? "▲" : d.bias < 0 ? "▼" : "•"} ${esc((d.label || "mixed").toUpperCase())} ${sc}</span>
+          <span class="why">${w ? esc(w.text) : "Nothing strong right now"}${d.with_above === false ? ` · <em>against ${tfName(d.above)}</em>` : ""}</span></span>`; }).join("")}</span>
+      <span class="meta">Each timeframe reads its own ICT concepts. ICT takes a lower timeframe's signal only when it sides with the one above it. The weights are the textbook, not fitted.</span>`;
+  }
   function renderTrend() {
     const c0 = S.consensus, el = $("trend"), pill = $("tfRead");
     el.hidden = !c0; pill.hidden = !c0 || !ovl.kronos;
@@ -822,14 +839,14 @@
     const c = tf === "M1" && Array.isArray(c0.path) && c0.path.length ? liveLine(c0) : c0;
     const sc = `${c.score > 0 ? "+" : ""}${(+c.score).toFixed(2)}`, cls = c.bias > 0 ? "up" : c.bias < 0 ? "down" : "flat";
     const word = (c.label || "mixed").toUpperCase();
-    pill.innerHTML = TF6.map((t) => `<span class="tfa">${tfName(t)}${arrow((c.tf || {})[t])}</span>`).join("") +
+    pill.innerHTML = TF6.map((t) => `<span class="tfa">${tfName(t)}${arrow(deskDir(t))}</span>`).join("") +
       `<b class="${cls === "flat" ? "" : cls}">${c.bias > 0 ? "▲" : c.bias < 0 ? "▼" : "•"} ${word} ${sc}</b>`;
     el.innerHTML = `<span class="name">Trend reading</span><span class="untested">${c.proven ? "TESTED" : "NOT A FORECAST"}</span>
       <span class="call ${cls}">${c.bias > 0 ? "▲ UP" : c.bias < 0 ? "▼ DOWN" : "— FLAT"} ${c.target != null ? `<span class="num" style="font-size:14px">${fmt(c.target)} (${c.target - c.last >= 0 ? "+" : ""}${fmt(c.target - c.last)})</span>` : ""}</span><span></span>
       <span class="odds"><span>Reading <b class="${cls === "flat" ? "" : cls}">${word} ${sc}</b></span><span>in ${horizon(c.minutes || 120)}</span></span>
       <span class="split"><i style="width:${Math.round((1 + Math.max(-1, Math.min(1, +c.score || 0))) * 50)}%"></i></span>
-      ${(() => { const b = lineBand(c, S.kronos), e = b[b.length - 1]; return e ? `<span class="meta num">Likely ends between ${fmt(e.lo)} and ${fmt(e.hi)} · middle half ${fmt(e.p25)} to ${fmt(e.p75)}</span>` : ""; })()}
-      <span class="tfs6">${TF6.map((t) => `<span>${tfName(t)}${arrow((c.tf || {})[t])}</span>`).join("")}</span>
+      ${(() => { const b = Array.isArray(c.band) && c.band.length ? c.band : lineBand(c, S.kronos), e = b[b.length - 1]; return e ? `<span class="meta num">Likely ends between ${fmt(e.lo)} and ${fmt(e.hi)} · middle half ${fmt(e.p25)} to ${fmt(e.p75)}</span>` : ""; })()}
+      <span class="tfs6">${TF6.map((t) => `<span>${tfName(t)}${arrow(deskDir(t))}</span>`).join("")}</span>
       <span class="parts">${(c.parts || []).map((p) => { const v = Math.max(-1, Math.min(1, +p.score || 0));
         return `<span>${esc(p.name)}</span><span class="bar"><i style="${v >= 0 ? `left:50%;width:${v * 50}%;background:var(--up)` : `right:50%;width:${-v * 50}%;background:var(--down)`}"></i></span><span class="num ${tone(v)}">${v > 0 ? "+" : ""}${v.toFixed(2)}</span>`; }).join("")}</span>
       <span class="meta">${c.live ? `The gold line looks ${LIVE_MIN} minutes ahead and is redone at every 1m candle close · from the ${candleClock(c.t - 60)} candle` : `The gold line on the 1m to 15m chart leans this way for the next ${horizon(c.minutes || 120)}`}${c.kronos ? ", with Kronos mixed in" : " (Kronos not in it right now)"}.</span>
@@ -943,6 +960,7 @@
     renderBoom();
     renderHeadsUp();
     renderTrend();
+    renderDesks();
     renderMesh();
     renderSmcRead();
     drawMarkers();

@@ -252,6 +252,14 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 .card.trend .parts .bar { height: 6px; background: var(--raise); border-radius: 3px; position: relative; }
 .card.trend .parts .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
 .card.trend .parts .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line); }
+.card.desks .rows { grid-column: 1 / -1; display: grid; gap: 0; }
+.card.desks .row { display: grid; grid-template-columns: 34px 1fr auto; gap: 1px 8px; padding: 5px 6px; border-top: 1px solid var(--line); align-items: baseline; }
+.card.desks .row.here { background: var(--raise); border-radius: 6px; }
+.card.desks .row .tf { font: 600 12px var(--mono); color: var(--fg); }
+.card.desks .row .role { font-size: 12px; color: var(--dim); }
+.card.desks .row .rd { font: 600 12px var(--mono); text-align: right; white-space: nowrap; }
+.card.desks .row .why { grid-column: 2 / -1; font-size: 12px; color: var(--dim); }
+.card.desks .row .why em { font-style: normal; color: var(--down); }
 .card.mesh table { grid-column: 1 / -1; width: 100%; border-collapse: collapse; font-size: 12px; }
 .card.mesh th { text-align: right; padding: 2px 0 4px 8px; font: 600 10.5px var(--label); letter-spacing: .08em; color: var(--dim); }
 .card.mesh th:first-child, .card.mesh td:first-child { text-align: left; padding-left: 0; }
@@ -381,6 +389,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
       <div class="eyebrow">Signals</div>
       <div class="heads" id="heads" hidden></div>
       <div class="card trend" id="trend" hidden></div>
+      <div class="card desks" id="desks" hidden></div>
       <div class="card mesh" id="mesh" hidden></div>
       <div class="card boom" id="boom" hidden></div>
       <div class="card kron" id="kronos"></div>
