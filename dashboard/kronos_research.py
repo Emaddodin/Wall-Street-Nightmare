@@ -161,11 +161,24 @@ def collect(a) -> None:
                        f"{per * (len(todo) - n) / 3600:.1f} h left for this setting")
                 (out / "progress.txt").write_text(msg + "\n")
                 print("  " + msg, end="\r", flush=True)
+                if n % 25 == 0:
+                    refresh(a)
             print(f"\n{cfg}: done.", flush=True)
+            refresh(a)
     print(f"All settings done. Next: python3 kronos_research.py report --out {out}")
 
 
 # ---------------------------------------------------------------- report
+
+def refresh(a) -> None:
+    """Keep report.md current while collecting, so it can be read before the run ends."""
+    try:
+        import contextlib, io
+        with contextlib.redirect_stdout(io.StringIO()):
+            report(a)
+    except Exception as e:                             # a report problem must not stop the run
+        print(f"\n(report not updated: {e})", flush=True)
+
 
 def ema(xs: list, n: int) -> list:
     k, out = 2 / (n + 1), []
