@@ -28,6 +28,7 @@ from pathlib import Path
 import ict_entries as ie
 from engine import Bars
 from ictmodel import MarketRead, consensus, daily
+from mesh import Mesh
 
 LOG_FILE = Path.home() / ".golddesk" / "boom_calls.csv"
 NAME = {1: "BOOM", -1: "CRASH"}
@@ -56,8 +57,9 @@ def _trim(b: Bars) -> Bars:
 
 
 class BoomTracker:
-    def __init__(self, digits: int = 2, log: Path | None = LOG_FILE):
+    def __init__(self, digits: int = 2, log: Path | None = LOG_FILE, mesh: Mesh | None = None):
         self.digits, self.log = digits, log
+        self.mesh = mesh if mesh is not None else Mesh(None)
         self.active: dict | None = None          # the call: status "waiting" (limit order) or "filled"
         self.history: list = self._read()
         self.entries: ie.M1Entries | None = None
@@ -152,6 +154,14 @@ class BoomTracker:
         self.fed_t = m1.t[n - 1]
         if self.read is not None:
             self._consensus(m1.t[n - 1] + 60, m1.c[n - 1], self.read.f["M1"].atr[-1])
+        for i in new:                                              # the knowledge mesh: candle + reading
+            rd = None
+            if i == n - 1 and self.consensus and self.consensus.get("x"):
+                cs = self.consensus
+                rd = {"x": cs["x"], "s": cs["score"], "atr": round(cs["atr"], 3),
+                      "g": {p["name"]: p["score"] for p in cs["parts"]},
+                      "k": (cs["parts"][-1]["items"]["up_prob"] if cs["kronos"] else None)}
+            self.mesh.record(m1.t[i] + 60, m1.o[i], m1.h[i], m1.l[i], m1.c[i], rd)
         self.watch = self._watch()
         return out
 
@@ -271,7 +281,7 @@ class BoomTracker:
             self.consensus = None
             return
         k = self.kronos if self.kronos and abs((self.kronos.get("t") or 0) - t) < 1800 else None
-        cs = consensus(x, k.get("up_prob") if k else None)
+        cs = consensus(x, k.get("up_prob") if k else None, self.mesh.trust())
         h1 = self.read.f.get("H1")
         unit = h1.atr[h1.at(t)] if h1 and h1.at(t) >= 0 else atr_m1 * 8
         steps = LINE_MIN * 60 // LINE_STEP
@@ -285,7 +295,7 @@ class BoomTracker:
         cs.update(t=t, price=price, atr=atr_m1, path=path, minutes=LINE_MIN, tf=tfs, last=price,
                   target=path[-1]["value"], dir=cs["bias"],
                   label={1: "bullish", -1: "bearish", 0: "mixed"}[cs["bias"]],
-                  kronos=bool(k), proven=False,
+                  kronos=bool(k), proven=False, x=x, trust=self.mesh.trust(),
                   note="What the timeframes, ICT events and Kronos say together. Descriptive: on a year of gold it "
                        "did not predict the next 30-120 minutes better than a coin flip.")
         self.consensus = cs
