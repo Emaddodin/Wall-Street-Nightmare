@@ -78,9 +78,11 @@ def run(m1: list, m5: Bars, trend: oc.Trend | None, a, kronos: dict, tp_r: float
         done = st.add(m5.t[j], m5.o[j], m5.h[j], m5.l[j], m5.c[j])
         t_close = m5.t[j] + 300
         for d, s in done.items():
+            if not oc.in_session(t_close):
+                continue
             if collect is not None:
                 collect.append(m5.t[j])
-            if t_close < busy_until or not oc.in_session(t_close):
+            if t_close < busy_until:
                 continue
             v = trend.votes(t_close, kronos.get(m5.t[j])) if trend else {}
             bias = oc.Trend.bias(v, need) if v else 0
