@@ -68,8 +68,15 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .left { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 .chartwrap { position: relative; min-height: 0; }
 #chart { position: absolute; inset: 0; }
-.chartbar { position: absolute; top: 12px; left: 12px; z-index: 3; display: flex; gap: 8px; flex-wrap: wrap; }
-.smcread { position: absolute; top: 54px; left: 12px; z-index: 3; max-width: calc(100% - 140px); background: rgba(21,23,26,.92); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font: 500 13px var(--label); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chartbar { position: absolute; top: 12px; left: 12px; right: 76px; z-index: 3; display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; pointer-events: none; }
+.chartbar > * { pointer-events: auto; }
+.ovl { flex-wrap: wrap; }
+.reads { position: absolute; top: 54px; left: 12px; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: calc(100% - 140px); pointer-events: none; }
+.tfread { display: flex !important; gap: 10px; align-items: baseline; }
+.tfread[hidden] { display: none !important; }
+.tfread .tfa { font: 600 12px var(--mono); color: var(--dim); }
+.tfread .tfa b { font-weight: 700; margin-left: 2px; }
+.smcread { max-width: 100%; background: rgba(21,23,26,.92); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font: 500 13px var(--label); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .smcread b { font-weight: 700; letter-spacing: .06em; margin-right: 6px; }
 #zones { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
 .ovl { display: flex; gap: 2px; background: rgba(21,23,26,.92); padding: 3px; border-radius: 9px; border: 1px solid var(--line); }
@@ -77,6 +84,7 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .ovl button.on { background: var(--raise); color: var(--fg); }
 .ovl button i { width: 14px; height: 0; border-top: 2px dashed var(--gold); }
 .ovl button i.z { height: 10px; border: 1px solid rgba(47,123,245,.8); background: rgba(47,123,245,.25); border-radius: 2px; }
+.ovl button i.f { width: 12px; height: 8px; border: 1px solid var(--up); border-top: 2px dashed var(--warn); background: transparent; }
 .ovl button i.b { width: 0; height: 0; border: 5px solid transparent; border-bottom: 9px solid var(--up); border-top: 0; }
 .ovl button i.s { width: 12px; height: 10px; border: 0; border-top: 1px solid var(--warn); border-bottom: 1px dashed var(--fg); background: linear-gradient(rgba(229,72,77,.3) 50%, rgba(47,182,124,.3) 50%); }
 .ovl button:not(.on) i { opacity: .35; }
@@ -236,6 +244,14 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 .heads.live.down { border-color: var(--down); background: rgba(229,72,77,.06); }
 .heads.live.up .hd { color: var(--up); } .heads.live.down .hd { color: var(--down); }
 .heads.live .hd { font-size: 14px; }
+.card.trend .tfs6 { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin: 4px 0 2px; }
+.card.trend .tfs6 span { text-align: center; border: 1px solid var(--line); border-radius: 6px; padding: 3px 0; font: 600 11px var(--mono); color: var(--dim); }
+.card.trend .tfs6 span, .card.trend .tfs6 span b { text-align: center; }
+.card.trend .tfs6 span b { display: block; font-size: 14px; }
+.card.trend .parts { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr auto; gap: 3px 8px; align-items: center; font-size: 12px; color: var(--dim); }
+.card.trend .parts .bar { height: 6px; background: var(--raise); border-radius: 3px; position: relative; }
+.card.trend .parts .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.card.trend .parts .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line); }
 .card.boom.live { border-width: 1.5px; }
 .card.boom.live.up { border-color: var(--up); background: rgba(47,182,124,.07); }
 .card.boom.live.down { border-color: var(--down); background: rgba(229,72,77,.07); }
@@ -275,6 +291,9 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
   aside { border-left: 0; border-top: 1px solid var(--line); order: -1; overflow: visible; }
   .left { order: 0; }
   .blotter { max-height: none; }
+  .chartbar { left: 8px; right: 62px; gap: 5px; }
+  .ovl button, .tfs button { padding: 3px 7px; font-size: 12px; gap: 5px; }
+  .reads { left: 8px; }
   .legend { position: fixed; inset: 10px; top: 10px; right: 10px; width: auto; max-width: none; max-height: none; z-index: 50; }
 }
 </style>
@@ -298,10 +317,10 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
     <div class="chartwrap">
       <div class="chartbar">
         <div class="tfs" id="tfs"><button data-tf="M1">1m</button><button data-tf="M5">5m</button><button data-tf="M15">15m</button><button data-tf="H1">1h</button><button data-tf="H4">4h</button></div>
-        <div class="ovl" id="ovl"><button data-o="kronos" title="Kronos forecast path and target"><i></i>Kronos</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button><button data-o="boom" title="Boom / Crash calls: arrows, entry, SL and TP"><i class="b"></i>Boom/Crash</button><button data-o="smc" title="Smart Money / ICT: structure (BOS, CHoCH), liquidity, FVG, order blocks, premium / discount, OTE, killzones, key levels"><i class="s"></i>SMC/ICT</button></div>
+        <div class="ovl" id="ovl"><button data-o="kronos" title="The gold line: what every timeframe, the ICT order flow and Kronos say together (1m-15m), Kronos 24 h on 1h"><i></i>Trend line</button><button data-o="flow" title="M1 order flow: liquidity raids ($), CISD levels and the limit-order gaps (CE) they led to"><i class="f"></i>Order flow</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button><button data-o="boom" title="Boom / Crash calls: arrows, entry, SL and TP"><i class="b"></i>Boom/Crash</button><button data-o="smc" title="Smart Money / ICT: structure (BOS, CHoCH), liquidity, FVG, order blocks, premium / discount, OTE, killzones, key levels"><i class="s"></i>SMC/ICT</button></div>
         <button class="helpbtn" id="helpBtn" title="What every word on the chart means" aria-label="Chart cheat sheet">?</button>
       </div>
-      <div class="smcread" id="smcRead" hidden></div>
+      <div class="reads"><div class="smcread tfread" id="tfRead" hidden></div><div class="smcread" id="smcRead" hidden></div></div>
       <div class="legend" id="legend" hidden role="dialog" aria-label="Chart cheat sheet">
         <div class="lg-head"><b>Chart cheat sheet</b><span class="fa" lang="fa" dir="rtl">راهنمای چارت</span>
           <span class="langs" id="langs"><button data-l="fa" lang="fa">فارسی</button><button data-l="en">EN</button></span>
@@ -351,6 +370,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
     <div class="sig">
       <div class="eyebrow">Signals</div>
       <div class="heads" id="heads" hidden></div>
+      <div class="card trend" id="trend" hidden></div>
       <div class="card boom" id="boom" hidden></div>
       <div class="card kron" id="kronos"></div>
       <div class="card" id="scalper"></div>

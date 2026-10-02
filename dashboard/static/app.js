@@ -41,7 +41,7 @@
   });
   const forecast = chart.addLineSeries({ color: C.gold, lineWidth: 2, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
   let last = null, loadedTf = null, first = 0, times = [];
-  const ovl = Object.assign({ kronos: true, scalper: false, boom: true, smc: true }, store.get("ovl2", {}));   // SMC/ICT covers the scalper's zones
+  const ovl = Object.assign({ kronos: true, scalper: false, boom: true, smc: true, flow: true }, store.get("ovl2", {}));   // SMC/ICT covers the scalper's zones
 
   async function loadCandles() {
     const want = tf;
@@ -91,7 +91,7 @@
       color: t.dir === 1 ? C.buy : C.sell, shape: t.dir === 1 ? "arrowUp" : "arrowDown", text: "",
     }));
     // Boom/Crash calls: entered on the bar after the forecast bar (t); finished ones show their result in R
-    const bm = S.boom, esec = TFSEC[S.entry_tf] || 300;
+    const bm = S.boom, esec = TFSEC[(bm && bm.tf) || S.entry_tf] || 300;
     if (ovl.boom && bm) {
       for (const b of (bm.history || []).slice(-12).concat(bm.active ? [bm.active] : [])) {
         const at = b.t + esec, up = b.dir === 1 || b.side === "BUY";
@@ -113,17 +113,21 @@
 
   // Kronos forecasts: state.kronos is the entry-timeframe (M5) one, state.kronos.day the 24 h H1 one. The 1m and 5m charts
   // show the M5 forecast, the 1h chart the 24 h one: average path as a dashed line, spread of the sample paths as shading.
+  // The gold line: on 1m-15m the trend reading (state.consensus: timeframes + ICT order flow + Kronos, 2 h), with
+  // Kronos's own spread as the shading when it has one; on 1h the Kronos 24 h forecast.
   function chartForecast() {
-    const k = S && S.kronos;
-    if (!k) return null;
-    const f = tf === "H1" ? k.day : (tf === "M1" || tf === "M5") ? k : null;
-    return f && Array.isArray(f.path) && f.path.length ? f : null;
+    const k = S && S.kronos, c = S && S.consensus;
+    const ok = (f) => f && Array.isArray(f.path) && f.path.length ? f : null;
+    if (tf === "H1") return ok(k && k.day);
+    if (tf !== "M1" && tf !== "M5" && tf !== "M15") return null;
+    if (ok(c)) return { ...c, band: k && k.path && Math.abs((k.t || 0) - c.t) < 1800 ? k.band : null, mix: true };
+    return tf === "M15" ? null : ok(k);
   }
   let fcKey = "";
   function drawForecast() {
     const k = chartForecast();
     const ok = !!(ovl.kronos && loadedTf === tf && k && last);
-    const key = ok ? tf + k.t : "";
+    const key = ok ? `${tf}${k.t}${k.mix ? "c" : "k"}${k.target}` : "";
     if (key === fcKey) return;
     fcKey = key;
     if (!ok) { forecast.setData([]); return; }
@@ -143,7 +147,7 @@
     }
     const kf = chartForecast();
     if (ovl.kronos && kf && Number.isFinite(+kf.target))
-      want.push([+kf.target, C.gold, `K ${kf.dir > 0 ? "▲" : kf.dir < 0 ? "▼" : "•"} ${horizon(kf.minutes).replace(" ", "")}`, 2, 70]);
+      want.push([+kf.target, C.gold, `${kf.mix ? "TREND" : "K"} ${kf.dir > 0 ? "▲" : kf.dir < 0 ? "▼" : "•"} ${horizon(kf.minutes).replace(" ", "")}`, 2, 70]);
     const ba = S.boom && S.boom.active;
     if (ovl.boom && ba) {
       const n = (ba.dir === 1 || ba.side === "BUY") ? "BOOM" : "CRASH";
@@ -227,6 +231,7 @@
     const right = r.width - chart.priceScale("right").width();
     const sec = TFSEC[tf], ts = chart.timeScale();
     if (ovl.smc) drawSmc(right, sec, ts);
+    if (ovl.flow) drawFlow(right, sec, ts);
     if (ovl.boom) { drawWatch(right, sec, ts); drawHeadsUp(right, sec, ts); }
     drawBand(right, sec, ts);
     if (ovl.scalper) drawScalperZones(right, sec, ts);
@@ -389,7 +394,44 @@
       zx.fillStyle = `rgba(${rgb},.07)`; zx.fillRect(x1, y1, x2 - x1, Math.max(2, y2 - y1));
       zx.setLineDash([2, 3]); zx.strokeStyle = `rgba(${rgb},.55)`; zx.lineWidth = 1;
       zx.strokeRect(x1 + .5, y1 + .5, x2 - x1 - 1, Math.max(2, y2 - y1) - 1); zx.setLineDash([]);
-      tag(`SETUP ${w.dir === 1 ? "▲" : "▼"}`, x1 + 3, y2 + TH / 2 + 2, `rgb(${rgb})`, { pri: 65, faint: true });
+      if (w.entry != null) {                            // a limit order waiting in the gap: dash at its entry
+        const ye = series.priceToCoordinate(w.entry);
+        if (ye != null) { zx.strokeStyle = `rgba(${rgb},.95)`; zx.lineWidth = 1.5; zx.beginPath(); zx.moveTo(x1, Math.round(ye) + .5); zx.lineTo(x2, Math.round(ye) + .5); zx.stroke(); }
+      }
+      tag(w.entry != null ? `${w.dir === 1 ? "BUY" : "SELL"} LIMIT` : `SETUP ${w.dir === 1 ? "▲" : "▼"}`, x1 + 3, y2 + TH / 2 + 2, `rgb(${rgb})`, { pri: 65, faint: w.entry == null });
+    }
+  }
+
+  // M1 order flow (state.flow): liquidity raids, CISD levels and the limit-order gaps they led to. Shown on 1m-5m.
+  function drawFlow(right, sec, ts) {
+    const f = S.flow;
+    if (!f || sec > 300) return;
+    const a = S.boom && S.boom.active, y = (v) => series.priceToCoordinate(v);
+    const X = (t) => { const x = xOf(t, ts, sec); return x == null ? null : Math.min(right, x); };
+    for (const r of (f.raids || []).slice(-6)) {
+      const x = X(r.time), yy = y(r.ext), yl = y(r.price);
+      if (x == null || yy == null || x >= right) continue;
+      const col = r.dir === 1 ? "47,182,124" : "229,72,77";
+      if (yl != null) { zx.setLineDash([1, 2]); zx.strokeStyle = `rgba(${col},.6)`; zx.beginPath(); zx.moveTo(x - 14, Math.round(yl) + .5); zx.lineTo(x + 6, Math.round(yl) + .5); zx.stroke(); zx.setLineDash([]); }
+      zx.fillStyle = `rgba(${col},.95)`; zx.beginPath(); zx.arc(x, yy, 2.5, 0, 7); zx.fill();
+      tag(`$ ${r.name || "raid"}`, x, yy + (r.dir === 1 ? TH / 2 + 4 : -TH / 2 - 4), `rgb(${col})`, { align: "center", pri: 48 });
+    }
+    for (const c of (f.cisd || []).slice(-6)) {
+      const x = X(c.time), yy = y(c.price);
+      if (x == null || yy == null || x >= right) continue;
+      const x0 = Math.max(0, x - 8 * ts.options().barSpacing);
+      zx.setLineDash([3, 2]); zx.strokeStyle = "rgba(232,178,58,.85)"; zx.lineWidth = 1;
+      zx.beginPath(); zx.moveTo(x0, Math.round(yy) + .5); zx.lineTo(x, Math.round(yy) + .5); zx.stroke(); zx.setLineDash([]);
+      tag("CISD", x0, yy + (c.dir === 1 ? -TH / 2 - 1 : TH / 2 + 1), "rgb(232,178,58)", { pri: 46 });
+    }
+    for (const o of (f.orders || []).slice(-6)) {
+      if (a && a.status === "waiting" && a.dir === o.dir && Math.abs(a.entry - o.entry) < 0.01) continue;   // drawn as the live order
+      const x1 = X(o.time), x2 = X(o.time + 30 * 60), y1 = y(Math.max(...o.gap)), y2 = y(Math.min(...o.gap)), ye = y(o.entry);
+      if (x1 == null || x2 == null || y1 == null || y2 == null || x2 - x1 < 2) continue;
+      const col = o.dir === 1 ? "47,182,124" : "229,72,77";
+      zx.strokeStyle = `rgba(${col},.5)`; zx.lineWidth = 1; zx.strokeRect(x1 + .5, y1 + .5, x2 - x1 - 1, Math.max(2, y2 - y1) - 1);
+      if (ye != null) { zx.strokeStyle = `rgba(${col},.9)`; zx.beginPath(); zx.moveTo(x1, Math.round(ye) + .5); zx.lineTo(x2, Math.round(ye) + .5); zx.stroke(); }
+      tag(`CE ${o.dir === 1 ? "▲" : "▼"}`, x2 + 2, ye ?? y1, `rgb(${col})`, { pri: 42, faint: true });
     }
   }
 
@@ -413,6 +455,8 @@
   }
   chart.timeScale().subscribeVisibleLogicalRangeChange(() => requestAnimationFrame(drawZones));
   new ResizeObserver(() => requestAnimationFrame(drawZones)).observe(zc);
+  const placeReads = () => { document.querySelector(".reads").style.top = (12 + document.querySelector(".chartbar").offsetHeight + 8) + "px"; };
+  new ResizeObserver(placeReads).observe(document.querySelector(".chartbar"));
 
   document.querySelectorAll("#ovl button").forEach((b) => {
     b.classList.toggle("on", !!ovl[b.dataset.o]);
@@ -420,7 +464,7 @@
       ovl[b.dataset.o] = !ovl[b.dataset.o]; store.set("ovl2", ovl);
       b.classList.toggle("on", ovl[b.dataset.o]);
       markerKey = ""; fcKey = "x";
-      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); renderSmcRead(); }
+      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); renderSmcRead(); renderTrend(); }
     });
   });
 
@@ -701,11 +745,14 @@
     }
     const up = a.dir === 1 || a.side === "BUY";
     const now = (S.clock && S.clock.server_time) || Date.now() / 1000;
-    const left = Math.max(0, Math.ceil((a.expires - now) / 60));
-    el.innerHTML = `<span class="name">${up ? "BOOM" : "CRASH"}${a.strong ? " · strong" : ""}</span>${tag}
-      <span class="call ${up ? "up" : "down"}">${up ? "▲ BUY" : "▼ SELL"} <span class="num" style="font-size:14px">${fmt(a.entry)}</span></span>
+    const waiting = a.status === "waiting";
+    const left = Math.max(0, Math.ceil(((waiting && a.fill_by ? a.fill_by : a.expires) - now) / 60));
+    const mins = left >= 60 ? `${Math.floor(left / 60)} h ${left % 60}` : left;
+    el.innerHTML = `<span class="name">${up ? "BOOM" : "CRASH"}${bm.tf ? " · " + esc(bm.tf.replace(/^M(\d+)$/, "$1m")) : ""}${a.strong ? " · strong" : ""}</span>${tag}
+      <span class="call ${up ? "up" : "down"}">${up ? "▲ BUY" : "▼ SELL"}${waiting ? " LIMIT" : a.order === "limit" ? " · filled" : ""} <span class="num" style="font-size:14px">@ ${fmt(a.entry)}</span></span>
       <button class="use" data-src="boom">Use SL/TP</button>
-      <span class="lvls num"><span>SL <b class="down">${fmt(a.sl)}</b></span><span>TP <b class="up">${fmt(a.tp)}</b></span><span><b>${left >= 60 ? `${Math.floor(left / 60)} h ${left % 60}` : left}</b> min left</span></span>
+      <span class="lvls num"><span>SL <b class="down">${fmt(a.sl)}</b></span><span>TP <b class="up">${fmt(a.tp)}</b></span><span>${waiting ? `valid <b>${mins}</b> more min` : `<b>${mins}</b> min left`}</span></span>
+      ${waiting ? `<span class="meta">A limit order idea: place it yourself at ${fmt(a.entry)} if you agree. It is void if price doesn't come back in time.</span>` : ""}
       ${a.why && a.why.length ? `<span class="meta">${a.why.map(esc).join(" · ")}</span>` : ""}
       ${a.move ? `<span class="meta">Kronos ${a.move > 0 ? "+" : ""}${fmt(a.move)}${a.up_prob != null ? ` · up ${pct(a.up_prob)}` : ""}</span>` : ""}
       <span class="meta">${tally}</span>`;
@@ -729,6 +776,26 @@
       <span class="ht">Watch <b class="num">${fmt(h.area[0])}-${fmt(h.area[1])}</b>${h.what ? ` · ${esc(h.what)}` : ""}${h.up_prob != null ? ` · Kronos up ${Math.round(h.up_prob * 100)}%` : ""}</span>
       ${h.why && h.why.length ? `<span class="ht dim">${esc(h.why.join(", "))}</span>` : ""}
       <span class="hp">${push} · a heads-up, not a trade signal</span>`;
+  }
+  // state.consensus: {score -1..1, bias, label, tf {M1..D1: +1|0|-1}, parts [{name, score, weight}], note, kronos, proven}
+  const TF6 = ["D1", "H4", "H1", "M15", "M5", "M1"];
+  const tfName = (t) => t.replace(/^M(\d+)$/, "$1m").replace(/^H(\d+)$/, "$1h").replace(/^D1$/, "1D");
+  const arrow = (v) => v > 0 ? `<b class="up">▲</b>` : v < 0 ? `<b class="down">▼</b>` : `<b>•</b>`;
+  function renderTrend() {
+    const c = S.consensus, el = $("trend"), pill = $("tfRead");
+    el.hidden = !c; pill.hidden = !c || !ovl.kronos;
+    if (!c) return;
+    const sc = `${c.score > 0 ? "+" : ""}${(+c.score).toFixed(2)}`, cls = c.bias > 0 ? "up" : c.bias < 0 ? "down" : "flat";
+    const word = (c.label || "mixed").toUpperCase();
+    pill.innerHTML = TF6.map((t) => `<span class="tfa">${tfName(t)}${arrow((c.tf || {})[t])}</span>`).join("") +
+      `<b class="${cls === "flat" ? "" : cls}">${c.bias > 0 ? "▲" : c.bias < 0 ? "▼" : "•"} ${word} ${sc}</b>`;
+    el.innerHTML = `<span class="name">Trend reading</span><span class="untested">${c.proven ? "TESTED" : "NOT A FORECAST"}</span>
+      <span class="call ${cls}">${c.bias > 0 ? "▲" : c.bias < 0 ? "▼" : "•"} ${word} <span class="num" style="font-size:14px">${sc}</span></span><span></span>
+      <span class="tfs6">${TF6.map((t) => `<span>${tfName(t)}${arrow((c.tf || {})[t])}</span>`).join("")}</span>
+      <span class="parts">${(c.parts || []).map((p) => { const v = Math.max(-1, Math.min(1, +p.score || 0));
+        return `<span>${esc(p.name)}</span><span class="bar"><i style="${v >= 0 ? `left:50%;width:${v * 50}%;background:var(--up)` : `right:50%;width:${-v * 50}%;background:var(--down)`}"></i></span><span class="num ${tone(v)}">${v > 0 ? "+" : ""}${v.toFixed(2)}</span>`; }).join("")}</span>
+      <span class="meta">The gold line on the 1m to 15m chart leans this way for the next ${horizon(c.minutes || 120)}${c.kronos ? ", with Kronos mixed in" : " (Kronos not in it right now)"}.</span>
+      <span class="meta">${esc(c.note || "Describes the chart, not a forecast.")}</span>`;
   }
   function renderSmcRead() {
     const m = S.smc, el = $("smcRead");
@@ -808,6 +875,7 @@
     renderScalper();
     renderBoom();
     renderHeadsUp();
+    renderTrend();
     renderSmcRead();
     drawMarkers();
     drawLines();
