@@ -27,6 +27,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from boom import BoomTracker
+import mesh as mesh_mod
+from mesh import Mesh
 from coach import WINDOW, SessionCoach
 from engine import (LADDER, Bars, Engine, Params, Spec, SESSION_NAMES, market_hours, ny7_offset, run_backtest,
                     session_of, session_ok, utc_minutes)
@@ -340,7 +342,7 @@ class Hub:
         self.forming = None
         self.tick_ = None
         self.kronos = None
-        self.boom = BoomTracker(self.spec.digits)
+        self.boom = BoomTracker(self.spec.digits, mesh=Mesh(None if source.kind == "demo" else mesh_mod.DIR))
         self.soon: SoonAlerts | None = None     # "setup likely soon" pushes to your phone (needs Kronos)
         self.coach: SessionCoach | None = None  # your daily session on your phone: start, NY, end, ready setups
         self.booted = False                     # history loaded; until then the page opens and says why not
@@ -581,6 +583,7 @@ class Hub:
                 "boom": self.boom.state(),
                 "consensus": self.boom.consensus,      # the trend reading of every timeframe and its chart line
                 "flow": self.boom.flow,                # M1 raids, CISDs and limit orders, for chart marks
+                "mesh": self.boom.mesh.state(),        # live record + scoreboard of every source (mesh.py)
                 "alerts": self.soon.state() if self.soon else None,
                 "session": self.coach.state() if self.coach else None,
                 "smc": self.smc,

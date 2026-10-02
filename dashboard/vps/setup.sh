@@ -100,6 +100,11 @@ UNIT
   fi
   research "$KREPO"
   boom_kronos "$KREPO"
+  local free
+  free=$(df -Pm /root 2>/dev/null | awk 'NR==2 {print $4}')
+  if [ -n "$free" ] && [ "$free" -lt 2048 ]; then   # the knowledge mesh adds about 30 MB a month in /root/.golddesk/mesh
+    echo "Warning: the VPS has only ${free} MB of disk left. Gold Desk keeps working, but tell Claude soon."
+  fi
 }
 # Once, for the "Rebuild BOOM/CRASH" thread: does a Kronos vote improve the M1 BOOM / CRASH limit orders?
 # A year of Dukascopy gold (not LiteFinance, which rate-limits this VPS). Nice 19, one core, resumable, changes

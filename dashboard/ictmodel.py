@@ -327,21 +327,24 @@ GROUPS = (   # name, weight, features averaged
 KRONOS_GROUP_W = 2
 
 
-def consensus(x: dict, kronos_up: float | None = None) -> dict:
+def consensus(x: dict, kronos_up: float | None = None, trust: dict | None = None) -> dict:
     """A plain vote, -1 (all bearish) .. +1 (all bullish): higher-timeframe structure and EMA regime, intraday
-    structure, ICT order-flow events and Kronos. Descriptive: it was not found to predict the next 30-120
+    structure, ICT order-flow events and Kronos. `trust` (mesh.py) scales a group's weight once its live record
+    is clearly better or worse than a coin. Descriptive: it was not found to predict the next 30-120
     minutes (ict_train.py / consensus check), so it says what the chart shows, not what comes next."""
     parts, tot, wsum = [], 0.0, 0.0
     for name, w, keys in GROUPS:
         v = sum(x.get(k, 0.0) for k in keys) / len(keys)
+        w = w * (trust or {}).get(name, 1.0)
         parts.append({"name": name, "score": round(v, 2), "weight": w,
                       "items": {k: x.get(k, 0.0) for k in keys}})
         tot += w * v
         wsum += w
     if kronos_up is not None:
         v = max(-1.0, min(1.0, (kronos_up - 0.5) * 2.5))
-        parts.append({"name": "Kronos", "score": round(v, 2), "weight": KRONOS_GROUP_W, "items": {"up_prob": kronos_up}})
-        tot += KRONOS_GROUP_W * v
-        wsum += KRONOS_GROUP_W
-    s = tot / wsum
+        w = KRONOS_GROUP_W * (trust or {}).get("Kronos", 1.0)
+        parts.append({"name": "Kronos", "score": round(v, 2), "weight": w, "items": {"up_prob": kronos_up}})
+        tot += w * v
+        wsum += w
+    s = tot / wsum if wsum else 0.0
     return {"score": round(s, 3), "bias": 1 if s >= 0.35 else (-1 if s <= -0.35 else 0), "parts": parts}
