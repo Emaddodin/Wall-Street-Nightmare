@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fa" dir="ltr" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
+<title>Gold Desk Chart Cheat Sheet</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=JetBrains+Mono:wght@600&family=Vazirmatn:wght@400;600&display=swap">
+<style>
+/* the chart cheat sheet as a full page: same content as the "?" panel in Gold Desk (glossary.js) */
+:root { --bg:#0e0f11; --panel:#15171a; --raise:#1c1f23; --line:#262a2f; --fg:#ece8df; --dim:#8e8a80; --gold:#d6ad52; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 Barlow, system-ui, sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 24px 16px 48px; }
+.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+h1 { margin: 0; font-size: 24px; letter-spacing: .06em; color: var(--gold); }
+.fa { direction: rtl; unicode-bidi: isolate; font-family: Vazirmatn, Tahoma, sans-serif; letter-spacing: 0; text-transform: none; }
+h1 .fa { font-size: 19px; font-weight: 600; }
+.langs { margin-left: auto; display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
+.langs button { all: unset; cursor: pointer; padding: 4px 12px; border-radius: 6px; color: var(--dim); font: 600 13px Barlow, sans-serif; }
+.langs button[lang="fa"] { font-family: Vazirmatn, Tahoma, sans-serif; }
+.langs button.on { background: var(--raise); color: var(--fg); }
+.lead { color: var(--dim); margin: 6px 0 20px; }
+#body > div { columns: 2 480px; column-gap: 22px; }
+section { break-inside: avoid; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 16px 8px; margin: 0 0 18px; }
+h3 { display: flex; gap: 10px; align-items: baseline; margin: 2px 0 6px; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+h3 .fa { color: var(--gold); font-size: 14px; }
+.lg-note { margin: 0 0 6px; font-size: 13px; color: var(--dim); }
+.lg-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 8px 0; border-top: 1px solid rgba(38,42,47,.7); }
+.lg-sw { display: flex; align-items: center; min-height: 20px; }
+.lg-name { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.lg-name b { font: 600 14px 'JetBrains Mono', monospace; }
+.lg-name .fa { color: var(--gold); }
+.lg-row p { margin: 2px 0 0; color: #c9c5bb; }
+.lg-fa .lg-row p, .lg-fa .lg-guide li { line-height: 1.8; font-size: 15px; }
+.lg-fa .lg-name .fa { color: var(--fg); font-weight: 600; }
+.lg-fa .lg-name b { color: var(--gold); font-size: 13px; }
+.lg-en { color: var(--dim); font-size: 11px; }
+.lg-guide { border-color: rgba(214,173,82,.4); background: #19180f; }
+.lg-guide ol { margin: 4px 0 8px; padding-inline-start: 22px; } .lg-guide li { margin: 4px 0; color: #d5d1c7; }
+.lg-tag { padding: 0 4px; border: 1px solid; border-radius: 3px; background: #0e0f11; font: 600 11px/15px 'JetBrains Mono', monospace; white-space: nowrap; }
+.lg-txt { font: 600 12px 'JetBrains Mono', monospace; } .lg-line { width: 46px; height: 0; }
+.lg-band { width: 52px; height: 18px; background: rgba(214,173,82,.12); position: relative; border-radius: 2px; }
+.lg-band i { position: absolute; left: 0; right: 0; top: 5px; bottom: 5px; background: rgba(214,173,82,.25); border-top: 2px dashed var(--gold); }
+.lg-box { width: 46px; height: 16px; border: 1px solid var(--c); border-radius: 2px; background: color-mix(in srgb, var(--c) 18%, transparent); } .lg-box.faint { opacity: .45; }
+.lg-col { width: 26px; height: 20px; background: color-mix(in srgb, var(--c) 22%, transparent); border-bottom: 2px dashed var(--c); }
+.lg-arrow { width: 0; height: 0; border: 7px solid transparent; }
+.lg-arrow.up { border-bottom: 11px solid var(--c); border-top: 0; } .lg-arrow.dn { border-top: 11px solid var(--c); border-bottom: 0; }
+footer { color: var(--dim); font-size: 13px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><h1>Gold Desk chart cheat sheet <span class="fa">راهنمای چارت</span></h1>
+    <span class="langs" id="langs"><button data-l="fa" lang="fa">فارسی</button><button data-l="en">EN</button></span></div>
+  <p class="lead" id="lead"></p>
+  <div id="body"></div>
+  <footer id="foot"></footer>
+</main>
+<script src="glossary.js"></script>
+<script>
+(() => {
+  const TXT = {
+    en: ["Every word, line, box and arrow on the Gold Desk chart. The same list opens from the ? button on the chart; the buttons above the chart turn each layer on or off.",
+         "Kronos, Boom/Crash and the scalper are not proven on gold. Use them as information, not as trade signals. Demo account only."],
+    fa: ["هر نوشته، خط، کادر و فلشی که روی چارت Gold Desk می‌بینی و معنی‌اش. همین راهنما با دکمه ? روی چارت هم باز می‌شود؛ دکمه‌های بالای چارت هر لایه را روشن یا خاموش می‌کنند.",
+         "Kronos، بوم/کرش و اسکالپر روی طلا ثابت نشده‌اند. فقط به‌عنوان اطلاعات از آنها استفاده کن، نه سیگنال معامله. فقط حساب دمو."],
+  };
+  let lang = "fa";
+  try { lang = localStorage.getItem("gd3_lang") ? JSON.parse(localStorage.getItem("gd3_lang")) : "fa"; } catch { /* storage blocked */ }
+  const show = (l) => {
+    lang = l === "en" ? "en" : "fa";
+    try { localStorage.setItem("gd3_lang", JSON.stringify(lang)); } catch { /* storage blocked */ }
+    document.getElementById("body").innerHTML = window.glossaryHtml(lang);
+    for (const [id, i] of [["lead", 0], ["foot", 1]]) {
+      const el = document.getElementById(id);
+      el.textContent = TXT[lang][i]; el.dir = lang === "fa" ? "rtl" : "ltr"; el.className = lang === "fa" ? "fa" : "";
+    }
+    document.querySelectorAll("#langs button").forEach((b) => b.classList.toggle("on", b.dataset.l === lang));
+  };
+  document.getElementById("langs").addEventListener("click", (e) => { const b = e.target.closest("button[data-l]"); if (b) show(b.dataset.l); });
+  show(lang);
+})();
+</script>
+</body>
+</html>

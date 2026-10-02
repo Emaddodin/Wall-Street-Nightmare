@@ -87,7 +87,15 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .legend .fa { direction: rtl; unicode-bidi: isolate; text-align: right; font-family: Vazirmatn, Tahoma, system-ui, sans-serif; color: var(--gold); font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; }
 .lg-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
 .lg-head b { font: 700 15px var(--label); letter-spacing: .04em; }
-.lg-head button { margin-left: auto; width: 28px; height: 28px; border-radius: 7px; color: var(--dim); font-size: 20px; line-height: 1; }
+.helptop { margin-left: 10px; font: 600 12px var(--mono); color: var(--gold); border: 1px solid rgba(214,173,82,.45); border-radius: 4px; padding: 1px 7px; }
+.helptop span { font-family: Vazirmatn, Tahoma, sans-serif; }
+.langs { margin-left: auto; display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 2px; }
+.langs button { padding: 2px 9px; border-radius: 5px; color: var(--dim); font: 600 12px var(--label); }
+.langs button[lang="fa"] { font-family: Vazirmatn, Tahoma, sans-serif; }
+.langs button.on { background: var(--raise); color: var(--fg); }
+.lg-open { color: var(--dim); text-decoration: none; font-size: 15px; padding: 0 4px; }
+.lg-open:hover { color: var(--gold); }
+.lg-head #legendClose { margin-left: 0; width: 28px; height: 28px; border-radius: 7px; color: var(--dim); font-size: 20px; line-height: 1; }
 .lg-head button:hover { background: var(--raise); color: var(--fg); }
 .lg-body { overflow: auto; padding: 4px 14px 14px; }
 .lg-body h3 { display: flex; align-items: baseline; gap: 10px; margin: 14px 0 6px; font: 700 12px var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
@@ -97,6 +105,18 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .lg-name { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .lg-name b { font: 600 13.5px var(--mono); color: var(--fg); }
 .lg-row p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.4; color: #c9c5bb; }
+.lg-body .lg-fa, .lg-body .lg-fa * { direction: rtl; text-align: right; }
+.lg-body .lg-fa .lg-sw, .lg-body .lg-fa .lg-sw *, .lg-body .lg-fa b[dir="ltr"], .lg-body .lg-fa .lg-en { direction: ltr; unicode-bidi: isolate; }
+.lg-body .lg-fa .lg-row p, .lg-body .lg-fa .lg-row p .fa { color: #d5d1c7; font-size: 14.5px; line-height: 1.75; }
+.lg-body .lg-fa .lg-name .fa { color: var(--fg); font-size: 15px; font-weight: 600; }
+.lg-body .lg-fa .lg-name b { color: var(--gold); font-size: 12.5px; }
+.lg-body .lg-fa h3 .fa { color: var(--gold); font-size: 14px; font-weight: 600; }
+.lg-en { color: var(--dim); font-size: 11px; }
+.lg-guide { margin-top: 14px; padding: 8px 12px; border: 1px solid rgba(214,173,82,.35); border-radius: 8px; background: rgba(214,173,82,.06); }
+.lg-guide h3 { margin-top: 4px; }
+.lg-guide ol { margin: 4px 0 6px; padding-inline-start: 22px; }
+.lg-guide li { margin: 3px 0; font-size: 13.5px; color: #d5d1c7; }
+.lg-body .lg-fa .lg-guide li .fa { color: #d5d1c7; font-size: 14.5px; }
 .lg-tag { display: inline-block; padding: 0 4px; border: 1px solid; border-radius: 3px; background: #0e0f11; font: 600 11px/15px var(--mono); white-space: nowrap; }
 .lg-txt { font: 600 12px var(--mono); }
 .lg-line { width: 46px; height: 0; }
@@ -259,7 +279,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 </head>
 <body dir="ltr">
 <header>
-  <div class="brand"><b>GOLD DESK</b><span id="sym">XAUUSD</span></div>
+  <div class="brand"><b>GOLD DESK</b><span id="sym">XAUUSD</span><button class="helptop" id="helpTop" title="What every label on the chart means"><span lang="fa" dir="rtl">راهنما</span> ?</button></div>
   <span class="pill unknown" id="badge">…</span>
   <div class="conn" id="conn"><i></i><span id="connTxt">Connecting</span></div>
   <div class="kpis">
@@ -279,7 +299,9 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
       </div>
       <div class="smcread" id="smcRead" hidden></div>
       <div class="legend" id="legend" hidden role="dialog" aria-label="Chart cheat sheet">
-        <div class="lg-head"><b>Chart cheat sheet</b><span class="fa" lang="fa" dir="rtl">راهنمای چارت</span><button id="legendClose" aria-label="Close">×</button></div>
+        <div class="lg-head"><b>Chart cheat sheet</b><span class="fa" lang="fa" dir="rtl">راهنمای چارت</span>
+          <span class="langs" id="langs"><button data-l="fa" lang="fa">فارسی</button><button data-l="en">EN</button></span>
+          <a class="lg-open" href="cheatsheet.html" target="_blank" rel="noopener" title="Open as a full page">↗</a><button id="legendClose" aria-label="Close">×</button></div>
         <div class="lg-body" id="legendBody"></div>
       </div>
       <div id="chart"></div>

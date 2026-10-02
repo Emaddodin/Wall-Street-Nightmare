@@ -93,14 +93,20 @@
     // Boom/Crash calls: entered on the bar after the forecast bar (t); finished ones show their result in R
     const bm = S.boom, esec = TFSEC[S.entry_tf] || 300;
     if (ovl.boom && bm) {
-      for (const b of (bm.history || []).concat(bm.active ? [bm.active] : [])) {
+      for (const b of (bm.history || []).slice(-12).concat(bm.active ? [bm.active] : [])) {
         const at = b.t + esec, up = b.dir === 1 || b.side === "BUY";
         m.push({ time: Math.min(at - (at % sec), last ? last.time : at), position: up ? "belowBar" : "aboveBar",
           color: up ? C.up : C.down, shape: up ? "arrowUp" : "arrowDown",
           text: b.r != null && b.exit != null ? `${b.r > 0 ? "+" : ""}${(+b.r).toFixed(1)}R` : "" });   // the arrow is the call, the text its result
       }
     }
-    m.splice(0, m.length, ...m.filter((x) => x.time >= first).sort((a, b) => a.time - b.time));
+    const merged = new Map();                      // same bar and side: one arrow, results joined
+    for (const x of m.filter((x) => x.time >= first)) {
+      const k = x.time + x.position, had = merged.get(k);
+      if (!had) merged.set(k, x);
+      else if (x.text) had.text = had.text ? `${had.text} ${x.text}` : x.text;
+    }
+    m.splice(0, m.length, ...[...merged.values()].sort((a, b) => a.time - b.time));
     const key = tf + JSON.stringify(m.map((x) => [x.time, x.text]));
     if (key !== markerKey) { series.setMarkers(m); markerKey = key; }
   }
@@ -413,26 +419,19 @@
   });
 
   // ---------------------------------------------------------------- "?" cheat sheet: what every word on the chart means
-  function swatch(w, term) {
-    const c = w.c || C.gold;
-    if (w.t === "tag") return `<span class="lg-tag" style="color:${c};border-color:${c}">${esc(w.label || term)}</span>`;
-    if (w.t === "text") return `<span class="lg-txt" style="color:${c}">${esc(term)}</span>`;
-    if (w.t === "line") return `<span class="lg-line" style="border-top:2px ${w.dash ? "dashed" : "solid"} ${c}"></span>`;
-    if (w.t === "band") return `<span class="lg-band"><i></i></span>`;
-    if (w.t === "arrow") return `<span class="lg-arrow ${w.up ? "up" : "dn"}" style="--c:${c}"></span>`;
-    if (w.t === "col") return `<span class="lg-col" style="--c:${c}"></span>`;
-    return `<span class="lg-box${w.faint ? " faint" : ""}" style="--c:${c};border-style:${w.dash ? "dashed" : "solid"}"></span>`;
-  }
+  let lang = store.get("lang", "fa");
   function buildLegend() {
-    const G = window.GLOSSARY || [];
-    $("legendBody").innerHTML = G.map((g) => `<section><h3>${esc(g.title)} <span class="fa" lang="fa" dir="rtl">${esc(g.fa)}</span></h3>
-      ${g.note ? `<p class="lg-note">${esc(g.note)}</p>` : ""}
-      ${g.items.map((i) => `<div class="lg-row"><span class="lg-sw">${swatch(i.sw || {}, i.term)}</span>
-        <div><div class="lg-name"><b>${esc(i.term)}</b><span class="fa" lang="fa" dir="rtl">${esc(i.fa)}</span></div><p>${esc(i.text)}</p></div></div>`).join("")}
-    </section>`).join("");
+    $("legendBody").innerHTML = window.glossaryHtml ? window.glossaryHtml(lang) : "";
+    document.querySelectorAll("#langs button").forEach((x) => x.classList.toggle("on", x.dataset.l === lang));
+    $("legendBody").scrollTop = 0;
   }
-  const showLegend = (on) => { $("legend").hidden = !on; $("helpBtn").classList.toggle("on", on); if (on && !$("legendBody").firstChild) buildLegend(); };
+  $("langs").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-l]");
+    if (b) { lang = b.dataset.l; store.set("lang", lang); buildLegend(); }
+  });
+  const showLegend = (on) => { $("legend").hidden = !on; $("helpBtn").classList.toggle("on", on); if (on) buildLegend(); };
   $("helpBtn").addEventListener("click", () => showLegend($("legend").hidden));
+  $("helpTop").addEventListener("click", () => showLegend(true));
   $("legendClose").addEventListener("click", () => showLegend(false));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") showLegend(false); });
 
