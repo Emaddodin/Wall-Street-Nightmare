@@ -86,21 +86,29 @@
     const sec = TFSEC[tf];
     const list = ovl.scalper ? (S.trades || []).slice(-40) : [];
     if (ovl.scalper && S.active) list.push(S.active);
+    // Arrows only, with a short tag: "B"/"S" for scalper signals, the R result for finished Boom/Crash calls,
+    // the full name only on the live one. Same bar + same side = one arrow with the tags joined.
     const m = list.map((t) => ({
       time: t.t_bar - (t.t_bar % sec), position: t.dir === 1 ? "belowBar" : "aboveBar",
-      color: t.dir === 1 ? C.buy : C.sell, shape: t.dir === 1 ? "arrowUp" : "arrowDown", text: t.dir === 1 ? "BUY" : "SELL",
+      color: t.dir === 1 ? C.buy : C.sell, shape: t.dir === 1 ? "arrowUp" : "arrowDown", text: t === S.active ? (t.dir === 1 ? "BUY" : "SELL") : "",
     }));
     // Boom/Crash calls: entered on the bar after the forecast bar (t); finished ones show their result in R
     const bm = S.boom, esec = TFSEC[S.entry_tf] || 300;
     if (ovl.boom && bm) {
-      for (const b of (bm.history || []).concat(bm.active ? [bm.active] : [])) {
-        const at = b.t + esec, up = b.dir === 1 || b.side === "BUY";
+      for (const b of (bm.history || []).slice(-12).concat(bm.active ? [bm.active] : [])) {
+        const at = b.t + esec, up = b.dir === 1 || b.side === "BUY", done = b.r != null && b.exit != null;
         m.push({ time: Math.min(at - (at % sec), last ? last.time : at), position: up ? "belowBar" : "aboveBar",
           color: up ? C.up : C.down, shape: up ? "arrowUp" : "arrowDown",
-          text: `${b.kind || (up ? "BOOM" : "CRASH")}${b.r != null && b.exit != null ? ` ${b.r > 0 ? "+" : ""}${(+b.r).toFixed(1)}R` : ""}` });
+          text: done ? `${b.r > 0 ? "+" : ""}${(+b.r).toFixed(1)}R` : (b === bm.active ? (b.kind || (up ? "BOOM" : "CRASH")) : "") });
       }
     }
-    m.splice(0, m.length, ...m.filter((x) => x.time >= first).sort((a, b) => a.time - b.time));
+    const merged = new Map();
+    for (const x of m.filter((x) => x.time >= first)) {
+      const k = x.time + x.position, had = merged.get(k);
+      if (!had) merged.set(k, x);
+      else if (x.text) had.text = had.text ? `${had.text} ${x.text}` : x.text;
+    }
+    m.splice(0, m.length, ...[...merged.values()].sort((a, b) => a.time - b.time));
     const key = tf + JSON.stringify(m.map((x) => [x.time, x.text]));
     if (key !== markerKey) { series.setMarkers(m); markerKey = key; }
   }
@@ -151,9 +159,6 @@
         if (a.tp1) want.push([a.tp1, C.up, "TP1", 1]);
         if (a.tp2) want.push([a.tp2, C.up, "TP2", 1]);
       }
-      const c = S.context;
-      if (c && c.sw_h) want.push([c.sw_h, "#6f6a60", "M15 swing high", 3]);
-      if (c && c.sw_l) want.push([c.sw_l, "#6f6a60", "M15 swing low", 3]);
     }
     const key = JSON.stringify(want);
     if (key === linesKey) return;
@@ -238,12 +243,16 @@
     const X = (t) => (t == null ? right : Math.min(right, xOf(t, ts, sec) ?? right));
     const H = zc.getBoundingClientRect().height;
     const taken = [];                              // drawn label boxes: a label that would overlap one is skipped
+    // every label sits on a dark pill so it reads over candles; one that would touch another is skipped
     const label = (txt, x, yy, col, align) => {
-      zx.font = "600 10px JetBrains Mono, ui-monospace, monospace";
+      zx.font = "600 11px JetBrains Mono, ui-monospace, monospace";
       const w = zx.measureText(txt).width, x0 = align === "right" ? x - w : align === "center" ? x - w / 2 : x;
-      if (taken.some((r) => x0 < r[0] + r[2] + 4 && x0 + w + 4 > r[0] && yy - 10 < r[1] && yy > r[1] - 10)) return;
+      if (x0 < 2 || x0 + w > right - 2) return;
+      if (taken.some((r) => x0 - 3 < r[0] + r[2] + 3 && x0 + w + 3 > r[0] - 3 && yy - 12 < r[1] + 3 && yy + 3 > r[1] - 12)) return;
       taken.push([x0, yy, w]);
-      zx.textAlign = align || "left"; zx.fillStyle = col; zx.fillText(txt, x, yy); zx.textAlign = "left";
+      zx.fillStyle = "rgba(14,16,20,.82)";
+      zx.fillRect(x0 - 3, yy - 11, w + 6, 15);
+      zx.textAlign = "left"; zx.fillStyle = col; zx.fillText(txt, x0, yy);
     };
     const hline = (x1, x2, yy, col, dash) => {
       zx.beginPath(); zx.setLineDash(dash || []); zx.strokeStyle = col; zx.lineWidth = 1;

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>راهنمای چارت Gold Desk</title>
+<style>
+:root { --bg:#0e1014; --panel:#161a20; --line:#262c35; --fg:#ece8df; --dim:#9a958b; --gold:#d6ad52;
+        --up:#2fb67c; --down:#e5484d; --blue:#2f7bf5; --orange:#e5533c; color-scheme:dark; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.8 Tahoma, "Vazirmatn", system-ui, sans-serif; }
+main { max-width:980px; margin:0 auto; padding:20px 16px 48px; }
+h1 { font-size:22px; margin:0 0 4px; color:var(--gold); }
+.sub { color:var(--dim); margin:0 0 20px; }
+h2 { font-size:17px; margin:28px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--line); }
+.grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px; }
+.t { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+.t b { font:600 13px/1.4 ui-monospace, Menlo, monospace; direction:ltr; unicode-bidi:isolate; display:inline-block;
+       padding:1px 7px; border-radius:4px; background:rgba(14,16,20,.9); margin-left:6px; }
+.t p { margin:4px 0 0; }
+.use { color:var(--dim); font-size:13.5px; }
+.up { color:var(--up); } .down { color:var(--down); } .gold { color:var(--gold); } .blue { color:var(--blue); } .or { color:var(--orange); }
+.note { background:rgba(214,173,82,.08); border:1px solid rgba(214,173,82,.35); border-radius:8px; padding:10px 14px; margin-top:24px; }
+code { direction:ltr; unicode-bidi:isolate; font-family:ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+<main>
+<h1>راهنمای چارت Gold Desk</h1>
+<p class="sub">هر نوشته‌ای که روی چارت می‌بینی، معنی‌اش و اینکه چطور ازش استفاده کنی. دکمه‌های بالای چارت (Kronos، Scalper، Boom/Crash، SMC/ICT) هر لایه را روشن یا خاموش می‌کنند.</p>
+
+<h2>سیگنال‌ها و معامله</h2>
+<div class="grid">
+  <div class="t"><b class="blue">▲ BUY</b><b class="or">▼ SELL</b><p>سیگنال اندیکاتور اسکالپر روی کندل بسته‌شده. فلش‌های قدیمی بدون نوشته‌اند؛ فقط سیگنال فعال اسم دارد.</p><p class="use">وقتی فعال است خطوط ورود، SL و TP آن هم کشیده می‌شود.</p></div>
+  <div class="t"><b class="up">BOOM</b><b class="down">CRASH</b><p>اسکالپ کوتاه ۳۰ دقیقه‌ای: Kronos حرکت تند پیش‌بینی کرده و روند اندیکاتور موافق است. BOOM یعنی خرید، CRASH یعنی فروش.</p><p class="use">هنوز تست نشده؛ اول روی دمو.</p></div>
+  <div class="t"><b class="up">+0.8R</b><b class="down">-1.0R</b><p>نتیجه سیگنال تمام‌شده بر حسب R. ‎+0.8R یعنی ۰٫۸ برابر ریسک سود، ‎-1.0R یعنی کل ریسک (خوردن SL).</p></div>
+  <div class="t"><b>R</b><p>واحد ریسک: فاصله ورود تا حد ضرر. اگر ریسک هر معامله ۱۰ دلار باشد، ‎+2R یعنی ۲۰ دلار سود.</p></div>
+  <div class="t"><b>Entry</b><b class="down">SL</b><b class="up">TP · TP1 · TP2</b><p>نقطه ورود، حد ضرر (Stop Loss) و حد سود (Take Profit). TP1 هدف اول (نصف حجم بسته می‌شود)، TP2 هدف دوم.</p></div>
+  <div class="t"><b class="gold">HEADS-UP</b><p>کادر خط‌چین: «احتمالاً به‌زودی ستاپ می‌آید» در این محدوده قیمت. هنوز سیگنال نیست؛ فقط آماده باش.</p></div>
+  <div class="t"><b>Untested</b><p>این نوع سیگنال هنوز روی داده واقعی طلا نتیجه قابل اعتماد نداشته. با حجم کم یا دمو.</p></div>
+  <div class="t"><b>Spread</b><p>فاصله قیمت خرید (Ask) و فروش (Bid). هرچه کمتر، بهتر. موقع اخبار و باز شدن بازار زیاد می‌شود.</p></div>
+</div>
+
+<h2>Kronos (هوش مصنوعی پیش‌بینی)</h2>
+<div class="grid">
+  <div class="t"><b class="gold">- - - مسیر Kronos</b><p>خط‌چین طلایی: میانگین مسیرهای پیش‌بینی‌شده برای ۲ ساعت آینده (روی ۱m و ۵m) یا ۲۴ ساعت (روی ۱h).</p></div>
+  <div class="t"><b class="gold">سایه طلایی</b><p>پخش مسیرها: سایه کم‌رنگ = از پایین‌ترین تا بالاترین مسیر، سایه پررنگ = نیمه وسط مسیرها. هرچه پهن‌تر، نامطمئن‌تر.</p></div>
+  <div class="t"><b class="gold">Kronos UP / DOWN 2 h</b><p>قیمت هدف میانگین در پایان پیش‌بینی، روی محور قیمت.</p></div>
+  <div class="t"><b>Up % · Down %</b><p>درصد مسیرهایی که بالاتر/پایین‌تر از قیمت فعلی تمام می‌شوند.</p></div>
+  <div class="t"><b>Volatility jump</b><p>درصد مسیرهایی که از نوسان اخیر پرنوسان‌ترند. بالا یعنی حرکت تند در راه است.</p></div>
+  <div class="t"><b>Forecast vs actual</b><p>کارنامه Kronos: پیش‌بینی‌های قبلی را با قیمت واقعی مقایسه می‌کند.</p></div>
+</div>
+
+<h2>ساختار بازار (SMC / ICT)</h2>
+<div class="grid">
+  <div class="t"><b>HH · HL</b><b>LH · LL</b><p>سقف/کف‌های چرخشی. Higher High و Higher Low = روند صعودی. Lower High و Lower Low = روند نزولی.</p></div>
+  <div class="t"><b class="up">BOS</b><p>Break of Structure: شکست سقف/کف در جهت روند فعلی. یعنی روند ادامه دارد.</p></div>
+  <div class="t"><b class="gold">CHoCH</b><p>Change of Character: اولین شکست خلاف روند. هشدار برگشت روند (خط‌چین زرد).</p></div>
+  <div class="t"><b class="down">PREMIUM</b><b>EQ 50%</b><b class="up">DISCOUNT</b><p>محدوده معاملاتی فعلی نصف می‌شود: بالای ۵۰٪ گران (جای فروش)، پایین ۵۰٪ ارزان (جای خرید).</p></div>
+  <div class="t"><b class="gold">OTE</b><p>Optimal Trade Entry: ناحیه ۶۲ تا ۷۹ درصد اصلاح موج. بهترین جای ورود هم‌جهت با روند.</p></div>
+</div>
+
+<h2>نواحی (Zones)</h2>
+<div class="grid">
+  <div class="t"><b class="up">FVG</b><b class="down">FVG</b><p>Fair Value Gap: شکاف قیمتی سه‌کندلی که بازار سریع از آن رد شده. قیمت معمولاً برمی‌گردد پرش کند. سبز = حمایتی، قرمز = مقاومتی. کم‌رنگ = پر شده.</p></div>
+  <div class="t"><b>IFVG</b><p>Inverse FVG: FVG که شکسته شده و حالا نقش برعکس دارد (حمایت قبلی ← مقاومت).</p></div>
+  <div class="t"><b class="blue">OB</b><b class="or">OB</b><p>Order Block: آخرین کندل مخالف قبل از حرکت قوی که ساختار را شکست. جای سفارش‌های بزرگ؛ قیمت اغلب به آن واکنش می‌دهد.</p></div>
+  <div class="t"><b>BB</b><p>Breaker Block: اوردربلاکی که قیمت از آن رد شده و حالا نقش برعکس دارد.</p></div>
+</div>
+
+<h2>نقدینگی (Liquidity)</h2>
+<div class="grid">
+  <div class="t"><b class="gold">EQH $$$</b><b class="gold">EQL $$$</b><p>سقف‌ها/کف‌های برابر: پشتشان استاپ‌های زیادی جمع شده. بازار دوست دارد آنها را بزند.</p></div>
+  <div class="t"><b class="gold">BSL</b><b class="gold">SSL</b><p>Buy-Side / Sell-Side Liquidity: استاپ‌های بالای سقف‌ها (BSL) و زیر کف‌ها (SSL). هدف‌های احتمالی قیمت.</p></div>
+  <div class="t"><b>$$$</b><b>✕</b><p>‎$$$ = نقدینگی هنوز دست‌نخورده. ✕ = جاروب شده (Swept)؛ معمولاً بعدش برگشت می‌آید.</p></div>
+</div>
+
+<h2>سطوح کلیدی و سشن‌ها</h2>
+<div class="grid">
+  <div class="t"><b>PDH · PDL</b><p>سقف و کف روز قبل.</p></div>
+  <div class="t"><b>PWH · PWL</b><p>سقف و کف هفته قبل.</p></div>
+  <div class="t"><b>NMO</b><p>New York Midnight Open: قیمت باز شدن ساعت ۰۰:۰۰ نیویورک؛ مرجع ارزان/گرانِ امروز.</p></div>
+  <div class="t"><b>Asia</b><p>سشن آسیا: ۰۳:۳۰ تا ۰۷:۳۰ صبح تهران (۲۰:۰۰ تا ۰۰:۰۰ نیویورک). سقف و کفش هدف نقدینگی لندن است.</p></div>
+  <div class="t"><b class="blue">London</b><p>کیل‌زون لندن: ۰۹:۳۰ تا ۱۲:۳۰ تهران (۰۲:۰۰ تا ۰۵:۰۰ نیویورک).</p></div>
+  <div class="t"><b class="gold">NY AM</b><p>کیل‌زون نیویورک صبح: ۱۴:۳۰ تا ۱۷:۳۰ تهران (۰۷:۰۰ تا ۱۰:۰۰ نیویورک). پرحرکت‌ترین زمان روز.</p></div>
+  <div class="t"><b>NY Lunch</b><p>ناهار نیویورک: ۱۹:۳۰ تا ۲۰:۳۰ تهران. بازار کند و فریبنده؛ معامله نکن.</p></div>
+  <div class="t"><b class="or">NY PM</b><p>نیویورک بعدازظهر: ۲۱:۰۰ تا ۲۳:۳۰ تهران (بعد از پایان سشن روزانه تو).</p></div>
+</div>
+<p class="use">ساعت‌ها برای الان است (نیویورک ۷٫۵ ساعت عقب‌تر از تهران). بعد از تغییر ساعت آمریکا در ۱ نوامبر، همه یک ساعت دیرتر می‌شوند. ساعت‌های دقیق در محدوده‌های رنگی خود چارت است.</p>
+
+<div class="note">
+<b>یک روش ساده برای خواندن چارت:</b>
+۱) روند را از BOS/CHoCH و HH/LL بفهم. ۲) در روند صعودی فقط در DISCOUNT و OTE دنبال خرید باش، روی FVG یا OB سبز/آبی؛ در روند نزولی برعکس. ۳) هدف را نزدیک‌ترین نقدینگی ($$$، PDH/PDL) بگذار. ۴) فقط داخل کیل‌زون‌ها معامله کن. ۵) سیگنال‌های BOOM/CRASH و Kronos را فقط تأیید بدان، نه دلیل اصلی.
+</div>
+</main>
+</body>
+</html>
