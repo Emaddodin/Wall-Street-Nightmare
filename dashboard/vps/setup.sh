@@ -98,6 +98,20 @@ UNIT
                   --out $CONF/kronos_backtest_M5_trades.csv > $BT 2>&1" \
       && echo "Testing Kronos and Boom/Crash on the last 30 days of gold in the background (results show on the page)."
   fi
+  research "$KREPO"
+}
+# Once, for the "Improve Kronos accuracy" thread: how often is Kronos's direction right, and which settings help?
+# Nice 19 with CPU and memory capped, resumable (each icon run restarts it if it stopped), changes no service.
+# Progress and results: http://127.0.0.1:8765/api/research and /api/research/<file> (through the Mac's tunnel).
+research() {
+  local R=$CONF/kronos_research F=$APP/dashboard/kronos_research.py LOG=$CONF/kronos_research.log
+  local URL=https://raw.githubusercontent.com/Emaddodin/Wall-Street-Nightmare/5435321a4f07e42197206c0676cde7a954783203/dashboard/kronos_research.py
+  [ "$KRONOS" = off ] && return 0
+  grep -q "All settings done" "$LOG" 2>/dev/null && return 0
+  systemctl is-active -q kronos-research && { echo "Kronos accuracy test: $(cat "$R/progress.txt" 2>/dev/null || echo starting)"; return 0; }
+  [ -s "$F" ] || curl -fsSo "$F" "$URL" || { echo "Kronos accuracy test: couldn't download it this time."; return 0; }
+  systemd-run -q --unit kronos-research --collect -p Nice=19 -p CPUQuota=200% -p MemoryMax=2500M -p WorkingDirectory=$APP/dashboard --setenv=HOME=/root /bin/sh -c "exec /root/kronos/.venv/bin/python kronos_research.py collect --repo $1 --size base --days 60 --points 240 --threads 2 > $LOG 2>&1" \
+    && echo "Kronos accuracy test started on the VPS in the background (low priority)." || true
 }
 # A browser for the broker page. cdn.playwright.dev is unreachable from this VPS, so in order:
 # a Chrome already installed here, Playwright's Microsoft mirror, the normal download, the Chrome .deb

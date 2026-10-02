@@ -8,6 +8,7 @@ page is your broker's own quote. Orders go out only when you click Buy, Sell or 
     python server.py --demo     # synthetic gold data, no MT5 needed
     python server.py --litefinance-login   # Mac: save your LiteFinance login once
     python server.py --litefinance         # Mac: LiteFinance chart + orders
+    python server.py --mt5-bridge          # Mac: your MT5 app's prices + orders (GoldDeskBridge EA, mt5bridge.py)
 """
 from __future__ import annotations
 
@@ -357,6 +358,10 @@ class Hub:
 
     def _learn_offset(self, tick: dict | None) -> None:
         if self.src.kind != "mt5" or tick is None or self.fixed_offset is not None:
+            return
+        told = self.src.server_offset() if hasattr(self.src, "server_offset") else None
+        if told is not None:             # the terminal says it outright (MT5 bridge)
+            self.live_offset = told
             return
         d = tick["time"] - time.time()
         cand = round(d / 1800) * 1800
@@ -733,6 +738,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         last, beat = None, time.time()
+        changed = getattr(HUB.src, "changed", None)
         try:
             while True:
                 tk = HUB.src.tick()
@@ -745,7 +751,11 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(b": ping\n\n")
                     self.wfile.flush()
                     beat = time.time()
-                time.sleep(0.03)
+                if changed is not None:          # MT5 bridge: wake on the next price, not a timer
+                    with changed:
+                        changed.wait(0.25)
+                else:
+                    time.sleep(0.03)
         except (BrokenPipeError, ConnectionResetError, OSError):
             return
 
@@ -764,6 +774,14 @@ class Handler(BaseHTTPRequestHandler):
                 if tf not in TF_SECONDS:
                     return self._json({"error": "unknown timeframe"}, 400)
                 return self._json(HUB.candles(tf, min(int(q.get("count", 600)), 5000)))
+            if u.path == "/api/research":
+                return self._json(research_state())
+            if u.path.startswith("/api/research/"):          # read-only copies of the test's own files
+                name = u.path.rsplit("/", 1)[1]
+                f = RESEARCH.parent / "kronos_research.log" if name == "log" else RESEARCH / name
+                if (name in RESEARCH_FILES or name == "log") and f.is_file():
+                    return self._send(200, f.read_bytes(), "text/plain; charset=utf-8")
+                return self._send(404, b"not there (yet)", "text/plain")
             if u.path == "/api/backtest":
                 days = max(1, min(int(q.pop("days", 10)), 90))
                 return self._json(HUB.backtest(days, q))
@@ -780,6 +798,22 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # keep the page alive and show the reason
             traceback.print_exc()
             return self._json({"error": str(e)}, 500)
+
+
+RESEARCH = Path.home() / ".golddesk" / "kronos_research"
+RESEARCH_FILES = {"report.md", "progress.txt", "paths.jsonl", "meta.json", "bars_M5.csv", "bars_M15.csv",
+                  "bars_H1.csv", "bars_H4.csv"}
+
+
+def research_state() -> dict:
+    """The Kronos accuracy test that vps/setup.sh runs once in the background: progress, log tail, report."""
+    rd = lambda f: f.read_text(errors="replace") if f.is_file() else None
+    log = rd(RESEARCH.parent / "kronos_research.log")
+    return {"progress": (rd(RESEARCH / "progress.txt") or "").strip() or None,
+            "done": bool(log and "All settings done" in log),
+            "log_tail": log.replace("\r", "\n").splitlines()[-8:] if log else None,
+            "report": rd(RESEARCH / "report.md"),
+            "files": sorted(f.name for f in RESEARCH.glob("*") if f.name in RESEARCH_FILES)}
 
 
 def poll_loop() -> None:
@@ -810,6 +844,8 @@ def main() -> None:
     ap.add_argument("--lf-headless", action="store_true", help="hide the LiteFinance browser window")
     ap.add_argument("--lf-dry-run", action="store_true", help="fill the LiteFinance ticket but never press its button")
     ap.add_argument("--lf-url", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--mt5-bridge", nargs="?", const="auto", metavar="FOLDER",
+                    help="use the MT5 app on this computer through the GoldDeskBridge EA (Mac or Windows)")
     ap.add_argument("--account", choices=["demo", "real"], help="label the LiteFinance account (auto by default)")
     ap.add_argument("--kronos", nargs="?", const="small", choices=["mini", "small", "base"],
                     help="show Kronos forecasts (model size, default small); needs install_kronos.sh")
@@ -829,6 +865,14 @@ def main() -> None:
         return login()
     if a.demo:
         src = DemoSource()
+    elif a.mt5_bridge:
+        from mt5bridge import MT5BridgeSource
+        print("Connecting to MT5 through the Gold Desk bridge...")
+        try:
+            src = MT5BridgeSource(a.mt5_bridge)
+        except RuntimeError as e:
+            raise SystemExit(str(e))
+        print(f"MT5 bridge: {src.dir}")
     elif a.litefinance:
         from litefinance import CHART, LiteFinanceSource
         print("Opening LiteFinance...")

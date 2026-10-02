@@ -33,6 +33,20 @@ curl -fsSL https://raw.githubusercontent.com/Emaddodin/Wall-Street-Nightmare/ref
 
 It puts Gold Desk in `~/GoldDesk`, installs the LiteFinance browser driver and Kronos, and adds a **Gold Desk** icon to your Desktop. Double-click that icon to trade: it updates Gold Desk to the latest version, stops any older copy, starts it with Kronos and the scalper on the chart, and opens the page. The first start also tests Kronos and the Boom / Crash calls on the last 30 days of gold in the background and shows the result on the page. Settings (demo or real badge, Kronos size) are in `~/.golddesk/config.sh`.
 
+## On a Mac: your MT5 app (the bridge)
+
+With the MT5 app open on your Mac, Gold Desk takes its prices, candles, account and open trades straight from MT5 and places your clicks in your MT5 account, so its chart moves with MT5's (the price reaches the page a few milliseconds after MT5 has it). It works through a small EA, `mt5/GoldDeskBridge.mq5`, that trades only when you click Buy, Sell or Close on Gold Desk.
+
+The Gold Desk icon copies the EA into MT5 by itself and tries to compile it. One time only, in MT5:
+
+1. If GoldDeskBridge isn't under Expert Advisors in the Navigator: press F4 (MetaEditor), open Experts > GoldDeskBridge, press Compile.
+2. Drag GoldDeskBridge onto the XAUUSD chart, tick "Allow Algo Trading", press OK.
+3. Turn on the Algo Trading button at the top of MT5.
+
+From then on the icon opens MT5 if needed and starts Gold Desk on it; MT5 keeps the EA on its chart between restarts. Without MT5 (or with `MT5=off` in `~/.golddesk/config.sh`) the icon uses the LiteFinance website on the VPS as before. The VPS keeps sending your phone pushes either way.
+
+Manual start: `python3 server.py --mt5-bridge`. The EA and Gold Desk talk through files in MT5's shared folder (`Common/Files/GoldDesk`), nothing goes over the internet. An order MT5 doesn't pick up within 3 seconds is taken back, so it can never run late.
+
 ## On a Mac: LiteFinance (manual start)
 
 No MT5 needed. Gold Desk opens the LiteFinance web terminal in its own Chromium window and works through it: candles come from the same history feed the LiteFinance chart uses, bid and ask are read from its order ticket, and Buy / Sell fill that ticket (side, lots, stop loss, take profit) and press its button.
@@ -47,6 +61,7 @@ python3 server.py --litefinance --account demo
 - `--lf-dry-run` fills the LiteFinance ticket but never presses its button. Use it to watch what an order would do.
 - `--lf-headless` hides the LiteFinance window. Leave it visible for now: open positions, closing and moving stops are still done in that window.
 - Your login is saved in `~/.golddesk/lf_session.json`, readable only by your Mac user. Gold Desk never sees your password.
+- After Buy or Sell, Gold Desk watches the LiteFinance page for the new trade (or the margin it uses). It says "sent" only when the trade opened; otherwise it shows LiteFinance's reason, or that it couldn't confirm the trade, so check the trade list before trying again. An account showing 0.00 USD is refused before anything is pressed.
 - If the LiteFinance page stops answering, or its prices freeze while gold is trading, Gold Desk reloads it and, if that doesn't help, opens it again by itself. A Buy or Sell that waited on a stuck page is never sent late: the ticket says nothing was sent.
 
 ## Kronos forecasts (optional)
@@ -101,6 +116,7 @@ A click reaches MT5 in a few milliseconds, because the page and the terminal are
 | `engine.py` | Signal rules and backtest (same rules as `mt5/XAU_M1_Scalper.mq5`), on M5 or M1 |
 | `boom.py` | Boom / Crash scalp calls (Kronos + indicator) and their live scoring |
 | `soon.py` | "Setup likely soon" heads-ups pushed to your phone with ntfy |
+| `mt5bridge.py`, `mt5/GoldDeskBridge.mq5` | Your MT5 app as the price and order source (Mac or Windows) |
 | `coach.py` | Your daily trading session on ntfy: start, New York open, 15 minutes left, recap, ready setups |
 | `smc.py` | Smart Money / ICT read of the chart (structure, order blocks, FVGs, liquidity, premium / discount, OTE, killzones, key levels) |
 | `static/` | The page, plus TradingView Lightweight Charts 4.2.3 (Apache 2.0) |
