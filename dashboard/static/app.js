@@ -227,7 +227,7 @@
     const right = r.width - chart.priceScale("right").width();
     const sec = TFSEC[tf], ts = chart.timeScale();
     if (ovl.smc) drawSmc(right, sec, ts);
-    if (ovl.boom) drawHeadsUp(right, sec, ts);
+    if (ovl.boom) { drawWatch(right, sec, ts); drawHeadsUp(right, sec, ts); }
     drawBand(right, sec, ts);
     if (ovl.scalper) drawScalperZones(right, sec, ts);
     for (const [price, col, name, , pri] of levelList()) {        // names of the horizontal levels, at the right edge
@@ -376,6 +376,21 @@
     zx.fillStyle = `rgba(${rgb},.14)`; zx.fillRect(x1, y1, w, hh);
     zx.setLineDash([5, 3]); zx.strokeStyle = `rgba(${rgb},.9)`; zx.lineWidth = 1.5; zx.strokeRect(x1 + .5, y1 + .5, w - 1, hh - 1); zx.setLineDash([]);
     tag(`WATCH ${h.side === "BUY" || h.dir === 1 ? "▲" : "▼"}`, x1 + 2, y1 - TH / 2 - 2, `rgb(${rgb})`, { pri: 75 });
+  }
+
+  // Boom / Crash setups past their CHoCH, waiting for price to come back into the zone (state.boom.watch)
+  function drawWatch(right, sec, ts) {
+    for (const w of (S.boom && S.boom.watch) || []) {
+      if (!w.poi || w.poi.length < 2) continue;
+      const x1 = Math.min(right, xOf(w.since, ts, sec) ?? right), x2 = Math.min(right, xOf(w.until, ts, sec) ?? right);
+      const y1 = series.priceToCoordinate(Math.max(...w.poi)), y2 = series.priceToCoordinate(Math.min(...w.poi));
+      if (y1 == null || y2 == null || x2 - x1 < 2) continue;
+      const rgb = w.dir === 1 ? "47,182,124" : "229,72,77";
+      zx.fillStyle = `rgba(${rgb},.07)`; zx.fillRect(x1, y1, x2 - x1, Math.max(2, y2 - y1));
+      zx.setLineDash([2, 3]); zx.strokeStyle = `rgba(${rgb},.55)`; zx.lineWidth = 1;
+      zx.strokeRect(x1 + .5, y1 + .5, x2 - x1 - 1, Math.max(2, y2 - y1) - 1); zx.setLineDash([]);
+      tag(`SETUP ${w.dir === 1 ? "▲" : "▼"}`, x1 + 3, y2 + TH / 2 + 2, `rgb(${rgb})`, { pri: 65, faint: true });
+    }
   }
 
   // the Kronos sample-path spread: outer shade = lowest to highest path, inner shade = middle half (p25 to p75)
@@ -678,7 +693,9 @@
     el.className = "card boom" + (a ? (a.dir === 1 || a.side === "BUY" ? " live up" : " live down") : "");
     if (!a) {
       const h = (bm.history || [])[bm.history.length - 1];
-      el.innerHTML = `<span class="name">Boom / Crash</span>${tag}<span class="call flat">Waiting</span><span></span>
+      const w = (bm.watch || [])[0];
+      el.innerHTML = `<span class="name">Boom / Crash</span>${tag}<span class="call flat">${w ? `Watching ${w.dir === 1 ? "▲ BUY" : "▼ SELL"}` : "Waiting"}</span><span></span>
+        ${w ? `<span class="meta">${w.dir === 1 ? "Swept a low, CHoCH up" : "Swept a high, CHoCH down"} through ${fmt(w.choch)}. Waiting for price back into <b class="num">${fmt(w.poi[0])}-${fmt(w.poi[1])}</b>${w.until ? ` until ${clock(w.until)}` : ""}.</span>` : ""}
         <span class="meta">${h ? `Last: ${esc(h.kind)} ${esc(h.side)} ${h.how === "target" ? "hit target" : h.how === "stop" ? "hit stop" : "timed out"}, ${h.r > 0 ? "+" : ""}${(+h.r).toFixed(2)}R · ` : ""}${tally}</span>`;
       return;
     }
@@ -688,8 +705,9 @@
     el.innerHTML = `<span class="name">${up ? "BOOM" : "CRASH"}${a.strong ? " · strong" : ""}</span>${tag}
       <span class="call ${up ? "up" : "down"}">${up ? "▲ BUY" : "▼ SELL"} <span class="num" style="font-size:14px">${fmt(a.entry)}</span></span>
       <button class="use" data-src="boom">Use SL/TP</button>
-      <span class="lvls num"><span>SL <b class="down">${fmt(a.sl)}</b></span><span>TP <b class="up">${fmt(a.tp)}</b></span><span><b>${left}</b> min left</span></span>
-      <span class="meta">Kronos ${a.move > 0 ? "+" : ""}${fmt(a.move)} (${esc(a.move_atr)} ATR) in ${esc(a.minutes)} min${a.why && a.why.length ? " · " + esc(a.why.join(", ")) : ""}</span>
+      <span class="lvls num"><span>SL <b class="down">${fmt(a.sl)}</b></span><span>TP <b class="up">${fmt(a.tp)}</b></span><span><b>${left >= 60 ? `${Math.floor(left / 60)} h ${left % 60}` : left}</b> min left</span></span>
+      ${a.why && a.why.length ? `<span class="meta">${a.why.map(esc).join(" · ")}</span>` : ""}
+      ${a.move ? `<span class="meta">Kronos ${a.move > 0 ? "+" : ""}${fmt(a.move)}${a.up_prob != null ? ` · up ${pct(a.up_prob)}` : ""}</span>` : ""}
       <span class="meta">${tally}</span>`;
   }
   // state.alerts: {push, topic, sent, error, recent: [{kind, side, dir, t, minutes, area, what, why, up_prob, title, text}]}
