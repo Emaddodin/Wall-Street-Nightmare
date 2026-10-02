@@ -28,6 +28,7 @@ import ict_entries as ie
 from engine import Bars
 from ictmodel import MarketRead, consensus, daily
 from mesh import Mesh
+import nowcast as nc
 from tfdesk import desks
 
 LOG_FILE = Path.home() / ".golddesk" / "boom_calls.csv"
@@ -67,6 +68,8 @@ class BoomTracker:
         self.read: MarketRead | None = None
         self.consensus: dict | None = None
         self.desks: dict = {}                    # each timeframe's own concepts and call (tfdesk.py)
+        self.nowcast: dict | None = None         # the 10-minute line from the live price, every poll (nowcast.py)
+        self.sig: float | None = None            # one-minute sigma of the last closed candles
         self.flow: dict = {"raids": [], "cisd": [], "orders": []}
         self.watch: list = []
         self.trend = None                        # kept for soon.py's signature
@@ -122,6 +125,7 @@ class BoomTracker:
             return out
         n = len(m1) - 1                                            # the last candle is still forming
         if m1.t[n - 1] == self.fed_t:
+            self._nowcast(m1.t[n], self._live_px(quote, m1.c[n]))
             return out
         utc = lambda t: t - offset(t)
         try:
@@ -157,6 +161,9 @@ class BoomTracker:
         self.fed_t = m1.t[n - 1]
         if self.read is not None:
             self._consensus(m1.t[n - 1] + 60, m1.c[n - 1], self.read.f["M1"].atr[-1])
+        self.sig = nc.sigma(m1.c[max(0, n - nc.SIGMA_N - 1):n])
+        self._nowcast(m1.t[n - 1] + 60, m1.c[n - 1])               # from the close, for the mesh's record
+        closed_nc = self.nowcast
         for i in new:                                              # the knowledge mesh: candle + reading
             rd = None
             if i == n - 1 and self.consensus and self.consensus.get("x"):
@@ -165,9 +172,27 @@ class BoomTracker:
                       "g": dict({p["name"]: p["score"] for p in cs["parts"]},
                                 **{f"Desk {k}": d["score"] for k, d in self.desks.items()}),
                       "k": (cs["parts"][-1]["items"]["up_prob"] if cs["kronos"] else None)}
+                if closed_nc:
+                    rd["g"]["10-min line"] = round(closed_nc["target"] - closed_nc["last"], 3)
             self.mesh.record(m1.t[i] + 60, m1.o[i], m1.h[i], m1.l[i], m1.c[i], rd)
         self.watch = self._watch()
+        self._nowcast(m1.t[n], self._live_px(quote, m1.c[n]))
         return out
+
+    @staticmethod
+    def _live_px(quote: dict | None, forming_close: float) -> float:
+        return (quote["bid"] + quote["ask"]) / 2 if quote else forming_close
+
+    def _nowcast(self, t: int, price: float) -> None:
+        """The 10-minute line from the live price; t is the forming candle's open (candle clock)."""
+        if not self.sig:
+            self.nowcast = None
+            return
+        line = self.consensus["score"] if self.consensus else None
+        k = self.kronos if self.kronos and abs((self.kronos.get("t") or 0) - t) < 1800 else None
+        self.nowcast = nc.nowcast(t, price, self.sig, nc.score(self.desks, line), k, self.digits)
+        if self.consensus is not None:
+            self.consensus["live"] = self.nowcast
 
     # ------------------------------------------------------------ calls
     def _order(self, e: dict, spread: float, t: int) -> dict | None:

@@ -5,7 +5,7 @@ Every closed M1 candle goes to ~/.golddesk/mesh/mesh_YYYY-MM.jsonl. Every 5th mi
 whole trend reading (ictmodel.py features of M1 .. D1), the vote of each group, Kronos's up-probability and the
 trend line's score. So the price, the reading and what happened next all sit in one place, for this live feed.
 
-The scoreboard checks each source against the price `h` minutes later (30, 60, 120), on samples h minutes apart
+The scoreboard checks each source against the price `h` minutes later (10, 30, 60, 120), on samples h minutes apart
 so no two overlap, next to two baselines (always up, the last 30 minutes' direction). It is rebuilt from the
 saved scoreboard (board.json, every 30 minutes) and the candles
 written after it when the dashboard starts. Nothing is ever deleted; writing pauses when the disk has under 1 GB.
@@ -27,7 +27,7 @@ from collections import deque
 from pathlib import Path
 
 DIR = Path.home() / ".golddesk" / "mesh"
-HORIZONS = (30, 60, 120)
+HORIZONS = (10, 30, 60, 120)
 TRUST_H = 60
 MIN_N = 200
 REBUILD_DAYS = 120
@@ -133,7 +133,7 @@ class Board:
     def view(self) -> dict:
         names = sorted({n for h in HORIZONS for n in self.score[h]},
                        key=lambda n: (n not in GROUPS and not n.startswith("Desk ")
-                                      and n not in ("Trend line", "Always up", "Last 30 min"), n))
+                                      and n not in ("Trend line", "10-min line", "Always up", "Last 30 min"), n))
         return {"sources": [{"name": n, "by_h": {str(h): self.score[h][n].view() if n in self.score[h] else None
                                                  for h in HORIZONS}} for n in names]}
 

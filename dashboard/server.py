@@ -583,6 +583,7 @@ class Hub:
                 "boom": self.boom.state(),
                 "consensus": self.boom.consensus,      # the trend reading of every timeframe and its chart line
                 "flow": self.boom.flow,                # M1 raids, CISDs and limit orders, for chart marks
+                "nowcast": self.boom.nowcast,          # the 10-minute line + band from the live price (nowcast.py)
                 "timeframes": self.boom.desks,         # each timeframe's own concepts, call and levels (tfdesk.py)
                 "mesh": self.boom.mesh.state(),        # live record + scoreboard of every source (mesh.py)
                 "alerts": self.soon.state() if self.soon else None,
