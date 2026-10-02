@@ -120,8 +120,22 @@
     const ok = (f) => f && Array.isArray(f.path) && f.path.length ? f : null;
     if (tf === "H1") return ok(k && k.day);
     if (tf !== "M1" && tf !== "M5" && tf !== "M15") return null;
-    if (ok(c)) return { ...c, band: k && k.path && Math.abs((k.t || 0) - c.t) < 1800 ? k.band : null, mix: true };
+    if (ok(c)) return { ...c, band: lineBand(c, k), mix: true };
     return tf === "M15" ? null : ok(k);
+  }
+  // Shading for the trend line, the same two tones as Kronos's: around the line, as wide as Kronos's own sample
+  // spread when a fresh Kronos run has one, else as wide as gold's usual M1 swing for that many minutes ahead.
+  function lineBand(c, k) {
+    const kb = k && Array.isArray(k.band) && k.path && Math.abs((k.t || 0) - c.t) < 1800 ? new Map(k.band.map((b) => [b.time - (b.time % 300), b])) : null;
+    const kp = kb ? new Map(k.path.map((p) => [p.time - (p.time % 300), p.value])) : null;
+    const atr = +c.atr || 0;
+    return c.path.map((p) => {
+      const b = kb && kb.get(p.time - (p.time % 300)), mid = kp && kp.get(p.time - (p.time % 300));
+      const w = b && mid != null ? { lo: mid - b.lo, hi: b.hi - mid, p25: mid - b.p25, p75: b.p75 - mid } : null;
+      const sd = atr * 0.8 * Math.sqrt(Math.max(1, (p.time - c.t) / 60 + 1));     // random-walk spread in M1 ATRs
+      const d = w || { lo: 1.64 * sd, hi: 1.64 * sd, p25: 0.67 * sd, p75: 0.67 * sd };
+      return { time: p.time, lo: p.value - d.lo, hi: p.value + d.hi, p25: p.value - d.p25, p75: p.value + d.p75 };
+    });
   }
   let fcKey = "";
   function drawForecast() {
@@ -790,7 +804,10 @@
     pill.innerHTML = TF6.map((t) => `<span class="tfa">${tfName(t)}${arrow((c.tf || {})[t])}</span>`).join("") +
       `<b class="${cls === "flat" ? "" : cls}">${c.bias > 0 ? "▲" : c.bias < 0 ? "▼" : "•"} ${word} ${sc}</b>`;
     el.innerHTML = `<span class="name">Trend reading</span><span class="untested">${c.proven ? "TESTED" : "NOT A FORECAST"}</span>
-      <span class="call ${cls}">${c.bias > 0 ? "▲" : c.bias < 0 ? "▼" : "•"} ${word} <span class="num" style="font-size:14px">${sc}</span></span><span></span>
+      <span class="call ${cls}">${c.bias > 0 ? "▲ UP" : c.bias < 0 ? "▼ DOWN" : "— FLAT"} ${c.target != null ? `<span class="num" style="font-size:14px">${fmt(c.target)} (${c.target - c.last >= 0 ? "+" : ""}${fmt(c.target - c.last)})</span>` : ""}</span><span></span>
+      <span class="odds"><span>Reading <b class="${cls === "flat" ? "" : cls}">${word} ${sc}</b></span><span>in ${horizon(c.minutes || 120)}</span></span>
+      <span class="split"><i style="width:${Math.round((1 + Math.max(-1, Math.min(1, +c.score || 0))) * 50)}%"></i></span>
+      ${(() => { const b = lineBand(c, S.kronos), e = b[b.length - 1]; return e ? `<span class="meta num">Likely ends between ${fmt(e.lo)} and ${fmt(e.hi)} · middle half ${fmt(e.p25)} to ${fmt(e.p75)}</span>` : ""; })()}
       <span class="tfs6">${TF6.map((t) => `<span>${tfName(t)}${arrow((c.tf || {})[t])}</span>`).join("")}</span>
       <span class="parts">${(c.parts || []).map((p) => { const v = Math.max(-1, Math.min(1, +p.score || 0));
         return `<span>${esc(p.name)}</span><span class="bar"><i style="${v >= 0 ? `left:50%;width:${v * 50}%;background:var(--up)` : `right:50%;width:${-v * 50}%;background:var(--down)`}"></i></span><span class="num ${tone(v)}">${v > 0 ? "+" : ""}${v.toFixed(2)}</span>`; }).join("")}</span>
