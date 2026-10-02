@@ -228,7 +228,7 @@ class SessionCoach:
         """A BOOM / CRASH call just started."""
         f = lambda x: f"{x:.{digits}f}"
         body = (f"Entry {f(sig['entry'])} · stop {f(sig['sl'])} · target {f(sig['tp'])}, within {sig['minutes']} min\n"
-                f"Kronos {sig['move']:+.2f} ({sig['move_atr']} ATR). {', '.join(sig.get('why') or [])}.\n"
+                f"{', '.join(sig.get('why') or [])}.\n"
                 "Untested call: check the chart, you decide.")
         return self._ready("call", sig["side"], sig.get("t"), sig["entry"], f"{sig['kind']} {sig['side']}",
                            f"Gold {sig['kind']} call: {sig['side']} now", body, sig["dir"])

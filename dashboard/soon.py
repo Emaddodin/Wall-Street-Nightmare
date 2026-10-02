@@ -10,9 +10,10 @@ coach.py; outside it they show on the page):
          That is where the indicator takes its entries.
   sweep  Same filter, but the paths dip below the last 10 bars' low (above the high for a sell) and the
          average path is back above it 30 minutes out: the liquidity sweep the indicator trades.
-  burst  The BOOM / CRASH filter is open, 6 of 10 paths agree, and the average path shows a clean move of at
-         least 1 ATR (the call itself needs 0.6) starting within 30 minutes, with three quarters of the paths
-         finishing it beyond its start: a BOOM / CRASH call is likely on one of the next bars.
+  burst  A BOOM / CRASH setup (boom.py, orchestra.py) has swept liquidity and broken structure and waits for
+         price to come back to its fair value gap or order block; the trend layer, Kronos included, points
+         the same way, and a quarter of the paths reach that zone within 30 minutes without running past the
+         sweep: a BOOM / CRASH call is likely if a confirming candle prints there.
 
 Never twice for the same setup, at most one push per side per hour and one per half hour (entry setups and
 BOOM / CRASH counted apart), 8 a day of which 5 BOOM / CRASH, none while a trade or call on that side is
@@ -32,7 +33,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-import boom
+import orchestra
 from engine import LADDER, session_ok
 
 LOOK_MIN = 30          # how far ahead a setup counts as "soon"
@@ -41,8 +42,6 @@ DAY_CAP = 8            # pushes a day in all ...
 BURST_CAP = 5          # ... of which BOOM / CRASH heads-ups at most this many, so entry setups always get through
 THROUGH_ATR = 1.0      # paths that run further than this through a zone or level break it rather than test it
 MAJORITY = 0.6         # share of paths that must end on the trade's side (6 of 10)
-BURST_ATR = 1.0        # a BOOM / CRASH heads-up wants a bigger move than the call itself (0.6 ATR) ...
-BURST_AGREE = True     # ... and three quarters of the paths finishing that move above (below) where it starts
 GAP_MIN = 30           # between two heads-ups of the same group
 SAME_MIN = 240         # the same setup (side, kind, price area) is announced once in this long
 HOME = Path.home() / ".golddesk"
@@ -51,7 +50,7 @@ SIDE = {1: "BUY", -1: "SELL"}
 GROUP = {"zone": "entry", "sweep": "entry", "burst": "boom"}
 
 
-def predict(eng, fc: dict, sec: int) -> list:
+def predict(eng, fc: dict, sec: int, watch: list = (), trend=None) -> list:
     """Setups Kronos and the indicator expect within LOOK_MIN minutes: at most one per side."""
     ctx, p = eng.ctx, eng.p
     path = [x["value"] for x in fc.get("path") or []]
@@ -66,8 +65,6 @@ def predict(eng, fc: dict, sec: int) -> list:
     macro, struct, zone_tf = LADDER.get({60: "M1", 300: "M5"}.get(eng.sec, "M1"))
     m, i = eng.m1, len(eng.m1) - 1
     swing = {1: min(m.l[i - p.sweep_len + 1:i + 1]), -1: max(m.h[i - p.sweep_len + 1:i + 1])}
-    st = boom.setup(eng)
-    boom_now = boom.decide(fc, st, sec)
     out = []
     for d in (1, -1):
         reach = low if d == 1 else high              # how far the paths go against the trade first
@@ -100,24 +97,20 @@ def predict(eng, fc: dict, sec: int) -> list:
                         pred = {"kind": "sweep", "k": k + 1, "area": sorted([lvl, lvl - d * 0.3 * a]),
                                 "what": f"sweep the recent {'low' if d == 1 else 'high'} ({lvl:.2f}) and turn back"}
                         break
-        if pred is None and not boom_now and boom.gate(st, d) and majority:
-            seq = [last] + path                      # burst: a clean, larger-than-BOOM move starting soon
-            for k in range(1, n + 1):
-                if k + n >= len(seq):
-                    break
-                if not in_session[k - 1]:
-                    continue
-                w = seq[k:k + n + 1]                 # path bars k-1 .. k+n-1
-                move = (w[-1] - w[0]) * d
-                worst = max(0.0, (w[0] - (min(w) if d == 1 else max(w))) * d)
-                agree = not BURST_AGREE or len(band) < k + n or \
-                    ((band[k + n - 1]["p25"] if d == 1 else band[k + n - 1]["p75"]) - w[0]) * d >= 0
-                if move >= BURST_ATR * a and worst <= boom.CLEAN * move and agree:
-                    pred = {"kind": "burst", "k": k, "area": [w[0] - 0.25 * a, w[0] + 0.25 * a],
-                            "what": f"start a {'BOOM' if d == 1 else 'CRASH'} move of about {move:.2f} "
-                                    f"({move / a:.1f} ATR)"}
-                    why = st["agree"][d]
-                    break
+        w = next((x for x in watch if x["dir"] == d), None)
+        if pred is None and w and trend is not None:
+            votes = trend.votes(t + sec, up)
+            if orchestra.Trend.bias(votes) == d:
+                edge, stop = (w["poi"][1], w["sweep_ext"]) if d == 1 else (w["poi"][0], w["sweep_ext"])
+                for k in range(n):
+                    if not in_session[k]:
+                        continue
+                    if (reach[k] - edge) * d <= 0 < (reach[k] - stop) * d:
+                        pred = {"kind": "burst", "k": k + 1, "area": list(w["poi"]),
+                                "what": f"come back to the {'BOOM' if d == 1 else 'CRASH'} zone after a liquidity "
+                                        f"sweep and a change of character"}
+                        why = trend.words(votes, d)
+                        break
         if pred:
             pred.update(dir=d, side=SIDE[d], t=t, minutes=pred["k"] * sec // 60, why=why, up_prob=up,
                         horizon_min=fc.get("minutes"), area=[round(x, 2) for x in sorted(pred["area"])])
@@ -228,9 +221,9 @@ class SoonAlerts:
             self.data["hello"] = topic
             self._save()
 
-    def check(self, eng, fc: dict, sec: int, busy: set) -> list:
+    def check(self, eng, fc: dict, sec: int, busy: set, watch: list = (), trend=None) -> list:
         """Called with each fresh forecast. Returns the heads-up sent now, if any."""
-        preds = predict(eng, fc, sec)
+        preds = predict(eng, fc, sec, watch, trend)
         if len(preds) != 1:                          # nothing, or both sides at once: no clear heads-up
             return []
         pr = preds[0]
@@ -274,4 +267,4 @@ class SoonAlerts:
                 "sent": n.sent if n else 0, "error": n.error if n else None,
                 "recent": self.data["history"][-5:],
                 "rules": {"look_min": LOOK_MIN, "cooldown_min": COOLDOWN_MIN, "gap_min": GAP_MIN,
-                          "day_cap": DAY_CAP, "burst_cap": BURST_CAP, "majority": MAJORITY, "burst_atr": BURST_ATR}}
+                          "day_cap": DAY_CAP, "burst_cap": BURST_CAP, "majority": MAJORITY}}

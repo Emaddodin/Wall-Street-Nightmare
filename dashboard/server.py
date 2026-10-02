@@ -26,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from boom import BoomTracker, setup as boom_setup
+from boom import BoomTracker
 from coach import WINDOW, SessionCoach
 from engine import (LADDER, Bars, Engine, Params, Spec, SESSION_NAMES, market_hours, ny7_offset, run_backtest,
                     session_of, session_ok, utc_minutes)
@@ -432,9 +432,14 @@ class Hub:
                         self._event("execute", self.exec_text(opened), opened["side"])
                         if self.coach:
                             self.coach.ready_trade(opened, eng.ctx, self.tf, self.spec.digits)
-                    for done in self.boom.on_bar(m1.t[i], m1.h[i], m1.l[i], m1.c[i], self.sec, eng.bar_spread(len(eng.m1) - 1)):
-                        self._event("boom_end", done["text"], done["side"])
             self.forming = self._bar_dict(m1, len(m1) - 1)
+            if new:
+                kronos_on = bool(self.kronos and self.kronos.model and not self.kronos.error)
+                for kind, call in self.boom.on_candles(eng, self._quote(), kronos_on):
+                    self._boom_event(kind, call)
+            late = self.boom.expire(self._quote())
+            if late:
+                self._boom_event("boom", late)
             self._radar()
             self._update_smc()
 
@@ -456,6 +461,11 @@ class Hub:
             if str(e) != self._smc_err:
                 self._smc_err = str(e)
                 print(f"SMC/ICT layer skipped: {e}", flush=True)
+
+    def _boom_event(self, kind: str, call: dict) -> None:
+        self._event(kind, call["text"], call["side"])
+        if kind == "boom" and self.coach:
+            self.coach.ready_call(call, self.spec.digits)
 
     def exec_text(self, tr: dict) -> str:
         d = self.spec.digits
@@ -501,14 +511,12 @@ class Hub:
             eng = self.engine
             if not eng or not len(eng.m1) or fc.get("t") != eng.m1.t[-1] or eng.ctx is None:
                 return                                   # a newer bar closed meanwhile; the next forecast decides
-            sig = self.boom.on_forecast(fc, boom_setup(eng), self._quote(), self.sec)
+            sig = self.boom.on_forecast(fc, self._quote())
             if sig:
-                self._event("boom", sig["text"], sig["side"])
-                if self.coach:
-                    self.coach.ready_call(sig, self.spec.digits)
+                self._boom_event("boom", sig)
             if self.soon:
                 busy = {x["dir"] for x in (eng.cur, self.boom.active) if x}
-                for pr in self.soon.check(eng, fc, self.sec, busy):
+                for pr in self.soon.check(eng, fc, self.sec, busy, self.boom.watch, self.boom.trend):
                     self._event("soon", f"{pr['title']}: watch {pr['area'][0]:.2f}-{pr['area'][1]:.2f}", pr["side"])
 
     # ------------------------------------------------------------ API payloads
