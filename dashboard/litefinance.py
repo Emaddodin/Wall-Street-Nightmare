@@ -17,6 +17,7 @@ import http.client
 import json
 import os
 import queue
+import re
 import shutil
 import threading
 import time
@@ -95,10 +96,46 @@ ORDER_JS = """async ({sel, side, lots, sl, tp, dry}) => {
   if (!btn) return {ok: false, message: 'LiteFinance order button not found. Nothing sent.'};
   if (!label.includes(side)) return {ok: false, message: 'LiteFinance button says "' + label.trim() + '", expected ' + side + '. Nothing sent.'};
   if (dry) return {ok: true, message: 'dry run: ticket filled, button not pressed', button: label.trim()};
+  const notes = window.__gdLook ? window.__gdLook().notes : [];   // what was on screen before the click
   const clickedAt = performance.now();
   btn.click();
-  return {ok: true, message: 'Sent to LiteFinance', button: label.trim(), click_ms: clickedAt - t0};
+  const after = window.__gdLook ? window.__gdLook() : {};          // same task: LiteFinance hasn't answered yet
+  return {ok: true, message: 'Pressed on LiteFinance', button: label.trim(), click_ms: clickedAt - t0,
+          before: {notes, rows: after.rows || [], used: after.used}};
 }"""
+
+# After an order is pressed: the open-trade rows, the margin in use and any message LiteFinance shows, so Gold
+# Desk can say whether the trade really opened. Installed once per page as window.__gdLook.
+LOOK_JS = r"""() => {
+  window.__gdLook = () => {
+    const flat = (s) => (s || '').replace(/\s+/g, ' ').trim();
+    const shown = (el) => el.checkVisibility ? el.checkVisibility() : el.getClientRects().length > 0;
+    const notes = [];
+    for (const el of document.querySelectorAll('[class*="notif"], [class*="toast"], [class*="alert"], [class*="error"], ' +
+        '[class*="message"], [class*="popup"], [class*="modal"], [role="dialog"], [role="alert"]')) {
+      if (el.closest('.js_trade_form') || !shown(el)) continue;
+      const t = flat(el.innerText);
+      if (t && t.length < 300 && !notes.includes(t)) notes.push(t);
+    }
+    const isRow = (t) => /XAUUSD/i.test(t) && /\b(buy|sell)\b/i.test(t) && t.length < 400;
+    const hits = Array.from(document.querySelectorAll('tr, li, [class*="row"], [class*="item"], [class*="trade"], [class*="position"]'))
+      .filter(el => el.offsetParent !== null && !el.closest('.js_trade_form, form') && isRow(flat(el.innerText)));
+    const rows = hits.filter(el => !hits.some(o => o !== el && el.contains(o))).map(el => flat(el.innerText));   // smallest ones
+    const m = (window.__gdAccount || {}).used;
+    let used = null;
+    if (m && m.box.isConnected) {
+      const n = flat(m.box.textContent).replace(m.text, ' ').match(/[-+−]?(?:\d{1,3}(?:[\u00a0\u202f ,]\d{3})+|\d+)(?:\.\d+)?/g) || [];
+      if (n.length === 1) used = parseFloat(n[0].replace(/[\u00a0\u202f ,]/g, '').replace('−', '-'));
+    }
+    return {notes, rows, used};
+  };
+  return window.__gdLook();
+}"""
+
+REFUSED = re.compile(r"not enough|insufficient|no money|reject|error|invalid|denied|forbidden|fail|cannot|can't|"
+                     r"unable|closed|disabled|off quotes|requote|limit|недостаточно|ошибка", re.I)
+OPENED = re.compile(r"executed|opened|success|filled|accepted|position.*open|order.*(done|placed)", re.I)
+CONFIRM = re.compile(r"confirm|are you sure", re.I)
 
 NOTES_JS = """() => {
   const visible = (el) => !!el && el.offsetParent !== null;
@@ -375,6 +412,7 @@ class LiteFinanceSource:
         """Browser, saved login, chart page with live prices. Raises with a plain reason."""
         self.browser = self._launch(pw)
         self.ctx = self.browser.new_context(storage_state=str(self.session), viewport={"width": 1366, "height": 850})
+        self.ctx.add_init_script(f"({LOOK_JS})()")    # every load of the page gets window.__gdLook
         self.page = self.ctx.new_page()
         resp = self.page.goto(self.url, wait_until="domcontentloaded", timeout=45000)
         if resp is not None and resp.status == 429:
@@ -721,6 +759,12 @@ class LiteFinanceSource:
     def market(self, side: str, lots: float, sl: float, tp: float) -> dict:
         if not self.connected:
             return {"ok": False, "message": self._boot_err or "Broker page not connected", "ms": 0}
+        eq = self._acct.get("equity")
+        if eq is not None and eq <= 0 and not self.dry_run:
+            return {"ok": False, "ms": 0, "status": "refused",
+                    "message": f"The LiteFinance web account Gold Desk trades on shows {eq:.2f} USD, so LiteFinance "
+                               "refuses orders there. Nothing sent. Pick your MT5 demo account as the web terminal's "
+                               "account on my.litefinance.org."}
         t0 = time.perf_counter()
         args = {"sel": SEL, "side": side, "lots": float(lots), "sl": float(sl or 0), "tp": float(tp or 0),
                 "dry": self.dry_run}
@@ -729,9 +773,43 @@ class LiteFinanceSource:
         # time until LiteFinance's own button was pressed (the page then sends it to the broker)
         res["ms"] = round(res.pop("click_ms"), 1) if "click_ms" in res else round(total, 1)
         res["price"] = (self.last_quote or {}).get("ask" if side == "BUY" else "bid")
-        if res.get("ok"):
+        before = res.pop("before", None)
+        if res.get("ok") and before is not None:
+            res.update(self._confirm(side, before))
+            res["ms_confirm"] = round((time.perf_counter() - t0) * 1000, 1)
+        if res.get("ok") or res.get("status") == "unconfirmed":
             self.note, self._note_at = "", time.time() + 0.8   # read LiteFinance's reply a moment later
         return res
+
+    def _confirm(self, side: str, before: dict, wait: float = 4.0) -> dict:
+        """Watch the page after the click: a new trade row or more margin in use means it opened; a new message
+        from LiteFinance says why not. Only "opened" counts as ok, so the page never says sent for a refused order."""
+        old_notes, n_rows, used = set(before.get("notes") or []), len(before.get("rows") or []), before.get("used")
+        end = time.time() + wait
+        while True:
+            time.sleep(0.12)
+            try:
+                now = self._call(lambda p: p.evaluate("() => window.__gdLook ? window.__gdLook() : null"), timeout=3)
+            except RuntimeError:
+                now = None
+            if now:
+                if len(now.get("rows") or []) > n_rows or (
+                        used is not None and now.get("used") is not None and now["used"] > used + 0.001):
+                    return {"ok": True, "status": "opened", "message": "Opened on LiteFinance"}
+                new = [t for t in now.get("notes") or [] if t not in old_notes]
+                said = " | ".join(new)[:240]
+                if new and CONFIRM.search(said):
+                    return {"ok": False, "status": "unconfirmed",
+                            "message": f"LiteFinance asks to confirm the order in its own window (\"{said}\"). Gold "
+                                       "Desk doesn't confirm for you; turn on one-click trading in LiteFinance."}
+                if new and OPENED.search(said) and not REFUSED.search(said):
+                    return {"ok": True, "status": "opened", "message": f"LiteFinance: {said}"}
+                if new and REFUSED.search(said):
+                    return {"ok": False, "status": "refused", "message": f"LiteFinance refused it: {said}"}
+            if time.time() > end:
+                return {"ok": False, "status": "unconfirmed",
+                        "message": f"{side} was pressed on LiteFinance, but no new trade showed up within "
+                                   f"{wait:.0f} s and LiteFinance gave no reason. Check its trade list before trying again."}
 
     def _not_yet(self, what: str) -> dict:
         return {"ok": False, "message": f"{what} from Gold Desk is not wired to LiteFinance yet. "
