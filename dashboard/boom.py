@@ -282,7 +282,8 @@ class BoomTracker:
             kron = (kp[min(i, len(kp)) - 1] - k["last"]) if kp else 0.0
             path.append({"time": t - 60 + i * LINE_STEP, "value": round(price + lean + 0.5 * kron, 2)})
         tfs = {name: int(x.get(f"st_{name}", 0)) for name in ("M1", "M5", "M15", "H1", "H4", "D1")}
-        cs.update(t=t, price=price, atr=atr_m1, path=path, minutes=LINE_MIN, tf=tfs,
+        cs.update(t=t, price=price, atr=atr_m1, path=path, minutes=LINE_MIN, tf=tfs, last=price,
+                  target=path[-1]["value"], dir=cs["bias"],
                   label={1: "bullish", -1: "bearish", 0: "mixed"}[cs["bias"]],
                   kronos=bool(k), proven=False,
                   note="What the timeframes, ICT events and Kronos say together. Descriptive: on a year of gold it "
