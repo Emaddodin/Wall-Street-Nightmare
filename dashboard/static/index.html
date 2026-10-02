@@ -252,6 +252,16 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 .card.trend .parts .bar { height: 6px; background: var(--raise); border-radius: 3px; position: relative; }
 .card.trend .parts .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
 .card.trend .parts .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line); }
+.card.mesh table { grid-column: 1 / -1; width: 100%; border-collapse: collapse; font-size: 12px; }
+.card.mesh th { text-align: right; padding: 2px 0 4px 8px; font: 600 10.5px var(--label); letter-spacing: .08em; color: var(--dim); }
+.card.mesh th:first-child, .card.mesh td:first-child { text-align: left; padding-left: 0; }
+.card.mesh td { text-align: right; padding: 3px 0 3px 8px; border-top: 1px solid var(--line); font-family: var(--mono); color: var(--dim); white-space: nowrap; }
+.card.mesh td:first-child { font-family: var(--body, inherit); color: var(--fg); white-space: normal; }
+.card.mesh td.up { color: var(--up); } .card.mesh td.down { color: var(--down); }
+.card.mesh td small { color: var(--dim); opacity: .7; margin-left: 3px; font-size: 10px; }
+.card.mesh td.base:first-child { color: var(--dim); }
+.card.mesh details { grid-column: 1 / -1; font-size: 12px; color: var(--dim); }
+.card.mesh summary { cursor: pointer; padding: 4px 0; }
 .card.boom.live { border-width: 1.5px; }
 .card.boom.live.up { border-color: var(--up); background: rgba(47,182,124,.07); }
 .card.boom.live.down { border-color: var(--down); background: rgba(229,72,77,.07); }
@@ -371,6 +381,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
       <div class="eyebrow">Signals</div>
       <div class="heads" id="heads" hidden></div>
       <div class="card trend" id="trend" hidden></div>
+      <div class="card mesh" id="mesh" hidden></div>
       <div class="card boom" id="boom" hidden></div>
       <div class="card kron" id="kronos"></div>
       <div class="card" id="scalper"></div>

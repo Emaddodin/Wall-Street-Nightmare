@@ -797,6 +797,35 @@
       <span class="meta">The gold line on the 1m to 15m chart leans this way for the next ${horizon(c.minutes || 120)}${c.kronos ? ", with Kronos mixed in" : " (Kronos not in it right now)"}.</span>
       <span class="meta">${esc(c.note || "Describes the chart, not a forecast.")}</span>`;
   }
+  // state.mesh: live scoreboard. sources [{name, by_h {"30"|"60"|"120": {n, right, coin_band, beats_coin} | null}}],
+  // horizons, rows, since, trust {group: x}, min_n, note
+  const MAIN = ["Trend line", "Higher timeframes", "Intraday structure", "ICT order flow", "Kronos", "Always up", "Last 30 min"];
+  let meshOpen = false;
+  const FEAT = { st: "Structure", reg: "EMA trend", turtle: "Turtle soup", cisd: "CISD", fvg: "FVG", ob: "Order block", pd: "Premium / discount",
+    judas: "Judas swing", sweep: "Liquidity sweep", mss: "MSS", bos: "BOS", choch: "CHoCH", ote: "OTE", kz: "Killzone", asia: "Asian range" };
+  const feat = (n) => { const m = /^([a-z]+)(?:_([A-Z]\d+))?$/.exec(n); return m && FEAT[m[1]] ? `${FEAT[m[1]]}${m[2] ? " " + tfName(m[2]) : ""}` : n; };
+  function renderMesh() {
+    const m = S.mesh, el = $("mesh");
+    el.hidden = !m || !Array.isArray(m.sources);
+    if (el.hidden) return;
+    const hs = (m.horizons || [30, 60, 120]).map(String), tr = m.trust || {};
+    const cell = (v) => {
+      if (!v || !v.n) return `<td>-</td>`;
+      const r = v.right, c = v.beats_coin ? (r > 0.5 ? "up" : "down") : "";
+      return `<td class="${c}" title="${v.n} checks · a coin lands within ±${Math.round((v.coin_band || 0) * 100)}%">${Math.round(r * 100)}%<small>${v.n}</small></td>`;
+    };
+    const row = (s) => `<tr><td class="${/^(Always up|Last 30 min)$/.test(s.name) ? "base" : ""}" title="${esc(s.name)}">${esc(feat(s.name))}${tr[s.name] != null ? ` <small>×${tr[s.name]}</small>` : ""}</td>${hs.map((h) => cell((s.by_h || {})[h])).join("")}</tr>`;
+    const head = `<tr><th>Right after</th>${hs.map((h) => `<th>${horizon(+h)}</th>`).join("")}</tr>`;
+    const main = MAIN.map((n) => m.sources.find((s) => s.name === n)).filter(Boolean), rest = m.sources.filter((s) => !MAIN.includes(s.name));
+    const earned = Object.keys(tr).length;       // trust needs 3 sigma on 200+ checks, so luck rarely gets there
+    el.innerHTML = `<span class="name">Live scoreboard</span><span class="untested">${earned ? "A GROUP EARNED WEIGHT" : "NOTHING PROVEN YET"}</span>
+      <table>${head}${main.map(row).join("")}</table>
+      ${rest.length ? `<details ${meshOpen ? "open" : ""}><summary>Every concept on its own (${rest.length})</summary><table>${head}${rest.map(row).join("")}</table></details>` : ""}
+      <span class="meta">${m.since ? `Since ${new Date(m.since * 1000).toLocaleDateString([], { day: "numeric", month: "short" })} · ` : ""}${m.rows ? `${m.rows.toLocaleString("en-US")} candles · ` : ""}Green or red = beyond a coin flip so far; with this many rows a few colour by luck. A group earns more weight in the trend line after ${m.min_n || 200} checks clearly beyond a coin.${m.error ? " " + esc(m.error) : ""}</span>
+      <span class="meta">${esc(m.note || "")}</span>`;
+    const d = el.querySelector("details");
+    if (d) d.addEventListener("toggle", () => { meshOpen = d.open; });
+  }
   function renderSmcRead() {
     const m = S.smc, el = $("smcRead");
     el.hidden = !ovl.smc || !m || !m.summary;
@@ -876,6 +905,7 @@
     renderBoom();
     renderHeadsUp();
     renderTrend();
+    renderMesh();
     renderSmcRead();
     drawMarkers();
     drawLines();
