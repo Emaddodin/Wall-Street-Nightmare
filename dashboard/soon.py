@@ -10,10 +10,7 @@ coach.py; outside it they show on the page):
          That is where the indicator takes its entries.
   sweep  Same filter, but the paths dip below the last 10 bars' low (above the high for a sell) and the
          average path is back above it 30 minutes out: the liquidity sweep the indicator trades.
-  burst  A BOOM / CRASH setup (boom.py, orchestra.py) has swept liquidity and broken structure and waits for
-         price to come back to its fair value gap or order block; the trend layer, Kronos included, points
-         the same way, and a quarter of the paths reach that zone within 30 minutes without running past the
-         sweep: a BOOM / CRASH call is likely if a confirming candle prints there.
+(BOOM / CRASH calls are limit orders now, pushed when they are placed, so they need no heads-up of their own.)
 
 Never twice for the same setup, at most one push per side per hour and one per half hour (entry setups and
 BOOM / CRASH counted apart), 8 a day of which 5 BOOM / CRASH, none while a trade or call on that side is
@@ -33,7 +30,6 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-import orchestra
 from engine import LADDER, session_ok
 
 LOOK_MIN = 30          # how far ahead a setup counts as "soon"
@@ -50,7 +46,7 @@ SIDE = {1: "BUY", -1: "SELL"}
 GROUP = {"zone": "entry", "sweep": "entry", "burst": "boom"}
 
 
-def predict(eng, fc: dict, sec: int, watch: list = (), trend=None) -> list:
+def predict(eng, fc: dict, sec: int) -> list:
     """Setups Kronos and the indicator expect within LOOK_MIN minutes: at most one per side."""
     ctx, p = eng.ctx, eng.p
     path = [x["value"] for x in fc.get("path") or []]
@@ -96,20 +92,6 @@ def predict(eng, fc: dict, sec: int, watch: list = (), trend=None) -> list:
                     if in_session[k] and 0 < (lvl - reach[k]) * d < THROUGH_ATR * a:
                         pred = {"kind": "sweep", "k": k + 1, "area": sorted([lvl, lvl - d * 0.3 * a]),
                                 "what": f"sweep the recent {'low' if d == 1 else 'high'} ({lvl:.2f}) and turn back"}
-                        break
-        w = next((x for x in watch if x["dir"] == d), None)
-        if pred is None and w and trend is not None:
-            votes = trend.votes(t + sec, up)
-            if orchestra.Trend.bias(votes) == d:
-                edge, stop = (w["poi"][1], w["sweep_ext"]) if d == 1 else (w["poi"][0], w["sweep_ext"])
-                for k in range(n):
-                    if not in_session[k]:
-                        continue
-                    if (reach[k] - edge) * d <= 0 < (reach[k] - stop) * d:
-                        pred = {"kind": "burst", "k": k + 1, "area": list(w["poi"]),
-                                "what": f"come back to the {'BOOM' if d == 1 else 'CRASH'} zone after a liquidity "
-                                        f"sweep and a change of character"}
-                        why = trend.words(votes, d)
                         break
         if pred:
             pred.update(dir=d, side=SIDE[d], t=t, minutes=pred["k"] * sec // 60, why=why, up_prob=up,
@@ -221,9 +203,9 @@ class SoonAlerts:
             self.data["hello"] = topic
             self._save()
 
-    def check(self, eng, fc: dict, sec: int, busy: set, watch: list = (), trend=None) -> list:
+    def check(self, eng, fc: dict, sec: int, busy: set) -> list:
         """Called with each fresh forecast. Returns the heads-up sent now, if any."""
-        preds = predict(eng, fc, sec, watch, trend)
+        preds = predict(eng, fc, sec)
         if len(preds) != 1:                          # nothing, or both sides at once: no clear heads-up
             return []
         pr = preds[0]

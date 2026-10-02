@@ -227,11 +227,16 @@ class SessionCoach:
     def ready_call(self, sig: dict, digits: int = 2) -> bool:
         """A BOOM / CRASH call just started."""
         f = lambda x: f"{x:.{digits}f}"
-        body = (f"Entry {f(sig['entry'])} · stop {f(sig['sl'])} · target {f(sig['tp'])}, within {sig['minutes']} min\n"
-                f"{', '.join(sig.get('why') or [])}.\n"
+        limit = sig.get("order") == "limit"
+        body = (f"{'Limit' if limit else 'Entry'} {f(sig['entry'])} · stop {f(sig['sl'])} · target {f(sig['tp'])}"
+                + (f", order valid {round((sig['fill_by'] - sig['t'] - 60) / 60)} min\n" if limit
+                   else f", within {sig['minutes']} min\n")
+                + f"{', '.join(sig.get('why') or [])}.\n"
                 "Untested call: check the chart, you decide.")
+        title = (f"Gold {sig['kind']}: {sig['side']} LIMIT {f(sig['entry'])}" if limit
+                 else f"Gold {sig['kind']} call: {sig['side']} now")
         return self._ready("call", sig["side"], sig.get("t"), sig["entry"], f"{sig['kind']} {sig['side']}",
-                           f"Gold {sig['kind']} call: {sig['side']} now", body, sig["dir"])
+                           title, body, sig["dir"])
 
     def _ready(self, kind: str, side: str, key, entry: float, label: str, title: str, body: str, d: int) -> bool:
         utc = self.clock()

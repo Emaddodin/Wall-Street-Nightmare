@@ -101,13 +101,13 @@ UNIT
   research "$KREPO"
   boom_kronos "$KREPO"
 }
-# Once, for the "Rebuild BOOM/CRASH" thread: does a Kronos vote improve the smart money BOOM / CRASH setups?
+# Once, for the "Rebuild BOOM/CRASH" thread: does a Kronos vote improve the M1 BOOM / CRASH limit orders?
 # A year of Dukascopy gold (not LiteFinance, which rate-limits this VPS). Nice 19, one core, resumable, changes
 # no service. Results: /api/research/boom_kronos_*.txt (through the Mac's tunnel).
 boom_kronos() {
   local P=$CONF/kronos_research/boom_kronos_progress.txt
   [ "$KRONOS" = off ] && return 0
-  grep -q "All BOOM/CRASH" "$P" 2>/dev/null && return 0
+  grep -q "All BOOM/CRASH M1" "$P" 2>/dev/null && return 0
   systemctl is-active -q boom-kronos-test && { echo "BOOM/CRASH Kronos test: $(cat "$P" 2>/dev/null || echo starting)"; return 0; }
   systemd-run -q --unit boom-kronos-test --collect -p Nice=19 -p CPUQuota=100% -p MemoryMax=2000M \
     -p WorkingDirectory="$APP/dashboard" --setenv=HOME=/root \

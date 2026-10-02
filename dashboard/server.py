@@ -433,13 +433,11 @@ class Hub:
                         if self.coach:
                             self.coach.ready_trade(opened, eng.ctx, self.tf, self.spec.digits)
             self.forming = self._bar_dict(m1, len(m1) - 1)
-            if new:
-                kronos_on = bool(self.kronos and self.kronos.model and not self.kronos.error)
-                for kind, call in self.boom.on_candles(eng, self._quote(), kronos_on):
+            try:                                         # Boom / Crash (M1) and the trend reading
+                for kind, call in self.boom.update(self.src, self.offset, self._quote()):
                     self._boom_event(kind, call)
-            late = self.boom.expire(self._quote())
-            if late:
-                self._boom_event("boom", late)
+            except Exception as e:
+                self.boom.error = f"Boom / Crash skipped: {e}"
             self._radar()
             self._update_smc()
 
@@ -505,18 +503,16 @@ class Hub:
                 "time": self.forming["time"]}
 
     def on_kronos(self, fc: dict) -> None:
-        """A Kronos forecast finished (worker thread): check it against the indicator for a Boom / Crash call,
-        then for a setup it expects soon (a heads-up push to your phone)."""
+        """A Kronos forecast finished (worker thread): it joins the trend reading (state.consensus), then the check
+        for a setup it expects soon (a heads-up push to your phone)."""
         with self.lock:
             eng = self.engine
             if not eng or not len(eng.m1) or fc.get("t") != eng.m1.t[-1] or eng.ctx is None:
                 return                                   # a newer bar closed meanwhile; the next forecast decides
-            sig = self.boom.on_forecast(fc, self._quote())
-            if sig:
-                self._boom_event("boom", sig)
+            self.boom.on_forecast(fc)
             if self.soon:
                 busy = {x["dir"] for x in (eng.cur, self.boom.active) if x}
-                for pr in self.soon.check(eng, fc, self.sec, busy, self.boom.watch, self.boom.trend):
+                for pr in self.soon.check(eng, fc, self.sec, busy):
                     self._event("soon", f"{pr['title']}: watch {pr['area'][0]:.2f}-{pr['area'][1]:.2f}", pr["side"])
 
     # ------------------------------------------------------------ API payloads
@@ -583,6 +579,8 @@ class Hub:
                 "broker": self.src.broker() if hasattr(self.src, "broker") else {"connected": True, "message": None},
                 "kronos": self.kronos.state() if self.kronos else None,
                 "boom": self.boom.state(),
+                "consensus": self.boom.consensus,      # the trend reading of every timeframe and its chart line
+                "flow": self.boom.flow,                # M1 raids, CISDs and limit orders, for chart marks
                 "alerts": self.soon.state() if self.soon else None,
                 "session": self.coach.state() if self.coach else None,
                 "smc": self.smc,
