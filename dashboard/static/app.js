@@ -520,7 +520,7 @@
   $("tp").addEventListener("input", sltpSummary);
 
   // ---------------------------------------------------------------- what just happened
-  const ICON = { ok: "✓", bad: "!", wait: "…", idle: "✓" };
+  const ICON = { ok: "✓", bad: "!", wait: "…", idle: "✓", warn: "?" };
   let resultIdle = true, idleShown = "";
   function result(kind, what, sub, idle) {
     resultIdle = !!idle;
@@ -546,7 +546,10 @@
     const rt = Math.round(performance.now() - t0);
     btn.classList.remove("sending");
     setTimeout(() => { busy = false; }, 150);     // stops an accidental double click, still allows fast repeat orders
-    if (r.ok) result("ok", `${side} ${lots.toFixed(2)} sent${r.price ? " at " + fmt(r.price) : ""}`,
+    // pressed but no trade seen yet: it may still have opened, so never invite a second click
+    if (r.status === "unconfirmed") result("warn", `${side} ${lots.toFixed(2)} not confirmed`,
+      `Check Open trades below before clicking again. It may have opened.${r.message ? " · " + r.message : ""}`);
+    else if (r.ok) result("ok", `${side} ${lots.toFixed(2)} sent${r.price ? " at " + fmt(r.price) : ""}`,
       `${rt} ms${sl || tp ? ` · SL ${sl ? fmt(sl) : "none"} · TP ${tp ? fmt(tp) : "none"}` : ""}`);
     else result("bad", `${side} not sent`, r.message || "");
     refresh();
@@ -733,9 +736,12 @@
     const badge = $("badge");
     badge.className = "pill " + (mode === "real" ? "real" : mode === "demo" || mode === "contest" || mode === "paper" ? "demo" : "unknown");
     badge.textContent = mode === "real" ? "REAL MONEY" : mode === "demo" ? "DEMO ACCOUNT" : mode === "paper" ? "PRACTICE · FAKE PRICES" : "DEMO OR REAL? CHECK";
+    if (a.login && mode !== "paper") badge.textContent += ` · #${a.login}`;
     if (S.symbol) $("sym").textContent = S.symbol;
     $("bal").textContent = money(a.balance);
     $("eq").textContent = money(a.equity);
+    $("mrgK").hidden = a.margin == null; $("mrg").textContent = money(a.margin);           // the MT5 bridge sends these
+    $("freeK").hidden = a.free_margin == null; $("free").textContent = money(a.free_margin);
     if (!Q && S.tick) showQuote(S.tick.bid, S.tick.ask);
 
     const canSee = !(S.caps && S.caps.positions === false);

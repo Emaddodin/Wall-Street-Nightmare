@@ -204,6 +204,8 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 .result.bad { border-color: rgba(229,72,77,.6); }
 .result.bad .ico { background: var(--down); color: #fff; }
 .result.wait .ico { background: var(--warn); color: #1a1405; }
+.result.warn { border-color: rgba(232,178,58,.65); }
+.result.warn .ico { background: var(--warn); color: #1a1405; }
 .result.pop { animation: pop .35s ease-out; }
 @keyframes pop { from { transform: scale(.97); } to { transform: none; } }
 
@@ -265,7 +267,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
   body { overflow: auto; height: auto; }
   html { height: auto; }
   header { height: auto; flex-wrap: wrap; padding: 10px 16px; gap: 10px 16px; }
-  .kpis { margin-left: 0; width: 100%; justify-content: space-between; gap: 10px; }
+  .kpis { margin-left: 0; width: 100%; justify-content: space-between; gap: 8px 10px; flex-wrap: wrap; }
   .kpi { align-items: flex-start; }
   main { display: flex; flex-direction: column; }
   .left { display: flex; flex-direction: column; }
@@ -285,6 +287,8 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
   <div class="kpis">
     <div class="kpi"><span class="eyebrow">Balance</span><b id="bal">-</b></div>
     <div class="kpi"><span class="eyebrow">Equity</span><b id="eq">-</b></div>
+    <div class="kpi" id="mrgK" hidden><span class="eyebrow">Margin</span><b id="mrg">-</b></div>
+    <div class="kpi" id="freeK" hidden><span class="eyebrow">Free margin</span><b id="free">-</b></div>
     <div class="kpi pl"><span class="eyebrow">Open P/L</span><b id="opl">-</b></div>
   </div>
 </header>
