@@ -88,7 +88,7 @@
     if (ovl.scalper && S.active) list.push(S.active);
     const m = list.map((t) => ({
       time: t.t_bar - (t.t_bar % sec), position: t.dir === 1 ? "belowBar" : "aboveBar",
-      color: t.dir === 1 ? C.buy : C.sell, shape: t.dir === 1 ? "arrowUp" : "arrowDown", text: t.dir === 1 ? "BUY" : "SELL",
+      color: t.dir === 1 ? C.buy : C.sell, shape: t.dir === 1 ? "arrowUp" : "arrowDown", text: "",
     }));
     // Boom/Crash calls: entered on the bar after the forecast bar (t); finished ones show their result in R
     const bm = S.boom, esec = TFSEC[S.entry_tf] || 300;
@@ -97,7 +97,7 @@
         const at = b.t + esec, up = b.dir === 1 || b.side === "BUY";
         m.push({ time: Math.min(at - (at % sec), last ? last.time : at), position: up ? "belowBar" : "aboveBar",
           color: up ? C.up : C.down, shape: up ? "arrowUp" : "arrowDown",
-          text: `${b.kind || (up ? "BOOM" : "CRASH")}${b.r != null && b.exit != null ? ` ${b.r > 0 ? "+" : ""}${(+b.r).toFixed(1)}R` : ""}` });
+          text: b.r != null && b.exit != null ? `${b.r > 0 ? "+" : ""}${(+b.r).toFixed(1)}R` : "" });   // the arrow is the call, the text its result
       }
     }
     m.splice(0, m.length, ...m.filter((x) => x.time >= first).sort((a, b) => a.time - b.time));
@@ -126,40 +126,87 @@
     forecast.setData([...byBar].sort((a, b) => a[0] - b[0]).map(([time, value]) => ({ time, value })));
   }
 
-  let lines = [], linesKey = "";
-  function drawLines() {
+  // horizontal levels: [price, color, short name, line style, label priority]. The chart draws the line and the price on
+  // the axis; the short name is a tag at the right edge, placed by the label engine so tags never sit on top of each other.
+  function levelList() {
     const want = [];
     for (const p of S.positions || []) {
-      want.push([p.open, p.side === "BUY" ? C.buy : C.sell, `${p.side} ${p.volume}`, 0]);
-      if (p.sl) want.push([p.sl, C.down, "SL", 2]);
-      if (p.tp) want.push([p.tp, C.up, "TP", 2]);
+      want.push([p.open, p.side === "BUY" ? C.buy : C.sell, `${p.side === "BUY" ? "B" : "S"} ${(+p.volume).toFixed(2)}`, 0, 100]);
+      if (p.sl) want.push([p.sl, C.down, "SL", 2, 95]);
+      if (p.tp) want.push([p.tp, C.up, "TP", 2, 95]);
     }
-    const k = S.kronos;
     const kf = chartForecast();
-    if (ovl.kronos && kf && Number.isFinite(+kf.target)) want.push([+kf.target, C.gold, `Kronos ${kf.call || ""} ${horizon(kf.minutes)}`, 2]);
+    if (ovl.kronos && kf && Number.isFinite(+kf.target))
+      want.push([+kf.target, C.gold, `K ${kf.dir > 0 ? "▲" : kf.dir < 0 ? "▼" : "•"} ${horizon(kf.minutes).replace(" ", "")}`, 2, 70]);
     const ba = S.boom && S.boom.active;
     if (ovl.boom && ba) {
-      want.push([ba.entry, C.gold, `${ba.kind} entry`, 0]);
-      want.push([ba.sl, C.down, `${ba.kind} SL`, 2]);
-      want.push([ba.tp, C.up, `${ba.kind} TP`, 2]);
+      const n = (ba.dir === 1 || ba.side === "BUY") ? "BOOM" : "CRASH";
+      want.push([ba.entry, C.gold, `${n} in`, 0, 85]);
+      want.push([ba.sl, C.down, `${n} SL`, 2, 85]);
+      want.push([ba.tp, C.up, `${n} TP`, 2, 85]);
     }
     if (ovl.scalper) {
       const a = S.active;
       if (a) {
-        want.push([a.entry, C.dim, `${a.side} signal`, 1]);
-        if (a.sl) want.push([a.sl, C.down, "Signal SL", 1]);
-        if (a.tp1) want.push([a.tp1, C.up, "TP1", 1]);
-        if (a.tp2) want.push([a.tp2, C.up, "TP2", 1]);
+        want.push([a.entry, C.dim, `SIG ${a.side === "BUY" ? "▲" : "▼"}`, 1, 60]);
+        if (a.sl) want.push([a.sl, C.down, "SIG SL", 1, 60]);
+        if (a.tp1) want.push([a.tp1, C.up, "TP1", 1, 60]);
+        if (a.tp2) want.push([a.tp2, C.up, "TP2", 1, 60]);
       }
       const c = S.context;
-      if (c && c.sw_h) want.push([c.sw_h, "#6f6a60", "M15 swing high", 3]);
-      if (c && c.sw_l) want.push([c.sw_l, "#6f6a60", "M15 swing low", 3]);
+      if (c && c.sw_h) want.push([c.sw_h, "#6f6a60", "M15 HI", 3, 20]);
+      if (c && c.sw_l) want.push([c.sw_l, "#6f6a60", "M15 LO", 3, 20]);
     }
+    return want;
+  }
+  let lines = [], linesKey = "";
+  function drawLines() {
+    const want = levelList().map(([price, color, , lineStyle]) => [price, color, lineStyle]);
     const key = JSON.stringify(want);
     if (key === linesKey) return;
     linesKey = key;
     lines.forEach((l) => series.removePriceLine(l));
-    lines = want.map(([price, color, title, lineStyle]) => series.createPriceLine({ price, color, title, lineStyle, lineWidth: 1, axisLabelVisible: true }));
+    lines = want.map(([price, color, lineStyle]) => series.createPriceLine({ price, color, title: "", lineStyle, lineWidth: 1, axisLabelVisible: true }));
+  }
+
+  // ---------------------------------------------------------------- chart text
+  // Every word on the chart goes through here: a short tag on a dark pill, 11px, one size and weight everywhere.
+  // Tags are queued while shapes are drawn, then placed most important first. A tag that would cover another one
+  // moves up or down a little (your trades go first and may move furthest); if there is no room it is left out.
+  const FONT = "600 11px JetBrains Mono, ui-monospace, Menlo, monospace", TH = 16, PADX = 4;
+  let tags = [];
+  const tag = (txt, x, y, col, o) => tags.push({ txt, x, y, col, align: (o && o.align) || "left", pri: (o && o.pri) || 10,
+    edge: !!(o && o.edge), must: !!(o && o.must), faint: !!(o && o.faint) });
+  function flushTags(right, H) {
+    zx.font = FONT; zx.textBaseline = "middle";
+    const placed = [];
+    const hit = (a) => placed.some((b) => a.x0 < b.x1 + 3 && a.x1 + 3 > b.x0 && a.y0 < b.y1 + 1 && a.y1 + 1 > b.y0);
+    for (const t of tags.sort((a, b) => b.pri - a.pri)) {
+      const w = zx.measureText(t.txt).width + PADX * 2;
+      let x0 = t.align === "right" ? t.x - w : t.align === "center" ? t.x - w / 2 : t.x;
+      x0 = Math.max(2, Math.min(right - w - 2, x0));
+      let box = null;
+      const steps = t.must ? 8 : t.edge ? 3 : 1;     // your trades may move further to find a free spot
+      for (let k = 0; k <= 2 * steps; k++) {
+        const dy = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * TH;
+        const yc = t.y + dy, b = { x0, x1: x0 + w, y0: yc - TH / 2, y1: yc + TH / 2, yc };
+        if (b.y0 < 2 || b.y1 > H - 2) continue;
+        if (!hit(b)) { box = b; break; }
+      }
+      if (!box) continue;
+      placed.push(box);
+      if (t.edge && Math.abs(box.yc - t.y) > 1) {    // moved off its line: a thin leader back to the level
+        zx.strokeStyle = t.col; zx.globalAlpha = .7; zx.lineWidth = 1;
+        zx.beginPath(); zx.moveTo(box.x1, box.yc); zx.lineTo(right, t.y); zx.stroke(); zx.globalAlpha = 1;
+      }
+      zx.fillStyle = "rgba(14,15,17,.88)";
+      zx.beginPath(); zx.roundRect ? zx.roundRect(box.x0, box.y0, w, TH, 3) : zx.rect(box.x0, box.y0, w, TH); zx.fill();
+      zx.strokeStyle = t.col; zx.globalAlpha = t.faint ? .3 : .55; zx.lineWidth = 1; zx.stroke(); zx.globalAlpha = 1;
+      zx.fillStyle = t.col; zx.globalAlpha = t.faint ? .6 : 1;
+      zx.fillText(t.txt, box.x0 + PADX, box.yc + .5); zx.globalAlpha = 1;
+    }
+    zx.textBaseline = "alphabetic";
+    tags = [];
   }
 
   // scalper FVG / order-block zones: boxes from the bar they formed to the right edge, drawn on a canvas over the chart
@@ -169,14 +216,21 @@
     if (zc.width !== Math.round(r.width * dpr) || zc.height !== Math.round(r.height * dpr)) { zc.width = Math.round(r.width * dpr); zc.height = Math.round(r.height * dpr); }
     zx.setTransform(dpr, 0, 0, dpr, 0, 0);
     zx.clearRect(0, 0, r.width, r.height);
+    tags = [];
     if (!S || loadedTf !== tf || !last) return;
     const right = r.width - chart.priceScale("right").width();
     const sec = TFSEC[tf], ts = chart.timeScale();
     if (ovl.smc) drawSmc(right, sec, ts);
     if (ovl.boom) drawHeadsUp(right, sec, ts);
     drawBand(right, sec, ts);
-    if (!ovl.scalper) return;
-    zx.font = "600 10px JetBrains Mono, ui-monospace, monospace";
+    if (ovl.scalper) drawScalperZones(right, sec, ts);
+    for (const [price, col, name, , pri] of levelList()) {        // names of the horizontal levels, at the right edge
+      const yy = series.priceToCoordinate(price);
+      if (yy != null) tag(name, right - 4, yy, col, { align: "right", pri, edge: true, must: pri >= 95 });
+    }
+    flushTags(right, r.height);
+  }
+  function drawScalperZones(right, sec, ts) {
     for (const z of S.zones || []) {
       const b = z.born - (z.born % sec);
       if (b > last.time) continue;
@@ -191,7 +245,7 @@
       zx.strokeStyle = `rgba(${col},.45)`;
       zx.lineWidth = 1;
       zx.strokeRect(x + .5, y1 + .5, right - x - 1, Math.max(1, y2 - y1) - 1);
-      if (y2 - y1 >= 11) { zx.fillStyle = `rgba(${col},.9)`; zx.fillText(z.kind, x + 4, y1 + 10); }
+      tag(z.kind, x + 4, y1 + TH / 2 + 1, `rgb(${col})`, { pri: 35 });
     }
   }
   // x for any time on the candle clock, also between bars, before the first one (clamped to 0) and in the future
@@ -233,18 +287,10 @@
   function drawSmc(right, sec, ts) {
     const m = S && S.smc && trimSmc(S.smc);
     if (!m) return;
-    const lab = right - 118;                       // labels sit left of the order / signal tags at the right edge
     const y = (v) => series.priceToCoordinate(v);
     const X = (t) => (t == null ? right : Math.min(right, xOf(t, ts, sec) ?? right));
     const H = zc.getBoundingClientRect().height;
-    const taken = [];                              // drawn label boxes: a label that would overlap one is skipped
-    const label = (txt, x, yy, col, align) => {
-      zx.font = "600 10px JetBrains Mono, ui-monospace, monospace";
-      const w = zx.measureText(txt).width, x0 = align === "right" ? x - w : align === "center" ? x - w / 2 : x;
-      if (taken.some((r) => x0 < r[0] + r[2] + 4 && x0 + w + 4 > r[0] && yy - 10 < r[1] && yy > r[1] - 10)) return;
-      taken.push([x0, yy, w]);
-      zx.textAlign = align || "left"; zx.fillStyle = col; zx.fillText(txt, x, yy); zx.textAlign = "left";
-    };
+    const lab = right - 4;                         // level names stack at the right edge with the trade tags
     const hline = (x1, x2, yy, col, dash) => {
       zx.beginPath(); zx.setLineDash(dash || []); zx.strokeStyle = col; zx.lineWidth = 1;
       zx.moveTo(x1, Math.round(yy) + .5); zx.lineTo(x2, Math.round(yy) + .5); zx.stroke(); zx.setLineDash([]);
@@ -254,13 +300,13 @@
       if (x1 == null || y1 == null || y2 == null || x2 <= x1) return;
       zx.fillStyle = `rgba(${rgb},${a})`; zx.fillRect(x1, y1, x2 - x1, Math.max(1, y2 - y1));
       zx.strokeStyle = `rgba(${rgb},${a * 3})`; zx.strokeRect(x1 + .5, y1 + .5, x2 - x1 - 1, Math.max(1, y2 - y1) - 1);
-      if (txt && y2 - y1 >= 10) label(txt, x1 + 4, y1 + 10, `rgba(${rgb},.95)`);
+      if (txt) tag(txt, x1 + 3, y1 + TH / 2 + 1, `rgb(${rgb})`, { pri: b.to_time ? 32 : 40, faint: !!b.to_time });
     };
     if (sec <= 900) for (const k of m.killzones || []) {            // sessions only make sense on 1m-15m
       const x1 = X(k.start), x2 = X(k.end), rgb = KZ[k.name] || "142,138,128";
       if (x1 == null || x2 <= x1) continue;
       zx.fillStyle = `rgba(${rgb},.06)`; zx.fillRect(x1, 0, x2 - x1, H);
-      label(k.name, x1 + 4, H - 36, `rgba(${rgb},.9)`);
+      tag(k.name, Math.max(x1 + 3, 64), H - 40, `rgb(${rgb})`, { pri: 15 });
       if (k.high && k.low) { hline(x1, x2, y(k.high), `rgba(${rgb},.6)`, [2, 2]); hline(x1, x2, y(k.low), `rgba(${rgb},.6)`, [2, 2]); }
     }
     const pd = m.pd;
@@ -270,9 +316,9 @@
         zx.fillStyle = "rgba(229,72,77,.05)"; zx.fillRect(x1, yh, right - x1, ye - yh);
         zx.fillStyle = "rgba(47,182,124,.05)"; zx.fillRect(x1, ye, right - x1, yl - ye);
         hline(x1, right, ye, "rgba(236,232,223,.35)", [6, 4]);
-        label("PREMIUM", x1 + 4, yh + 11, "rgba(229,72,77,.8)");
-        label("EQ 50%", x1 + 4, ye - 3, "rgba(236,232,223,.6)");
-        label("DISCOUNT", x1 + 4, yl - 4, "rgba(47,182,124,.8)");
+        tag("PREM", lab, yh + TH / 2 + 1, "rgb(229,72,77)", { align: "right", pri: 25, edge: true, faint: true });
+        tag("EQ", lab, ye, "rgb(236,232,223)", { align: "right", pri: 26, edge: true, faint: true });
+        tag("DISC", lab, yl - TH / 2 - 1, "rgb(47,182,124)", { align: "right", pri: 25, edge: true, faint: true });
       }
     }
     for (const o of m.ote || []) box(o, "214,173,82", .08, "OTE");
@@ -281,27 +327,27 @@
     for (const l of m.liquidity || []) {
       const x1 = X(l.from_time) ?? 0, x2 = X(l.to_time), yy = y(l.price);
       if (yy == null) continue;
-      const col = l.swept ? "rgba(142,138,128,.45)" : "rgba(232,178,58,.85)";
-      hline(x1, x2, yy, col, [1, 3]);
-      label(`${l.kind || "LIQ"}${l.swept ? " ✕" : " $$$"}`, Math.min(x2, lab) - 4, yy + (/L$/.test(l.kind || "") ? 11 : -3), col, "right");
+      hline(x1, x2, yy, l.swept ? "rgba(142,138,128,.45)" : "rgba(232,178,58,.85)", [1, 3]);
+      tag(`${l.kind || "LIQ"} ${l.swept ? "✕" : "$"}`, l.swept ? x2 - 4 : lab, yy, l.swept ? "rgb(142,138,128)" : "rgb(232,178,58)",
+        { align: "right", pri: l.swept ? 22 : 50, edge: !l.swept, faint: !!l.swept });
     }
     for (const b of m.structure || []) {
       const x1 = X(b.from_time), x2 = X(b.time), yy = y(b.price);
       if (x1 == null || yy == null) continue;
       const col = b.kind === "CHoCH" ? "rgba(232,178,58,.95)" : b.dir === 1 ? "rgba(47,182,124,.9)" : "rgba(229,72,77,.9)";
       hline(x1, x2, yy, col, b.kind === "CHoCH" ? [4, 3] : []);
-      label(b.kind || "BOS", (x1 + x2) / 2, yy + (b.dir === 1 ? -3 : 11), col, "center");
+      tag(b.kind || "BOS", (x1 + x2) / 2, yy + (b.dir === 1 ? -TH / 2 - 1 : TH / 2 + 1), col, { align: "center", pri: 55 });
     }
     for (const w of m.swings || []) {
       const xx = X(w.time), yy = y(w.price);
       if (xx == null || yy == null || xx >= right) continue;
-      label(w.kind, xx, yy + (/H$/.test(w.kind) ? -6 : 14), "rgba(236,232,223,.7)", "center");
+      tag(w.kind, xx, yy + (/H$/.test(w.kind) ? -TH / 2 - 3 : TH / 2 + 3), "rgb(190,186,176)", { align: "center", pri: 30 });
     }
     for (const l of m.levels || []) {
       const x1 = l.time ? X(l.time) : 0, yy = y(l.price);
       if (yy == null) continue;
       hline(x1, right, yy, "rgba(236,232,223,.4)", [8, 4]);
-      label(`${l.label} ${fmt(l.price)}`, lab - 4, yy - 3, "rgba(236,232,223,.75)", "right");
+      tag(l.label, lab, yy, "rgb(236,232,223)", { align: "right", pri: 45, edge: true });
     }
   }
 
@@ -323,8 +369,7 @@
     const w = Math.max(6, x2 - x1), hh = Math.max(3, y2 - y1);
     zx.fillStyle = `rgba(${rgb},.14)`; zx.fillRect(x1, y1, w, hh);
     zx.setLineDash([5, 3]); zx.strokeStyle = `rgba(${rgb},.9)`; zx.lineWidth = 1.5; zx.strokeRect(x1 + .5, y1 + .5, w - 1, hh - 1); zx.setLineDash([]);
-    zx.font = "700 11px Barlow Semi Condensed, Barlow, sans-serif"; zx.fillStyle = `rgba(${rgb},1)`;
-    zx.fillText(`HEADS-UP ${h.side}`, x1 + 3, y1 - 5);
+    tag(`WATCH ${h.side === "BUY" || h.dir === 1 ? "▲" : "▼"}`, x1 + 2, y1 - TH / 2 - 2, `rgb(${rgb})`, { pri: 75 });
   }
 
   // the Kronos sample-path spread: outer shade = lowest to highest path, inner shade = middle half (p25 to p75)
@@ -366,6 +411,30 @@
       loadCandles();
     });
   });
+
+  // ---------------------------------------------------------------- "?" cheat sheet: what every word on the chart means
+  function swatch(w, term) {
+    const c = w.c || C.gold;
+    if (w.t === "tag") return `<span class="lg-tag" style="color:${c};border-color:${c}">${esc(w.label || term)}</span>`;
+    if (w.t === "text") return `<span class="lg-txt" style="color:${c}">${esc(term)}</span>`;
+    if (w.t === "line") return `<span class="lg-line" style="border-top:2px ${w.dash ? "dashed" : "solid"} ${c}"></span>`;
+    if (w.t === "band") return `<span class="lg-band"><i></i></span>`;
+    if (w.t === "arrow") return `<span class="lg-arrow ${w.up ? "up" : "dn"}" style="--c:${c}"></span>`;
+    if (w.t === "col") return `<span class="lg-col" style="--c:${c}"></span>`;
+    return `<span class="lg-box${w.faint ? " faint" : ""}" style="--c:${c};border-style:${w.dash ? "dashed" : "solid"}"></span>`;
+  }
+  function buildLegend() {
+    const G = window.GLOSSARY || [];
+    $("legendBody").innerHTML = G.map((g) => `<section><h3>${esc(g.title)} <span class="fa" lang="fa" dir="rtl">${esc(g.fa)}</span></h3>
+      ${g.note ? `<p class="lg-note">${esc(g.note)}</p>` : ""}
+      ${g.items.map((i) => `<div class="lg-row"><span class="lg-sw">${swatch(i.sw || {}, i.term)}</span>
+        <div><div class="lg-name"><b>${esc(i.term)}</b><span class="fa" lang="fa" dir="rtl">${esc(i.fa)}</span></div><p>${esc(i.text)}</p></div></div>`).join("")}
+    </section>`).join("");
+  }
+  const showLegend = (on) => { $("legend").hidden = !on; $("helpBtn").classList.toggle("on", on); if (on && !$("legendBody").firstChild) buildLegend(); };
+  $("helpBtn").addEventListener("click", () => showLegend($("legend").hidden));
+  $("legendClose").addEventListener("click", () => showLegend(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") showLegend(false); });
 
   // ---------------------------------------------------------------- live prices (pushed by the server)
   function showQuote(bid, ask) {

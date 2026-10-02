@@ -8,7 +8,7 @@
 <title>Gold Desk</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Vazirmatn:wght@400;600&display=swap">
 <style>
 /* Layout: one screen. Chart left with the open-trades blotter under it; the order rail on the right reads top to bottom:
    price + one-click buttons, lots, what just happened, signals. */
@@ -80,6 +80,34 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .ovl button i.b { width: 0; height: 0; border: 5px solid transparent; border-bottom: 9px solid var(--up); border-top: 0; }
 .ovl button i.s { width: 12px; height: 10px; border: 0; border-top: 1px solid var(--warn); border-bottom: 1px dashed var(--fg); background: linear-gradient(rgba(229,72,77,.3) 50%, rgba(47,182,124,.3) 50%); }
 .ovl button:not(.on) i { opacity: .35; }
+.helpbtn { width: 34px; border-radius: 9px; background: rgba(21,23,26,.92); border: 1px solid var(--line); color: var(--dim); font: 700 15px var(--label); }
+.helpbtn:hover, .helpbtn.on { color: var(--gold); border-color: rgba(214,173,82,.6); }
+.legend { position: absolute; top: 54px; right: 76px; z-index: 4; width: 460px; max-width: calc(100% - 24px); max-height: calc(100% - 66px); display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.55); }
+.legend .fa { direction: rtl; unicode-bidi: isolate; text-align: right; font-family: Vazirmatn, Tahoma, system-ui, sans-serif; color: var(--gold); font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.lg-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+.lg-head b { font: 700 15px var(--label); letter-spacing: .04em; }
+.lg-head button { margin-left: auto; width: 28px; height: 28px; border-radius: 7px; color: var(--dim); font-size: 20px; line-height: 1; }
+.lg-head button:hover { background: var(--raise); color: var(--fg); }
+.lg-body { overflow: auto; padding: 4px 14px 14px; }
+.lg-body h3 { display: flex; align-items: baseline; gap: 10px; margin: 14px 0 6px; font: 700 12px var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.lg-note { margin: -2px 0 6px; font-size: 12.5px; color: var(--dim); }
+.lg-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: start; padding: 7px 0; border-top: 1px solid rgba(38,42,47,.6); }
+.lg-sw { display: flex; align-items: center; min-height: 20px; padding-top: 1px; }
+.lg-name { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.lg-name b { font: 600 13.5px var(--mono); color: var(--fg); }
+.lg-row p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.4; color: #c9c5bb; }
+.lg-tag { display: inline-block; padding: 0 4px; border: 1px solid; border-radius: 3px; background: #0e0f11; font: 600 11px/15px var(--mono); white-space: nowrap; }
+.lg-txt { font: 600 12px var(--mono); }
+.lg-line { width: 46px; height: 0; }
+.lg-band { width: 52px; height: 18px; background: rgba(214,173,82,.12); position: relative; border-radius: 2px; }
+.lg-band i { position: absolute; left: 0; right: 0; top: 5px; bottom: 5px; background: rgba(214,173,82,.25); border-top: 2px dashed var(--gold); }
+.lg-box { width: 46px; height: 16px; border: 1px solid var(--c); border-radius: 2px; background: color-mix(in srgb, var(--c) 18%, transparent); }
+.lg-box.faint { opacity: .45; }
+.lg-col { width: 26px; height: 20px; background: color-mix(in srgb, var(--c) 22%, transparent); border-bottom: 2px dashed var(--c); }
+.lg-arrow { width: 0; height: 0; border: 7px solid transparent; }
+.lg-arrow.up { border-bottom: 11px solid var(--c); border-top: 0; }
+.lg-arrow.dn { border-top: 11px solid var(--c); border-bottom: 0; }
 .tfs { display: flex; gap: 2px; background: rgba(21,23,26,.92); padding: 3px; border-radius: 9px; border: 1px solid var(--line); }
 .tfs button { padding: 4px 11px; border-radius: 6px; color: var(--dim); font: 600 13px var(--label); }
 .tfs button.on { background: var(--raise); color: var(--fg); }
@@ -225,6 +253,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
   aside { border-left: 0; border-top: 1px solid var(--line); order: -1; overflow: visible; }
   .left { order: 0; }
   .blotter { max-height: none; }
+  .legend { position: fixed; inset: 10px; top: 10px; right: 10px; width: auto; max-width: none; max-height: none; z-index: 50; }
 }
 </style>
 </head>
@@ -246,8 +275,13 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
       <div class="chartbar">
         <div class="tfs" id="tfs"><button data-tf="M1">1m</button><button data-tf="M5">5m</button><button data-tf="M15">15m</button><button data-tf="H1">1h</button><button data-tf="H4">4h</button></div>
         <div class="ovl" id="ovl"><button data-o="kronos" title="Kronos forecast path and target"><i></i>Kronos</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button><button data-o="boom" title="Boom / Crash calls: arrows, entry, SL and TP"><i class="b"></i>Boom/Crash</button><button data-o="smc" title="Smart Money / ICT: structure (BOS, CHoCH), liquidity, FVG, order blocks, premium / discount, OTE, killzones, key levels"><i class="s"></i>SMC/ICT</button></div>
+        <button class="helpbtn" id="helpBtn" title="What every word on the chart means" aria-label="Chart cheat sheet">?</button>
       </div>
       <div class="smcread" id="smcRead" hidden></div>
+      <div class="legend" id="legend" hidden role="dialog" aria-label="Chart cheat sheet">
+        <div class="lg-head"><b>Chart cheat sheet</b><span class="fa" lang="fa" dir="rtl">راهنمای چارت</span><button id="legendClose" aria-label="Close">×</button></div>
+        <div class="lg-body" id="legendBody"></div>
+      </div>
       <div id="chart"></div>
       <canvas id="zones"></canvas>
     </div>
@@ -303,6 +337,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
   </aside>
 </main>
 <script src="lightweight-charts.standalone.production.js"></script>
+<script src="glossary.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
