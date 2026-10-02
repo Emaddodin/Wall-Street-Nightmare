@@ -21,7 +21,6 @@ One call at a time. Nothing here places an order. Finished calls go to ~/.goldde
 from __future__ import annotations
 
 import csv
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,6 +28,7 @@ import ict_entries as ie
 from engine import Bars
 from ictmodel import MarketRead, consensus, daily
 from mesh import Mesh
+from tfdesk import desks
 
 LOG_FILE = Path.home() / ".golddesk" / "boom_calls.csv"
 NAME = {1: "BOOM", -1: "CRASH"}
@@ -66,6 +66,7 @@ class BoomTracker:
         self.fed_t = 0                           # last M1 candle (candle clock) fed to the entries
         self.read: MarketRead | None = None
         self.consensus: dict | None = None
+        self.desks: dict = {}                    # each timeframe's own concepts and call (tfdesk.py)
         self.flow: dict = {"raids": [], "cisd": [], "orders": []}
         self.watch: list = []
         self.trend = None                        # kept for soon.py's signature
@@ -110,11 +111,13 @@ class BoomTracker:
         """Each poll. Reads M1 and the higher timeframes when a new M1 candle has closed. Returns events:
         ("boom", call) a new limit order, ("boom_fill", call), ("boom_end", call)."""
         out = []
-        a = self.active
-        if a and a["status"] == "waiting" and quote:            # fill on the live quote
-            if (quote["ask"] <= a["entry"]) if a["dir"] == 1 else (quote["bid"] >= a["entry"]):
-                out.append(("boom_fill", self._fill(int(time.time()))))
         m1 = src.rates("M1", HISTORY["M1"] + 1)
+        a = self.active
+        if a and a["status"] == "waiting" and quote and len(m1):   # fill on the live quote
+            if (quote["ask"] <= a["entry"]) if a["dir"] == 1 else (quote["bid"] >= a["entry"]):
+                # the forming candle's time: the candle clock, like every other time here (the quote's own
+                # time can be UTC while the broker's candles run ahead of it)
+                out.append(("boom_fill", self._fill(m1.t[-1])))
         if len(m1) < 400:
             return out
         n = len(m1) - 1                                            # the last candle is still forming
@@ -159,7 +162,8 @@ class BoomTracker:
             if i == n - 1 and self.consensus and self.consensus.get("x"):
                 cs = self.consensus
                 rd = {"x": cs["x"], "s": cs["score"], "atr": round(cs["atr"], 3),
-                      "g": {p["name"]: p["score"] for p in cs["parts"]},
+                      "g": dict({p["name"]: p["score"] for p in cs["parts"]},
+                                **{f"Desk {k}": d["score"] for k, d in self.desks.items()}),
                       "k": (cs["parts"][-1]["items"]["up_prob"] if cs["kronos"] else None)}
             self.mesh.record(m1.t[i] + 60, m1.o[i], m1.h[i], m1.l[i], m1.c[i], rd)
         self.watch = self._watch()
@@ -255,6 +259,8 @@ class BoomTracker:
             with open(self.log, "a", newline="") as f:
                 w = csv.writer(f)
                 if new:
+                    # "bar_utc" is a historical name: the column holds the candle clock (the chart's time), and
+                    # _read() turns it back into the same number, so reloaded calls sit on the right candle.
                     w.writerow(["bar_utc", "kind", "side", "entry", "sl", "tp", "exit", "how", "r", "usd_0.01lot",
                                 "kronos_move_30min", "atr", "why", "model"])
                 w.writerow([datetime.fromtimestamp(s["t"], timezone.utc).strftime("%Y-%m-%d %H:%M"), s["kind"],
@@ -280,6 +286,10 @@ class BoomTracker:
         if not x:
             self.consensus = None
             return
+        try:
+            self.desks = desks(self.read, t, price)
+        except Exception as e:
+            self.desks, self.error = {}, f"Timeframe desks skipped: {e}"
         k = self.kronos if self.kronos and abs((self.kronos.get("t") or 0) - t) < 1800 else None
         cs = consensus(x, k.get("up_prob") if k else None, self.mesh.trust())
         h1 = self.read.f.get("H1")

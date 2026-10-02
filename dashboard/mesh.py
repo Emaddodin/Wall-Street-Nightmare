@@ -7,7 +7,8 @@ trend line's score. So the price, the reading and what happened next all sit in 
 
 The scoreboard checks each source against the price `h` minutes later (30, 60, 120), on samples h minutes apart
 so no two overlap, next to two baselines (always up, the last 30 minutes' direction). It is rebuilt from the
-files when the dashboard starts.
+saved scoreboard (board.json, every 30 minutes) and the candles
+written after it when the dashboard starts. Nothing is ever deleted; writing pauses when the disk has under 1 GB.
 
 Trust: a group of the trend line (Higher timeframes, Intraday structure, ICT order flow, Kronos) that has been
 right or wrong on at least MIN_N independent 60-minute samples, beyond what a coin would do (3 sigma, since
@@ -19,6 +20,8 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import shutil
 import time
 from collections import deque
 from pathlib import Path
@@ -29,6 +32,8 @@ TRUST_H = 60
 MIN_N = 200
 REBUILD_DAYS = 120
 FEATURE_EVERY = 300
+SNAPSHOT_EVERY = 1800           # the scoreboard is saved to board.json this often, so a restart reads only the tail
+MIN_FREE = 1 << 30             # stop writing (never delete) when the disk has less than 1 GB free
 GROUPS = ("Higher timeframes", "Intraday structure", "ICT order flow", "Kronos")
 
 
@@ -100,6 +105,20 @@ class Board:
             if t % (h * 60) == 0:
                 self.pending[h].append((t, c, sg))
 
+    def dump(self) -> dict:
+        return {"score": {str(h): {n: [s.n, s.right] for n, s in sc.items()} for h, sc in self.score.items()},
+                "pending": {str(h): list(q) for h, q in self.pending.items()}, "closes": list(self.closes),
+                "first_t": self.first_t, "rows": self.rows}
+
+    def load(self, d: dict) -> None:
+        for h in HORIZONS:
+            for n, (cnt, right) in d["score"].get(str(h), {}).items():
+                sc = self.score[h].setdefault(n, Score())
+                sc.n, sc.right = cnt, right
+            self.pending[h] = deque(tuple(p) for p in d["pending"].get(str(h), []))
+        self.closes.extend(tuple(c) for c in d["closes"])
+        self.first_t, self.rows = d["first_t"], d["rows"]
+
     def trust(self) -> dict:
         out = {}
         for name in GROUPS:
@@ -113,7 +132,8 @@ class Board:
 
     def view(self) -> dict:
         names = sorted({n for h in HORIZONS for n in self.score[h]},
-                       key=lambda n: (n not in GROUPS and n not in ("Trend line", "Always up", "Last 30 min"), n))
+                       key=lambda n: (n not in GROUPS and not n.startswith("Desk ")
+                                      and n not in ("Trend line", "Always up", "Last 30 min"), n))
         return {"sources": [{"name": n, "by_h": {str(h): self.score[h][n].view() if n in self.score[h] else None
                                                  for h in HORIZONS}} for n in names]}
 
@@ -134,17 +154,32 @@ class Mesh:
         return sorted(self.dir.glob("mesh_*.jsonl")) if self.dir and self.dir.exists() else []
 
     def _rebuild(self) -> None:
+        """The saved scoreboard plus the candles written after it; without one, the last REBUILD_DAYS of files."""
         since = time.time() - REBUILD_DAYS * 86400
-        for f in self._files()[-5:]:
+        snap = self.dir / "board.json"
+        files = self._files()[-5:]
+        if snap.exists():
+            d = json.loads(snap.read_text())
+            self.board.load(d["board"])
+            self.last_t = since = d["t"]
+            files = self._files()[-2:]
+        for f in files:
             with open(f) as fh:
                 for line in fh:
                     try:
+                        t = int(line[5:line.index(",")])          # every line starts {"t":<seconds>,
+                        if t < since or t <= self.last_t:
+                            continue
                         row = json.loads(line)
                     except ValueError:
                         continue
-                    if row.get("t", 0) >= since and row["t"] > self.last_t:
-                        self.board.feed(row)
-                        self.last_t = row["t"]
+                    self.board.feed(row)
+                    self.last_t = row["t"]
+
+    def _save(self) -> None:
+        tmp = self.dir / "board.json.tmp"
+        tmp.write_text(json.dumps({"t": self.last_t, "board": self.board.dump()}, separators=(",", ":")))
+        os.replace(tmp, self.dir / "board.json")
 
     def record(self, t: int, o: float, h: float, l: float, c: float, reading: dict | None = None) -> None:
         """A closed M1 candle; t is its close time. `reading` = {x, g, k, s, atr}, kept on every 5th minute."""
@@ -162,9 +197,14 @@ class Mesh:
         if self.dir:
             try:
                 self.dir.mkdir(parents=True, exist_ok=True)
+                if shutil.disk_usage(self.dir).free < MIN_FREE:
+                    self.error = "Mesh paused: less than 1 GB free on the disk (nothing was deleted)"
+                    return
                 name = time.strftime("mesh_%Y-%m.jsonl", time.gmtime(t))
                 with open(self.dir / name, "a") as fh:
                     fh.write(json.dumps(row, separators=(",", ":")) + "\n")
+                if t % SNAPSHOT_EVERY == 0:
+                    self._save()
                 self.error = None
             except OSError as e:
                 self.error = f"Mesh write: {e}"
