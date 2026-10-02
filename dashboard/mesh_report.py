@@ -35,6 +35,7 @@ def history_rows(path: str) -> list:
     from boom_backtest import load
     from ict_train import frames
     from ictmodel import MarketRead, consensus
+    from tfdesk import desks
     m1 = load(path)
     mr = MarketRead(frames(m1))
     rows = []
@@ -45,7 +46,9 @@ def history_rows(path: str) -> list:
             x = mr.features(t, r[4])
             if x:
                 cs = consensus(x)
-                row.update(x=x, s=cs["score"], g={p["name"]: p["score"] for p in cs["parts"]})
+                g = {p["name"]: p["score"] for p in cs["parts"]}
+                g.update({f"Desk {k}": d["score"] for k, d in desks(mr, t, r[4]).items()})
+                row.update(x=x, s=cs["score"], g=g)
         rows.append(row)
     return rows
 
@@ -93,7 +96,8 @@ def main() -> None:
             flag = "  <- beyond a coin" if v["beats_coin"] else ""
             print(f"  {name:<20} n {v['n']:>5}  right {v['right']:6.1%}  (coin +/-{v['coin_band']:.1%}){flag}")
     print(f"\nTrust the live trend line would use now: {b.trust() or 'none yet (every group as set)'}")
-    groups = [g for g in mesh.GROUPS if g in b.score[60]] + ["Trend line"]
+    groups = [g for g in mesh.GROUPS if g in b.score[60]] + ["Trend line"] + \
+        [f"Desk {k}" for k in ("D1", "H4", "H1", "M15", "M5", "M1")]
     top = [n for n, _ in sorted(b.score[60].items(), key=lambda kv: -kv[1].n)[:12]]
     names = list(dict.fromkeys(groups + top))
     print("\nWhen two sources agree, 60 min later (best first; within the band means no edge):")
