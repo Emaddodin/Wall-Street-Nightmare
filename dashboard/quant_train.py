@@ -18,7 +18,8 @@ What it does, in order:
      picks the tree depth / leaf size and, by early stopping on each fold, the number of trees.
   4. Learner: gradient-boosted shallow trees written here in numpy (histogram splits on quantile bins,
      shrinkage, row and column subsampling): log-loss for direction, Huber for the move. Probabilities are
-     Platt-calibrated on the last CV fold (out of sample for the model that made them).
+     Platt-calibrated on the CV folds' out-of-fold forecasts (each made by a model that never saw them; the
+     last fold alone let its own up-share leak into the calibration).
   5. Held-out report: accuracy against a coin with the 95% range for that many independent 30-minute windows
      (samples every 5 minutes overlap, so n_eff = n x step / 30), Brier skill against always-50% (with a 95%
      range from resampling whole days), log-loss, AUC, a calibration table, the regression's correlation, a
@@ -413,7 +414,7 @@ class GBM:
         """{"base", "depth", "trees": [{"f": [...], "t": [...], "v": [...]}]} for quant.Booster (pure Python)."""
         trees = []
         for feat, tbin, val, _ in self.trees:
-            last = max([k for k in range(len(feat)) if feat[k] >= 0 or val[k] != 0.0] + [0])
+            last = max([0] + [2 * k + 2 for k in range(len(feat)) if feat[k] >= 0])       # last reachable node
             trees.append({"f": [int(f) for f in feat[:last + 1]],
                           "t": [float(edges[f][b]) if f >= 0 else None for f, b in zip(feat[:last + 1], tbin[:last + 1])],
                           "v": [float(v) for v in val[:last + 1]]})
@@ -466,23 +467,26 @@ BASE_HP = {"lr": 0.05, "lam": 10.0, "subsample": 0.7, "colsample": 0.7}
 
 
 def cv_select(XbT, y, folds, loss: str, grid, max_trees: int, patience: int, seed: int, delta: float = 1.0,
-              log=print, nb: int = 33) -> dict:
+              log=print, nb: int = 33, hp: dict | None = None) -> dict:
     """Pick the config with the lowest mean early-stopped validation loss. Returns the chosen config, its trees
     per fold, every config's score and the last fold's model (for Platt)."""
+    hp = hp or BASE_HP
     res = []
     for cfg in grid:
         losses, iters, base_l, last = [], [], [], None
+        oof = np.full(XbT.shape[1], np.nan)
         for tr, va in folds:
-            ml = max(5, int(cfg["min_leaf_frac"] * tr.sum() * BASE_HP["subsample"]))
+            ml = max(5, int(cfg["min_leaf_frac"] * tr.sum() * hp["subsample"]))
             m = GBM(loss=loss, depth=cfg["depth"], min_leaf=ml, max_trees=max_trees, patience=patience,
-                    seed=seed, delta=delta, nb=nb, **BASE_HP)
+                    seed=seed, delta=delta, nb=nb, **hp)
             m.fit(XbT[:, tr], y[tr], XbT[:, va], y[va])
             losses.append(min(m.curve))
             base_l.append(m.curve[0])
             iters.append(m.best)
             last = (m, va)
+            oof[va] = m.margin(XbT[:, va])
         r = {"cfg": cfg, "loss": float(np.mean(losses)), "base_loss": float(np.mean(base_l)), "iters": iters,
-             "trees": int(np.median(iters)), "last": last}
+             "trees": int(np.median(iters)), "last": last, "oof": oof}
         res.append(r)
         if log:
             log(f"    depth {cfg['depth']}, leaf {cfg['min_leaf_frac']:.0%}: CV {loss} {r['loss']:.5f} vs "
@@ -492,10 +496,24 @@ def cv_select(XbT, y, folds, loss: str, grid, max_trees: int, patience: int, see
     return best
 
 
-def platt(margins, y) -> tuple:
-    from kronos_calib import platt_fit
-    return platt_fit([float(x) for x in margins], [float(v) for v in y], [1.0] * len(y), lam_id=1.0, lam_ns=1.0,
-                     iters=30)
+def platt(margins, y, lam: float = 1.0) -> tuple:
+    """Platt scaling p = sigmoid(a * margin + b) by Newton's method, with a small ridge toward a = b = 0
+    (no skill), which also settles a model with no trees (constant margins)."""
+    m, y = np.asarray(margins, float), np.asarray(y, float)
+    a = b = 0.0
+    for _ in range(50):
+        p = sigmoid(a * m + b)
+        w = p * (1 - p)
+        ga, gb = float(np.sum((p - y) * m)) + lam * a, float(np.sum(p - y)) + lam * b
+        haa, hab, hbb = float(np.sum(w * m * m)) + lam, float(np.sum(w * m)), float(np.sum(w)) + lam
+        det = haa * hbb - hab * hab
+        if det <= 1e-12:
+            break
+        da, db = (hbb * ga - hab * gb) / det, (haa * gb - hab * ga) / det
+        a, b = a - da, b - db
+        if abs(da) < 1e-10 and abs(db) < 1e-10:
+            break
+    return float(a), float(b)
 
 
 def calibrated(margins, ab) -> "np.ndarray":
@@ -639,9 +657,11 @@ def train(ds: dict, split: int, folds: int = 4, embargo_min: int = 1440, grid=GR
     sel = cv_select(XbT_tr, ytr, fl, "logloss", grid, max_trees, patience, seed, log=log, nb=nb)
     cfg = sel["cfg"]
     ml = max(5, int(cfg["min_leaf_frac"] * len(ytr) * BASE_HP["subsample"]))
-    m_last, va_last = sel["last"]
-    marg_last = m_last.margin(XbT_tr[:, va_last])
-    ab = platt(marg_last, ytr[va_last])
+    # Platt on the out-of-fold margins of every purged fold (each from a model that never saw them). Fitting it
+    # on the last fold alone, as first planned, let that fold's up-share leak into the intercept.
+    oof = sel["oof"]
+    have = ~np.isnan(oof)
+    ab = platt(oof[have], ytr[have])
     cls = GBM(loss="logloss", depth=cfg["depth"], min_leaf=ml, seed=seed, nb=nb, **BASE_HP).fit(
         XbT_tr, ytr, n_trees=sel["trees"])
     delta = float(np.quantile(np.abs(mtr - np.median(mtr)), 0.9)) or 1.0
@@ -700,7 +720,9 @@ def train(ds: dict, split: int, folds: int = 4, embargo_min: int = 1440, grid=GR
 
 
 # ====================================================================== report
-def verdict(met: dict, ok: bool, what: str = "the 30-minute quant model") -> str:
+def verdict(met: dict, ok: bool, what: str = "the 30-minute quant model", unit: str = "independent 30-minute windows",
+            period: str = "held-out months",
+            no_edge_tail: str = " The page shows it as a coin and gives it ~0 weight next to Kronos.") -> str:
     acc, lo, hi, band = met["accuracy"], met["acc_low95"], met["acc_high95"], met["coin_band"]
     bss = met["brier_skill"]
     ci = met.get("brier_skill_ci")
@@ -708,14 +730,14 @@ def verdict(met: dict, ok: bool, what: str = "the 30-minute quant model") -> str
     if ok:
         drift = met.get("brier_skill_vs_drift")
         tail = "" if drift is None or drift > 0 else (
-            " -- but no better than always forecasting the training months' up-share (the trend), so the features "
+            " -- but no better than always forecasting the training period's up-share (the trend), so the inputs "
             "add nothing beyond the drift")
-        return (f"Verdict: {what} beat a coin on the held-out months: right {acc:.1%} (95% range {lo:.1%}-{hi:.1%}) "
-                f"over {met['n_eff']:.0f} independent windows, Brier skill {bss:+.4f}{cis}{tail}. Small and "
+        return (f"Verdict: {what} beat a coin on the {period}: right {acc:.1%} (95% range {lo:.1%}-{hi:.1%}) "
+                f"over {met['n_eff']:.0f} {unit}, Brier skill {bss:+.4f}{cis}{tail}. Small and "
                 "measured on one stretch of history: keep watching its live record.")
-    return (f"Verdict: no edge. On the held-out months {what} was right {acc:.1%} of the time (a coin's 95% range "
-            f"is {0.5 - band:.1%}-{0.5 + band:.1%} for {met['n_eff']:.0f} independent windows) and its Brier skill is "
-            f"{bss:+.4f}{cis}. The page shows it as a coin and gives it ~0 weight next to Kronos.")
+    return (f"Verdict: no edge. On the {period} {what} was right {acc:.1%} of the time (a coin's 95% range "
+            f"is {0.5 - band:.1%}-{0.5 + band:.1%} for {met['n_eff']:.0f} {unit}) and its Brier skill is "
+            f"{bss:+.4f}{cis}.{no_edge_tail}")
 
 
 def print_report(model: dict, met: dict, log=print) -> None:
