@@ -144,7 +144,8 @@
     const now0 = last && loadedTf === "M1" ? last : null;
     const glue = (lv) => {                       // moved onto the chart's own price while a candle is forming
       const px = now0 && now0.time >= lv.t ? now0.close : lv.last, d = px - lv.last;
-      return { px, path: lv.path.map((p) => ({ time: p.time, value: p.value + d })),
+      return { px, samples: (lv.samples || []).map((sm) => sm.map((p) => ({ time: p.time, value: p.value + d }))),
+        path: lv.path.map((p) => ({ time: p.time, value: p.value + d })),
         band: (lv.band || []).map((b) => ({ time: b.time, lo: b.lo + d, hi: b.hi + d, p25: b.p25 + d, p75: b.p75 + d })) };
     };
     const pts = [[c.t, +c.last], ...c.path.map((p) => [p.time, p.value])].sort((a, b) => a[0] - b[0]);
@@ -158,7 +159,7 @@
     const l30 = c.live30 || S.nowcast30;
     if (l30 && Array.isArray(l30.path) && l30.path.length) {
       const g = glue(l30);
-      return { ...c, ...l30, path: g.path, band: g.band, target: g.path[g.path.length - 1].value, last: g.px, live: true, checked: LIVE_MIN };
+      return { ...c, ...l30, path: g.path, band: g.band, samples: g.samples, target: g.path[g.path.length - 1].value, last: g.px, live: true, checked: LIVE_MIN };
     }
     const lv = c.live;
     if (lv && Array.isArray(lv.path) && lv.path.length && Array.isArray(lv.band) && lv.band.length) {
@@ -555,12 +556,19 @@
     // (light = 9 in 10 end inside, darker = the middle half) and one label at the tip. Odds and plan live in the cards.
     shade("lo", "hi", "rgba(214,173,82,.10)");
     shade("p25", "p75", "rgba(214,173,82,.22)");
+    zx.strokeStyle = "rgba(214,173,82,.16)"; zx.lineWidth = 1;     // texture: past 30-minute stretches at today's size
+    for (const sm of k.samples || []) {
+      zx.beginPath(); let on = false;
+      for (const p of [{ time: k.t, value: k.last }, ...sm]) { const xx = ts.timeToCoordinate(p.time - (p.time % sec)), yy = y(p.value);
+        if (xx == null || yy == null || xx > right) continue; on ? zx.lineTo(xx, yy) : zx.moveTo(xx, yy); on = true; }
+      zx.stroke();
+    }
     const end = pts[pts.length - 1], x0 = pts[0].x, mv = k.target - k.last, l = leanOf(k);
     zx.fillStyle = "rgba(236,232,223,.07)"; zx.fillRect(Math.round(x0), 0, 1, zc.getBoundingClientRect().height - ts.height());   // now | next 10 min
     zx.fillStyle = "rgba(214,173,82,.9)"; zx.beginPath(); zx.arc(x0, y(k.last), 3, 0, 7); zx.fill();   // starts at the live price
     const ye = y(k.target);                                        // the tip: a dot, and the label just above it
     zx.beginPath(); zx.arc(end.x, ye, 3, 0, 7); zx.fill();
-    tag(`${LIVE_MIN} min  ${fmt(k.target)} ${mv >= 0 ? "+" : "−"}${fmt(Math.abs(mv))}`, end.x, ye - TH / 2 - 6, C.gold, { align: "right", pri: 90, must: true });
+    tag(`${LIVE_MIN} min  ${fmt(end.b.lo)} – ${fmt(end.b.hi)}`, end.x, y(end.b.hi) - TH / 2 - 4, C.gold, { align: "right", pri: 90, must: true });
   }
   chart.timeScale().subscribeVisibleLogicalRangeChange(() => requestAnimationFrame(drawZones));
   new ResizeObserver(() => requestAnimationFrame(drawZones)).observe(zc);
