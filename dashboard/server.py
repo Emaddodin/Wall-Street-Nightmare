@@ -388,6 +388,9 @@ class Hub:
         self.boom.smt_fn = self._smt
         self.silver_bars: dict = {}
         self.news = None                         # news.NewsDesk: calendar + headlines + gold impact (set in main)
+        self.ntfy = None                         # soon.Ntfy: pushes to your phone (set in main)
+        self.ntfy_topic = None
+        self.boom.news_fn = self._news_state
         self.boom.market_open = lambda: self.src.kind == "demo" or market_hours(time.time())[0]
         self.bootstrap()
 
@@ -504,9 +507,13 @@ class Hub:
                 print(f"SMC/ICT layer skipped: {e}", flush=True)
 
     def _boom_event(self, kind: str, call: dict) -> None:
+        if kind == "forming":                    # a model forming / ready / entering: on the page and on your phone
+            it = call["item"]
+            self._event("forming", call["title"], it["side"])
+            if self.ntfy:
+                self.ntfy.push(call["title"], call["body"], call["priority"], call["tags"])
+            return
         self._event(kind, call["text"], call["side"])
-        if kind == "boom" and self.coach:
-            self.coach.ready_call(call, self.spec.digits)
 
     def exec_text(self, tr: dict) -> str:
         d = self.spec.digits
@@ -593,7 +600,7 @@ class Hub:
     def _overall(self, market_open: bool) -> dict | None:
         try:
             return brain.overall(self.boom.ict, self._news_state(), self.boom.quant, self.boom.kronos30, self.boom.smt,
-                                 market_open)
+                                 market_open, self.boom.trust)
         except Exception as e:
             return {"verdict": "MIXED", "score": 0, "confidence": 0, "do": "WAIT", "voices": [], "risks": [],
                     "text": f"Overall analysis skipped: {e}"}
@@ -671,6 +678,9 @@ class Hub:
                 "error": self.error or getattr(self.src, "feed_note", None) or mk["note"],
                 "market": mk,
                 "analysis_only": True,
+                "push": {"topic": self.ntfy_topic, "server": ntfy_server() if self.ntfy_topic else None,
+                         "sent": self.ntfy.sent if self.ntfy else 0, "error": self.ntfy.error if self.ntfy else None,
+                         "recent": self.boom.announcer.log[-8:]},
                 "positions": self._positions(),       # read-only: your MT5 account's open gold trades (phone included)
                 "broker": self.src.broker() if hasattr(self.src, "broker") else {"connected": True, "message": None},
                 "kronos": self.kronos.state() if self.kronos else None,
@@ -943,7 +953,17 @@ def main() -> None:
         print(f"News box off: {e}")
     threading.Thread(target=poll_loop, daemon=True).start()
     topic, where = find_topic(a.ntfy_topic)
+    if not topic and src.kind != "demo" and not a.no_alerts:   # your own private topic, made once
+        topic, where = "golddesk-" + secrets.token_hex(6), "made for you"
+        try:
+            (Path.home() / ".golddesk").mkdir(parents=True, exist_ok=True)
+            (Path.home() / ".golddesk" / "ntfy_topic").write_text(topic)
+        except OSError:
+            pass
     ntfy = Ntfy(topic, ntfy_server()) if topic and src.kind != "demo" and not a.no_alerts else None
+    HUB.ntfy, HUB.ntfy_topic = ntfy, (topic if ntfy else None)
+    if ntfy:
+        print(f"Phone pushes (models forming / ready / enter): subscribe to '{topic}' in the ntfy app ({where})")
     if ntfy and a.session != "off":
         HUB.coach = SessionCoach(HUB.coach_snapshot, ntfy, a.session)
         print(f"Trading session pushes: {a.session} Tehran time, market days ({where})")

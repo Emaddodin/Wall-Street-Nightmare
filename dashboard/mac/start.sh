@@ -75,7 +75,7 @@ mt5_ready() {
 }
 # Gold Desk on MT5's prices: analysis only, nothing is sent to MT5.
 mt5_mode() {
-  local args=(--mt5-bridge --entry-tf M5 --port "$PORT" --no-alerts)
+  local args=(--mt5-bridge --entry-tf M5 --port "$PORT")
   if [ "$KRONOS" != off ] && python3 -c "import torch" 2>/dev/null; then
     args+=(--kronos "$KRONOS")
   fi

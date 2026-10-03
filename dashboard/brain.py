@@ -212,7 +212,8 @@ def _wait_plan(ctx, setups: list, ranking: list) -> dict:
 
 # ====================================================================== the one line
 def desk_line(ict: dict, kronos30: dict | None, t: int, price: float, sigma: float | None,
-              band30: list | None = None, digits: int = 2, quant: dict | None = None) -> dict | None:
+              band30: list | None = None, digits: int = 2, quant: dict | None = None,
+              trust: dict | None = None) -> dict | None:
     """30 minutes from the live price: the best ICT plan blended with Kronos' calibrated 30-minute path and the
     quant model's forecast. Each voice weighs by its conviction; a voice that hasn't beaten a coin on held-out
     data (quant) or on its live record (Kronos) is turned down. t: open time of the forming M1 candle."""
@@ -263,8 +264,8 @@ def desk_line(ict: dict, kronos30: dict | None, t: int, price: float, sigma: flo
             kp.append(prev)
         cal = (k.get("calibration") or {}).get("M30") or (k.get("calibration") or {}).get("M1x30") or {}
         n, skill = cal.get("n") or 0, cal.get("skill")
-        trust = 0.7 if n < 30 or skill is None else (0.4 if skill <= 0 else min(1.0, 0.7 + 3 * skill))
-        kconv = (k.get("confidence") or 0.0) * trust
+        ktrust = 0.7 if n < 30 or skill is None else (0.4 if skill <= 0 else min(1.0, 0.7 + 3 * skill))
+        kconv = (k.get("confidence") or 0.0) * ktrust
         kdir = k.get("dir") or 0
     else:
         kp, kconv, kdir = [price] * LINE_MIN, 0.0, 0
@@ -276,6 +277,10 @@ def desk_line(ict: dict, kronos30: dict | None, t: int, price: float, sigma: flo
         qdir = q.get("dir") or 0
     else:
         qp, qconv, qdir = [price] * LINE_MIN, 0.0, 0
+    tr = trust or {}
+    conv *= tr.get("Voice: ICT setup", 1.0)                         # earned in the knowledge mesh (mesh.py)
+    kconv *= tr.get("Voice: Kronos 30 min", 1.0)
+    qconv *= tr.get("Voice: Quant model", 1.0)
     anchor = 0.35
     tot = conv + kconv + qconv + anchor
     wi, wk, wq = conv / tot, kconv / tot, qconv / tot
@@ -333,7 +338,7 @@ def desk_line(ict: dict, kronos30: dict | None, t: int, price: float, sigma: flo
 
 # ====================================================================== the overall analysis
 def overall(ict: dict | None, news: dict | None = None, quant: dict | None = None, kronos30: dict | None = None,
-            smt: dict | None = None, market_open: bool = True) -> dict | None:
+            smt: dict | None = None, market_open: bool = True, trust: dict | None = None) -> dict | None:
     """Everything at once: each voice's direction (-1 bearish .. +1 bullish), its weight and its words, the
     weighted verdict, how much the voices agree, what lowers confidence right now, and one paragraph."""
     if not ict:
@@ -341,10 +346,14 @@ def overall(ict: dict | None, news: dict | None = None, quant: dict | None = Non
     voices = []
 
     def add(name, v, w, text):
+        tm = (trust or {}).get(f"Voice: {name}")                  # earned in the knowledge mesh: 0 .. 2
+        if tm is not None:
+            w *= tm
+            text += f" [mesh trust x{tm:.2f}]"
         if v is None:
-            voices.append({"name": name, "value": None, "weight": w, "text": text})
+            voices.append({"name": name, "value": None, "weight": w, "text": text, "trust": tm})
             return
-        voices.append({"name": name, "value": round(max(-1.0, min(1.0, v)), 2), "weight": w, "text": text})
+        voices.append({"name": name, "value": round(max(-1.0, min(1.0, v)), 2), "weight": w, "text": text, "trust": tm})
 
     dec = ict.get("decision") or {}
     act = dec.get("action", "WAIT")
@@ -373,10 +382,10 @@ def overall(ict: dict | None, news: dict | None = None, quant: dict | None = Non
     k = kronos30
     if k and k.get("up_prob") is not None:
         cal = (k.get("calibration") or {}).get("M30") or (k.get("calibration") or {}).get("M1x30") or {}
-        trust = 0.4 if (cal.get("n") or 0) >= 30 and (cal.get("skill") or 0) <= 0 else 1.0
-        add("Kronos 30 min", (k["up_prob"] - 0.5) * 2 * trust, 2.0,
+        ktrust = 0.4 if (cal.get("n") or 0) >= 30 and (cal.get("skill") or 0) <= 0 else 1.0
+        add("Kronos 30 min", (k["up_prob"] - 0.5) * 2 * ktrust, 2.0,
             f"{k.get('call', '?')}: up {k['up_prob']:.0%}, {k.get('move', 0):+.2f}"
-            + (" (hasn't beaten a coin yet: turned down)" if trust < 1 else ""))
+            + (" (hasn't beaten a coin yet: turned down)" if ktrust < 1 else ""))
     else:
         add("Kronos 30 min", None, 2.0, "not running")
     q = quant
@@ -444,3 +453,324 @@ def overall(ict: dict | None, news: dict | None = None, quant: dict | None = Non
             "do": do, "voices": voices, "against": against, "risks": risks, "line_state": ln.get("state"),
             "text": " ".join(p for p in parts if p),
             "note": "A weighted read of every source, for orientation. Not a prediction anyone has proven."}
+
+
+# ====================================================================== what is forming right now
+STAGES = (("watch", 0.25, "liquidity about to be taken"), ("forming", 0.45, "sweep done, waiting for the shift"),
+          ("set", 0.70, "set up, waiting for the pullback"), ("ready", 0.85, "price at the zone, the next close decides"),
+          ("enter", 1.00, "entry candle closed"))
+STAGE_P = {s: p for s, p, _ in STAGES}
+STAGE_TXT = {s: t for s, _, t in STAGES}
+
+
+def _model_names():
+    from playbook import MODELS
+    return {m: v[0] for m, v in MODELS.items()}
+
+
+def forming(ctx, setups: list, ranking: list, trust: dict | None = None) -> list:
+    """Every model's progress on the live candles, most reliable first.
+    Each item: {key, model, name, tf, dir, side, stage, progress, steps[{label, done}], next, level, zone,
+    anchor_time, confidence, why[], text}."""
+    names = _model_names()
+    rk = {r["model"]: r for r in ranking}
+    out = {}
+
+    def put(model, tf, d, stage, steps, nxt, level=None, zone=None, anchor=None, score=None, why=None):
+        if not d:
+            return
+        it = {"model": model, "name": names.get(model, model), "tf": tf, "dir": d, "side": _side(d), "stage": stage,
+              "progress": STAGE_P[stage], "steps": steps, "next": nxt, "level": level, "zone": zone,
+              "anchor_time": anchor, "score": score, "why": why or []}
+        k = (model, tf, d)
+        if k not in out or out[k]["progress"] < it["progress"]:
+            out[k] = it
+
+    # 1) set / ready / enter: the playbook's setups
+    for s in setups:
+        if s["status"] not in ("armed", "filled") and not (s.get("trigger") and s["trigger"]["fresh"]):
+            continue
+        tr = s.get("trigger")
+        T = ctx.tapes[s["tf"]]
+        a = T.atr[-1] or 1.0
+        z = s["zone"]
+        mid = (z["top"] + z["bottom"]) / 2
+        if tr and tr["fresh"] and s["entry_now"]["verdict"] == "ENTER":
+            stage, nxt = "enter", f"{tr['text']}: {s['side'].lower()} on this close"
+        elif tr and tr["fresh"]:
+            stage, nxt = "ready", "triggered but " + "; ".join(s["entry_now"]["missing"])
+        elif s["status"] == "filled" or ((T.b.c[-1] - z["top"]) if s["dir"] == 1 else (z["bottom"] - T.b.c[-1])) <= 0.5 * a:
+            stage, nxt = "ready", (f"a {s['tf']} close back {'above' if s['dir'] == 1 else 'below'} {mid:.2f} "
+                                   f"(or an M1 CISD inside {z['bottom']:.2f}-{z['top']:.2f})")
+        else:
+            stage, nxt = "set", f"price back into {z['bottom']:.2f}-{z['top']:.2f}, then a close {'up' if s['dir'] == 1 else 'down'}"
+        steps = [{"label": c["label"], "done": c["ok"]} for c in s["checks"] if c["key"] in ("key", "sweep", "shift", "time", "bias", "smt", "kronos")]
+        steps.append({"label": f"zone {z['bottom']:.2f}-{z['top']:.2f}", "done": True})
+        steps.append({"label": "confirmation close", "done": stage == "enter"})
+        put(s["model"], s["tf"], s["dir"], stage, steps, nxt, level=mid, zone=z, anchor=s["t"], score=s["score"],
+            why=s["why"])
+
+    # 2) forming: a fresh sweep and no shift yet, matched to the models it can become
+    sb = ctx.clock.get("silver_bullet")
+    utc_now = ctx.utc(ctx.t)
+    from ictclock import in_window
+    from playbook import MODELS
+    for tf, age_max in (("M1", 8), ("M5", 4)):
+        T = ctx.tapes.get(tf)
+        if not T or not T.sweeps:
+            continue
+        for w in T.sweeps[-3:]:
+            age = T.n - 1 - w["i"]
+            if age > age_max:
+                continue
+            d = w["dir"]
+            if any(c["dir"] == d and c["i"] >= w["i"] for c in T.cisd) or any(x["dir"] == d and x["i"] >= w["i"] for x in T.breaks):
+                continue                                              # already shifted: the setups cover it
+            ref = T.cisd_ref.get(d)
+            sw_hi = [s for s in T.swings if s["dir"] == d and s["i"] < w["i"] and (s["price"] - T.b.c[-1]) * d > 0]
+            mss_lvl = sw_hi[-1]["price"] if sw_hi else None
+            key = ctx.key_level_at(tf, w["ext"])
+            ext = not w["kind"].startswith(tf)
+            base = [{"label": f"swept {w['kind']} {w['level']:.2f}", "done": True},
+                    {"label": f"at a higher-timeframe key level ({key})" if key else "higher-timeframe key level", "done": bool(key)}]
+            shift = [{"label": f"CISD: close {'above' if d == 1 else 'below'} {ref:.2f}" if ref is not None else "CISD",
+                      "done": False}]
+            nxt = (f"a {tf} close {'above' if d == 1 else 'below'} {ref:.2f} (CISD)" if ref is not None else "a CISD") + \
+                (f", or {'above' if d == 1 else 'below'} {mss_lvl:.2f} with displacement (MSS)" if mss_lvl else "")
+            cands = ["mss_fvg"]
+            if sb:
+                cands.append("silver_bullet")
+            if w["kind"] in ("Asian low", "Asian high") and in_window(utc_now, MODELS["judas"][1]) and ctx.bias * d >= 0:
+                cands.append("judas")
+            if ext:
+                cands += ["turtle_soup", "cisd_fvg"]
+            if w["eq"]:
+                cands.append("hrlr")
+            if ctx.smt_vote(tf, d, T.b.t[w["i"]])[0] == 1:
+                cands.append("smt")
+            opp_ob = [z for z in T.live_obs(-d, "OB") if (z["bottom"] - T.b.c[-1] if d == 1 else T.b.c[-1] - z["top"]) <= 1.5 * (T.atr[-1] or 1)]
+            if opp_ob:
+                cands += ["breaker", "unicorn"]
+            opp_fvg = [g for g in T.open_fvgs(-d) if abs(g["ce"] - T.b.c[-1]) <= 1.5 * (T.atr[-1] or 1)]
+            if opp_fvg:
+                cands.append("ifvg")
+            for m in cands:
+                extra = []
+                if m == "breaker" or m == "unicorn":
+                    z = opp_ob[-1]
+                    extra = [{"label": f"order block {z['bottom']:.2f}-{z['top']:.2f} to break", "done": False}]
+                if m == "ifvg":
+                    g = opp_fvg[-1]
+                    extra = [{"label": f"close {'above' if d == 1 else 'below'} the FVG {(g['top'] if d == 1 else g['bottom']):.2f} "
+                                       "(the inversion)", "done": False}]
+                if m == "judas":
+                    extra = [{"label": "Asian range = accumulation", "done": True},
+                             {"label": "London / NY run against the daily bias = manipulation", "done": True},
+                             {"label": "distribution after the CISD", "done": False}]
+                put(m, tf, d, "forming", base + extra + shift, nxt, level=ref, anchor=T.b.t[w["i"]],
+                    why=[f"{tf} swept {w['kind']} {w['level']:.2f} {age} candle{'s' if age != 1 else ''} ago"])
+
+    # 3) watch: liquidity about to be taken (price close to it, not taken yet)
+    m5 = ctx.tapes.get("M5")
+    if m5 and m5.n:
+        a5 = m5.atr[-1] or 1.0
+        px = ctx.price
+        lv = ctx.lv or {}
+        pools = []
+        if lv.get("asia"):
+            pools += [(lv["asia"]["high"], 1, "Asian high"), (lv["asia"]["low"], -1, "Asian low")]
+        for k, d0, nm in (("pdh", 1, "PDH"), ("pdl", -1, "PDL"), ("pwh", 1, "PWH"), ("pwl", -1, "PWL")):
+            if lv.get(k):
+                pools.append((lv[k]["price"], d0, nm))
+        for s in m5.erl(1, px)[:2]:
+            pools.append((s["price"], 1, "M5 swing high"))
+        for s in m5.erl(-1, px)[:2]:
+            pools.append((s["price"], -1, "M5 swing low"))
+        for g in lv.get("ndog", []) + lv.get("nwog", []):
+            pools.append((g["ce"], 1 if g["ce"] > px else -1, "opening gap 50 %"))
+        for lvl, side, nm in pools:
+            dist = (lvl - px) * side
+            if 0 < dist <= 0.35 * a5:
+                d = -side                                              # a raid above sets up a sell, below a buy
+                steps = [{"label": f"{nm} {lvl:.2f} is {dist:.2f} away", "done": True},
+                         {"label": f"sweep it and close back {'below' if side == 1 else 'above'}", "done": False},
+                         {"label": "CISD / MSS", "done": False}, {"label": "entry close", "done": False}]
+                nxt = f"a wick through {lvl:.2f} that closes back {'below' if side == 1 else 'above'} it"
+                models = ["turtle_soup"]
+                if nm.startswith("Asian") and in_window(utc_now, MODELS["judas"][1]):
+                    models.append("judas")
+                if nm.startswith("opening gap"):
+                    models = ["gap"]
+                for m in models:
+                    put(m, "M5", d, "watch", steps, nxt, level=lvl, anchor=None, why=[f"{nm} {lvl:.2f} within {dist:.2f}"])
+
+    # AMD in London: the Asian range is the accumulation; say what manipulation is expected
+    asia = (ctx.lv or {}).get("asia")
+    if asia and in_window(utc_now, (("London", 120, 330),)) and abs(ctx.bias) > 0.15:
+        d = 1 if ctx.bias > 0 else -1
+        lvl = asia["low"] if d == 1 else asia["high"]
+        if ("judas", "M5", d) not in out and ("judas", "M1", d) not in out:
+            put("judas", "M5", d, "watch",
+                [{"label": f"accumulation: Asian range {asia['low']:.2f}-{asia['high']:.2f}", "done": True},
+                 {"label": f"manipulation: a run {'below' if d == 1 else 'above'} {lvl:.2f} against the bias", "done": False},
+                 {"label": "CISD back inside", "done": False}, {"label": "distribution entry", "done": False}],
+                f"London to run {'below the Asian low' if d == 1 else 'above the Asian high'} {lvl:.2f}, then a CISD back",
+                level=lvl, why=["AMD: Asia accumulated, London is the manipulation window"])
+
+    # 4) OTE: a leg that shifted and is retracing toward 62 %
+    for tf in ("M1", "M5"):
+        T = ctx.tapes.get(tf)
+        if not T or not T.breaks:
+            continue
+        br = T.breaks[-1]
+        if T.n - 1 - br["i"] > (40 if tf == "M1" else 15) or not br["sweep"]:
+            continue
+        d = br["dir"]
+        rng = range(br["ext_i"], T.n)
+        k = max(rng, key=lambda m: T.b.h[m]) if d == 1 else min(rng, key=lambda m: T.b.l[m])
+        tip = T.b.h[k] if d == 1 else T.b.l[k]
+        span = (tip - br["ext"]) * d
+        if span <= 1.5 * (T.atr[-1] or 1):
+            continue
+        back = (tip - T.b.c[-1]) * d / span
+        if 0.3 <= back < 0.62:
+            lvl = tip - d * 0.62 * span
+            put("ote", tf, d, "forming",
+                [{"label": f"{br['kind']} {'up' if d == 1 else 'down'} after a sweep", "done": True},
+                 {"label": f"retraced {back:.0%} of the leg", "done": True},
+                 {"label": f"reach 62 % ({lvl:.2f})", "done": False}, {"label": "confirmation close", "done": False}],
+                f"price into the 62-70 % zone from {lvl:.2f}", level=lvl, anchor=T.b.t[br["i"]],
+                why=[f"leg {br['ext']:.2f} -> {tip:.2f}"])
+
+    # 5) Pulse: approaching the higher timeframe's internal liquidity on the way to its external liquidity
+    for tf, htf in (("M1", "M15"), ("M5", "H1")):
+        H = ctx.tapes.get(htf)
+        if not H or not H.n:
+            continue
+        a = H.atr[-1] or 1.0
+        for d in (1, -1):
+            gaps = [g for g in H.open_fvgs(d) if 0 < ((ctx.price - g["top"]) if d == 1 else (g["bottom"] - ctx.price)) <= 0.5 * a]
+            erl = H.erl(d, ctx.price)
+            if gaps and erl:
+                g = gaps[-1]
+                put("pulse", tf, d, "watch",
+                    [{"label": f"{htf} gap {g['bottom']:.2f}-{g['top']:.2f} below the draw" if d == 1 else
+                      f"{htf} gap {g['bottom']:.2f}-{g['top']:.2f} above the draw", "done": True},
+                     {"label": f"{htf} draw {erl[0]['price']:.2f}", "done": True},
+                     {"label": f"tap the gap", "done": False}, {"label": f"{tf} CISD", "done": False}],
+                    f"a tap of {g['bottom']:.2f}-{g['top']:.2f}, then a {tf} CISD {'up' if d == 1 else 'down'}",
+                    level=g["ce"], zone={"top": g["top"], "bottom": g["bottom"]}, why=[f"Pulse toward {erl[0]['price']:.2f}"])
+
+    # confidence: stage x fit for this market x record x higher-timeframe agreement x Kronos x the setup's grade
+    items = []
+    for it in out.values():
+        r = rk.get(it["model"], {})
+        fit = r.get("fit", 0.5)
+        edge = r.get("edge", 0.0) or 0.0
+        d = it["dir"]
+        align = 1.15 if ctx.bias * d > 0.15 else (0.75 if ctx.bias * d < -0.15 else 1.0)
+        kv = ctx.kronos_vote(d)[0]
+        kf = 1.1 if kv == 1 else (0.8 if kv == -1 else 1.0)
+        sc = it["score"] if it["score"] is not None else 0.55
+        tm = (trust or {}).get(f"Model: {it['name']}", 1.0)          # earned in the knowledge mesh (mesh.py)
+        conf = it["progress"] * (0.35 + 0.65 * fit) * (0.7 + 0.6 * max(-0.5, min(0.5, edge))) * align * kf * (0.5 + 0.5 * sc)
+        conf *= 0.5 + 0.5 * tm
+        it["trust"] = tm if (trust or {}).get(f"Model: {it['name']}") is not None else None
+        it["confidence"] = round(max(0.0, min(1.0, conf)), 3)
+        it["key"] = f"{it['model']}:{it['tf']}:{d}:{it['anchor_time'] or round(it['level'] or 0, 1)}"
+        done = sum(1 for s in it["steps"] if s["done"])
+        it["text"] = (f"{it['name']} {it['side']} {it['stage'].upper()} on {it['tf']} ({done}/{len(it['steps'])}): "
+                      f"{STAGE_TXT[it['stage']]}. Next: {it['next']}.")
+        items.append(it)
+    items.sort(key=lambda x: (-x["confidence"], -x["progress"]))
+    return items
+
+
+class Announcer:
+    """Turns forming models into pushes: one message when a model reaches FORMING, READY or ENTER (once per
+    model, side and anchor), the most reliable one named first and the others listed; at most one push every
+    90 s (an ENTER always goes), 40 a day, nothing while the market is closed or below `min_conf`."""
+
+    PUSH_STAGES = ("forming", "ready", "enter")
+
+    def __init__(self, min_conf: float = 0.18, gap_s: int = 90, per_day: int = 40):
+        self.min_conf, self.gap_s, self.per_day = min_conf, gap_s, per_day
+        self.done: dict = {}           # key -> highest stage pushed
+        self.last = 0
+        self.day, self.count = None, 0
+        self.log: list = []
+        self.cool: dict = {}           # (model, tf, side, stage) -> last push time: the same news isn't repeated
+        self.cool_s = 900
+
+    def step(self, items: list, now: int, market_open: bool = True, news: bool = False, overall: dict | None = None) -> list:
+        if not market_open or not items:
+            return []
+        day = now // 86400
+        if day != self.day:
+            self.day, self.count = day, 0
+        fresh = []
+        for it in items:
+            if it["stage"] not in self.PUSH_STAGES or it["confidence"] < self.min_conf:
+                continue
+            prev = self.done.get(it["key"])
+            ck = (it["model"], it["tf"], it["dir"], it["stage"])
+            if now - self.cool.get(ck, -10 ** 9) < self.cool_s:
+                continue                                              # said that a moment ago
+            if prev is None or STAGE_P[it["stage"]] > STAGE_P[prev]:
+                fresh.append(it)
+        if not fresh:
+            return []
+        top = fresh[0]
+        urgent = top["stage"] == "enter"
+        if (now - self.last < self.gap_s and not urgent) or self.count >= self.per_day:
+            return []
+        for it in fresh:
+            self.done[it["key"]] = it["stage"]
+            self.cool[(it["model"], it["tf"], it["dir"], it["stage"])] = now
+        if len(self.done) > 2000:
+            self.done = dict(list(self.done.items())[-1000:])
+        self.last, self.count = now, self.count + 1
+        others = [f"{x['name']} {x['side']} ({x['stage']}, {x['confidence']:.0%})" for x in items[:5]
+                  if x is not top and x["confidence"] >= self.min_conf][:3]
+        word = {"forming": "forming", "ready": "READY", "enter": "ENTER NOW"}[top["stage"]]
+        title = f"XAUUSD {top['side']} {word}: {top['name']} {top['tf']}"
+        body = [f"{top['text']}", f"Confidence {top['confidence']:.0%} (the most reliable of {len(fresh)} forming now)."]
+        if others:
+            body.append("Also forming: " + "; ".join(others) + ".")
+        if overall:
+            body.append(f"Overall: {overall.get('verdict', '').lower()} {overall.get('score', 0):+.2f}.")
+        if news:
+            body.append("High-impact news close: careful.")
+        msg = {"title": title, "body": "\n".join(body), "priority": "urgent" if urgent else ("high" if top["stage"] == "ready" else "default"),
+               "tags": "rotating_light" if urgent else ("bell" if top["stage"] == "ready" else "eyes"),
+               "item": top, "time": now}
+        self.log = (self.log + [{k: msg[k] for k in ("title", "body", "time")}])[-30:]
+        return [msg]
+
+
+# ====================================================================== the knowledge mesh
+def mesh_votes(ict: dict | None, overall_: dict | None) -> dict:
+    """What the brain says at this candle, as knowledge-mesh sources (mesh.py scores each against the price 10, 30,
+    60 and 120 minutes later and earns it trust): every model's forming direction weighted by its progress, the
+    best forming model, every voice of the overall analysis, the overall verdict and the decision."""
+    g = {}
+    if not ict:
+        return g
+    seen = set()
+    for it in ict.get("forming") or []:
+        if it["stage"] == "watch" or it["name"] in seen:
+            continue
+        seen.add(it["name"])
+        g[f"Model: {it['name']}"] = round(it["dir"] * it["progress"], 3)
+    fm = [x for x in ict.get("forming") or [] if x["stage"] != "watch"]
+    if fm:
+        g["Best forming model"] = round(fm[0]["dir"] * fm[0]["confidence"], 3)
+    dec = ict.get("decision") or {}
+    if dec.get("dir"):
+        g["Decision"] = dec["dir"]
+    for v in (overall_ or {}).get("voices") or []:
+        if v.get("value") is not None:
+            g[f"Voice: {v['name']}"] = v["value"]
+    if overall_ and overall_.get("score") is not None:
+        g["Overall"] = overall_["score"]
+    return g

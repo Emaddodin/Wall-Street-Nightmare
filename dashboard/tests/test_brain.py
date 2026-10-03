@@ -89,3 +89,22 @@ def test_candle_patterns_confirm_direction():
         b.append(i * 60, *r)
     assert cdl.confirms(b, 1, 1)["name"] == "Bullish Engulfing"
     assert cdl.confirms(b, 1, -1) is None
+
+
+def _item(model="unicorn", stage="forming", conf=0.5, anchor=1, d=1):
+    return {"model": model, "name": model.title(), "tf": "M1", "dir": d, "side": "BUY" if d == 1 else "SELL",
+            "stage": stage, "progress": brain.STAGE_P[stage], "confidence": conf, "key": f"{model}:M1:{d}:{anchor}",
+            "text": f"{model} {stage}", "steps": [], "next": "x"}
+
+
+def test_announcer_pushes_best_once_and_upgrades():
+    a = brain.Announcer()
+    m = a.step([_item(conf=0.6), _item("turtle_soup", conf=0.3)], 10_000)
+    assert len(m) == 1 and "Unicorn" in m[0]["title"] and "Turtle_Soup" in m[0]["body"]
+    assert a.step([_item(conf=0.6)], 10_200) == []                    # same thing again: silent
+    assert a.step([_item(anchor=2, conf=0.6)], 10_300) == []          # a new sweep, same model + stage: cooling down
+    up = a.step([_item(stage="ready", conf=0.7)], 10_400)             # the stage moved on: pushed
+    assert up and "READY" in up[0]["title"]
+    now = a.step([_item(stage="enter", conf=0.8)], 10_410)            # entries never wait for the gap
+    assert now and now[0]["priority"] == "urgent"
+    assert a.step([_item(conf=0.9)], 20_000, market_open=False) == []

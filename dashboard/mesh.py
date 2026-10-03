@@ -135,6 +135,18 @@ class Board:
                 out[name] = round(1 + max(-1.0, min(1.0, (acc - 0.5) / 0.1)), 2)
         return out
 
+    def trust_all(self) -> dict:
+        """Earned trust of every source the mesh scores (models, voices, Kronos, the ML model ...), same rule as
+        `trust`: 0 (always wrong) .. 2 (clearly right), only once it is beyond a coin by 3 sigma on MIN_N samples."""
+        out = {}
+        for name, s in self.score[TRUST_H].items():
+            if s.n < MIN_N or name in ("Always up", "Last 30 min"):
+                continue
+            acc = s.right / s.n
+            if abs(acc - 0.5) > 3 * math.sqrt(0.25 / s.n):
+                out[name] = round(1 + max(-1.0, min(1.0, (acc - 0.5) / 0.1)), 2)
+        return out
+
     def view(self) -> dict:
         names = sorted({n for h in HORIZONS for n in self.score[h]},
                        key=lambda n: (n not in GROUPS and not n.startswith("Desk ")
@@ -226,6 +238,9 @@ class Mesh:
 
     def trust(self) -> dict:
         return self.board.trust()
+
+    def trust_all(self) -> dict:
+        return self.board.trust_all()
 
     def state(self) -> dict:
         b = self.board

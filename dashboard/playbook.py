@@ -907,7 +907,7 @@ class Playbook:
         self.history: dict = {}       # tf -> the read of each closed candle, with the action at that close
 
     def update(self, bars: dict, utc, desks: dict | None = None, kronos30: dict | None = None, smt: dict | None = None,
-               news: bool = False, spread: float = SPREAD, market_open: bool = True) -> dict | None:
+               news: bool = False, spread: float = SPREAD, market_open: bool = True, trust: dict | None = None) -> dict | None:
         """bars: closed candles by timeframe (M1 M5 M15 H1 H4 D1). Returns state.ict."""
         t0 = time.time()
         h1, m5 = bars.get("H1"), bars.get("M5")
@@ -973,6 +973,10 @@ class Playbook:
             if rd:
                 reads[tf] = rd
         decision = brain.decide(ctx, setups, ranking, reads, market_open)
+        try:
+            forming = brain.forming(ctx, setups, ranking, trust)
+        except Exception as e:
+            forming, self.error = [], f"forming: {e}"
         for tf, rd in reads.items():                                   # the read of each candle, kept for the chart
             hist = self.history.setdefault(tf, [])
             if not hist or hist[-1]["time"] != rd["time"]:
@@ -987,6 +991,7 @@ class Playbook:
             "regime": ctx.regime, "levels": _levels_out(lv), "timeframes": reports,
             "setups": sorted(setups, key=lambda s: (s["status"] != "armed", -s["score"]))[:12],
             "ranking": ranking, "best": self.best, "talk": talk, "news": news, "decision": decision,
+            "forming": forming[:12], "best_forming": next((x for x in forming if x["stage"] != "watch"), None),
             "reads": reads, "history": {tf: h[-40:] for tf, h in self.history.items()},
             "entries": [r for tf in self.history for r in self.history[tf] if r.get("action_dir")][-20:],
             "kronos30": {k: (kronos30 or {}).get(k) for k in ("up_prob", "move", "call", "dir", "confidence")} if kronos30 else None,

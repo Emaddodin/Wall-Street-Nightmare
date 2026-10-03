@@ -93,6 +93,10 @@ class BoomTracker:
         self.smt: dict | None = None
         self.market_open = lambda: True
         self.silver_bars: dict = {}              # silver candles by timeframe (set by the server's SMT reader)
+        self.news_fn = lambda: None              # the news box's state (set by the server)
+        self.overall: dict | None = None         # brain.overall at the last closed candle
+        self.trust: dict = {}                    # earned trust of every mesh source (mesh.trust_all)
+        self.announcer = brain.Announcer()       # forming / ready / enter pushes (brain.py)
         self.quant: dict | None = None           # the quant model's 30-minute forecast (quant.py)
         try:
             from quant import QuantModel
@@ -199,8 +203,10 @@ class BoomTracker:
             except Exception as e:
                 self.smt, self.error = None, f"SMT skipped: {e}"
             try:
+                self.trust = self.mesh.trust_all()
                 self.ict = self.playbook.update(bars, utc, desks=self.desks, kronos30=self.kronos30, smt=self.smt,
-                                                news=news, spread=spread, market_open=self.market_open())
+                                                news=news, spread=spread, market_open=self.market_open(),
+                                                trust=self.trust)
             except Exception as e:
                 self.error = f"ICT playbook skipped: {e}"
             if self.quant_model is not None:
@@ -211,6 +217,16 @@ class BoomTracker:
                     self.quant = {"ok": False, "status": f"quant skipped: {e}"}
             if self.ict is not None:
                 self.ict["quant"] = self.quant
+                self.ict["trust"] = self.trust
+                try:
+                    self.overall = brain.overall(self.ict, self.news_fn(), self.quant, self.kronos30, self.smt,
+                                                 self.market_open(), self.trust)
+                except Exception as e:
+                    self.overall, self.error = None, f"Overall skipped: {e}"
+                if not first:
+                    for msg in self.announcer.step(self.ict.get("forming") or [], int(utc(m1.t[n - 1])) + 60,
+                                                   self.market_open(), news, self.overall):
+                        out.append(("forming", msg))
         self.sig = nc.sigma(m1.c[max(0, n - nc.SIGMA_N - 1):n])
         self._nowcast(m1.t[n - 1] + 60, m1.c[n - 1])               # from the close, for the mesh's record
         closed_nc = self.nowcast
@@ -227,6 +243,7 @@ class BoomTracker:
                 ln = (self.ict or {}).get("line")
                 if ln:
                     rd["g"]["Desk line"] = round(ln["target"] - ln["last"], 3)
+                rd["g"].update(brain.mesh_votes(self.ict, self.overall))      # every model and voice, scored
             if i == n - 1 and self.nodes is not None:
                 tu = utc(m1.t[i])
                 try:
@@ -270,7 +287,8 @@ class BoomTracker:
         if self.ict is not None:                                   # the one line: ICT plan + Kronos (brain.py)
             try:
                 self.ict["line"] = brain.desk_line(self.ict, self.kronos30, t, price, self.sig,
-                                                   (self.nowcast30 or {}).get("band"), self.digits, quant=self.quant)
+                                                   (self.nowcast30 or {}).get("band"), self.digits, quant=self.quant,
+                                                   trust=self.trust)
             except Exception as e:
                 self.ict["line"], self.error = None, f"Desk line skipped: {e}"
 
