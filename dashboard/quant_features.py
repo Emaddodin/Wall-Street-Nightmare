@@ -156,14 +156,15 @@ def sub(b: Bars, a: int, z: int) -> Bars:
     return out
 
 
-def aggregate(b: Bars, sec: int) -> Bars:
-    """Higher-timeframe candles from M1 (the last one may still be open; see closed_by)."""
+def aggregate(b: Bars, sec: int, utc=None) -> Bars:
+    """Higher-timeframe candles from lower ones (the last may still be open; see merge_closed). utc: the
+    candle clock -> UTC function when the candles must start on UTC boundaries (H4 from server-clock H1)."""
     out = Bars(sec)
     t, o, h, l, c = b.t, b.o, b.h, b.l, b.c
     v = b.v if len(b.v) == len(b.t) else [0.0] * len(b.t)
     ot, oh, ol, oc, ov = out.t, out.h, out.l, out.c, out.v
     for i in range(len(t)):
-        k = t[i] - t[i] % sec
+        k = t[i] - (t[i] if utc is None else utc(t[i])) % sec
         if ot and ot[-1] == k:
             if h[i] > oh[-1]:
                 oh[-1] = h[i]
@@ -176,14 +177,15 @@ def aggregate(b: Bars, sec: int) -> Bars:
     return out
 
 
-def merge_closed(given: Bars | None, m1: Bars, sec: int) -> Bars:
-    """`given` closed candles of a timeframe, extended by the ones built from closed M1 candles that closed since
-    (a broker's list can lag the M1 close by a poll). Built candles must start inside the M1 window (complete)."""
-    if not len(m1):
+def merge_closed(given: Bars | None, base: Bars, sec: int, utc=None) -> Bars:
+    """`given` closed candles of a timeframe, extended by the ones built from closed `base` candles (M1, or H1
+    for H4) that closed since: a broker's list can lag the base close by a poll. Built candles must start
+    inside the base window (complete). utc: align the built candles on UTC boundaries (H4 on a server clock)."""
+    if not len(base):
         return given if given is not None else Bars(sec)
-    last_close = m1.t[-1] + 60
-    agg = aggregate(m1, sec)
-    first = m1.t[0]
+    last_close = base.t[-1] + base.sec
+    agg = aggregate(base, sec, utc)
+    first = base.t[0]
     if given is not None and len(given):
         out = sub(given, 0, len(given))
         after = given.t[-1]
@@ -246,7 +248,7 @@ class _Other:
         self.t, self.c = self.m1.t, self.m1.c
         self.p2, _ = _prefix(self.c)
         m5 = frames.get("M5")
-        self.m5 = merge_closed(m5, self.m1, 300) if m5 is not None else _closed_agg(self.m1, 300)
+        self.m5 = merge_closed(m5, self.m1, 300)
         self.m5_close = [x + 300 for x in self.m5.t]
 
     def idx(self, t_gold: int) -> int:
@@ -267,6 +269,28 @@ def _closed_agg(m1: Bars, sec: int) -> Bars:
     return merge_closed(None, m1, sec)
 
 
+# ------------------------------------------------------------------ ICT tape windows
+def window_tape(b: Bars, U: list, j: int, W: int, B: int, cache: dict, name: str, used: set | None = None,
+                drop_old: bool = False) -> tuple:
+    """(tape, first index): the ictlib.Tape over the candles of `b` from the UTC block start
+    floor((U[j] - W) / B) * B to the end of that block (or of `b`), which answers candle j as known then.
+    Live and training read the same window, whatever their history length. U: UTC open times of b."""
+    start = (U[j] - W) // B * B
+    s0 = bisect_left(U, start)
+    e0 = bisect_left(U, start + W + B) - 1
+    key = (name, U[s0], U[e0], e0 - s0)
+    if used is not None:
+        used.add(key)
+    tp = cache.get(key)
+    if tp is None:
+        tp = Tape(sub(b, s0, e0 + 1), name)
+        if drop_old:                                  # a replay never comes back to an older block
+            for k in [k for k in cache if k[0] == name]:
+                del cache[k]
+        cache[key] = tp
+    return tp, s0
+
+
 # ------------------------------------------------------------------ ICT tape read as of a candle
 def _last(xs: list, j: int):
     for x in reversed(xs):
@@ -277,7 +301,7 @@ def _last(xs: list, j: int):
 
 def tape_features(tp: Tape, j: int, price: float) -> list:
     """ICT_KEYS values from tape `tp` as known at its candle j (events and states after j are ignored)."""
-    if tp is None or j < 0 or j >= tp.n:
+    if tp is None or j < 0 or j >= tp.n or j + 1 < 2 * tp.pivot + 3:    # a Tape reads nothing below 9 candles
         return [0.0, AGE_CAP, 0.0, AGE_CAP, 0.0, AGE_CAP, 0.0, FVG_CAP, FVG_CAP, 0.0, 0.0]
     atr = tp.atr[j] if tp.atr[j] > 0 else 1e-9
     out = []
@@ -297,9 +321,16 @@ def tape_features(tp: Tape, j: int, price: float) -> list:
     else:
         out += [0.0, AGE_CAP, 0.0]
     up = dn = FVG_CAP
+    b = tp.b
     for g in tp.fvgs:
         if g["born"] > j or (g["end"] is not None and g["end"] <= j):
             continue
+        if g["end"] is not None and g["born"] < j:
+            # `end` is the gap's last change (a filled gap can invert later), so whether it was still open at j
+            # comes from the candles: untouched beyond its far edge after it was born
+            if (min(b.l[g["born"] + 1:j + 1]) <= g["bottom"]) if g["dir"] == 1 else \
+                    (max(b.h[g["born"] + 1:j + 1]) >= g["top"]):
+                continue
         if g["top"] > price:
             d = (g["bottom"] - price) / atr
             up = min(up, d if d > 0 else 0.0)
@@ -319,7 +350,6 @@ def tape_features(tp: Tape, j: int, price: float) -> list:
             break
     pd = 0.0
     if hi is not None and lo is not None:
-        b = tp.b
         top = max(hi["price"], max(b.h[hi["i"]:j + 1]))
         bot = min(lo["price"], min(b.l[lo["i"]:j + 1]))
         if top > bot:
@@ -327,6 +357,48 @@ def tape_features(tp: Tape, j: int, price: float) -> list:
     out.append(pd)
     out.append(sum(x["dir"] for x in brs) / len(brs) if brs else 0.0)
     return out
+
+
+# ------------------------------------------------------------------ SMT state (smt.SMTReader's rule, lean)
+def _align_fast(g: Bars, o: Bars) -> tuple:
+    if g.t == o.t:
+        return g, o
+    idx = {t: j for j, t in enumerate(o.t)}
+    gi = [i for i, t in enumerate(g.t) if t in idx]
+    oi = [idx[g.t[i]] for i in gi]
+    a, b = Bars(g.sec), Bars(g.sec)
+    for dst, src, ii in ((a, g, gi), (b, o, oi)):
+        dst.t = [src.t[i] for i in ii]
+        dst.o = [src.o[i] for i in ii]
+        dst.h = [src.h[i] for i in ii]
+        dst.l = [src.l[i] for i in ii]
+        dst.c = [src.c[i] for i in ii]
+        dst.v = [0.0] * len(ii)
+        dst.spread = [0.0] * len(ii)
+    return a, b
+
+
+def smt_state(gold: Bars, other: Bars, name: str = "silver") -> tuple:
+    """(state, corr) as smt.SMTReader.update(tf, gold, other, last_forming=False) reads them on these closed
+    candles: state = direction of the newest confirmed SMT of the last 15 candles still intact, 0 when none,
+    when fewer than 40 candles line up or when the correlation is under 0.3; corr = 120-candle correlation."""
+    keep = 139
+    gt = sub(gold, max(0, len(gold) - keep), len(gold))
+    g, o = _align_fast(gt, other)
+    n = len(g)
+    if not n:
+        return 0, None
+    cover = n / max(1, sum(1 for t in gt.t if t >= g.t[0]))
+    corr = smtmod.correlation(g, o, 120)
+    if n < 40 or cover < 0.6 or corr is None or corr < smtmod.MIN_CORR:
+        return 0, corr
+    evs = smtmod.divergences(g, o, pivot=3, lookback=120, inverse=False, tol=0.0, last_forming=False, name=name)
+    state = 0
+    for e in evs:
+        age = n - 1 - bisect_left(g.t, e["time"])
+        if age < 15 and smtmod.SMTReader._intact(g, e):
+            state = e["dir"]
+    return state, corr
 
 
 # ------------------------------------------------------------------ the builder
@@ -358,7 +430,6 @@ class FeatureBuilder:
         fs, fd = _frames_of(silver), _frames_of(dxy)
         self.xag = _Other(fs) if fs else None
         self.dxy = _Other(fd) if fd else None
-        self.smt_reader = smtmod.SMTReader(name="silver")
 
     # -- per-candle series -------------------------------------------------------------------------------------
     def _prep_m1(self) -> None:
@@ -433,21 +504,9 @@ class FeatureBuilder:
 
     def tape(self, tf: str, j: int) -> tuple:
         """(tape, first candle index) of the tape window that answers candle j of tf."""
-        U = self.U[tf]
         W, B = ICT_WIN[tf]
-        start = (U[j] - W) // B * B
-        s0 = bisect_left(U, start)
-        e0 = bisect_left(U, start + W + B) - 1
-        key = (tf, U[s0], U[e0], e0 - s0)
-        self.used_tapes.add(key)
-        tp = self.tape_cache.get(key)
-        if tp is None:
-            tp = Tape(sub(self.tf[tf], s0, e0 + 1), tf)
-            if self.utc is None:                     # training: the previous block is never needed again
-                for k in [k for k in self.tape_cache if k[0] == tf]:
-                    del self.tape_cache[k]
-            self.tape_cache[key] = tp
-        return tp, s0
+        return window_tape(self.tf[tf], self.U[tf], j, W, B, self.tape_cache, tf, self.used_tapes,
+                           drop_old=self.utc is None)
 
     # -- features ----------------------------------------------------------------------------------------------
     def features(self, i: int, kronos30: dict | None = None) -> OrderedDict | None:
@@ -578,19 +637,15 @@ class FeatureBuilder:
                 x["rs30"] = x["ret_30"] - x["xag_r30"]
                 x["rs60"] = x["ret_60"] - x["xag_r60"]
                 a = bisect_left(sv.t, gwin.t[0])
-                r = self.smt_reader.update("M1", gwin, sub(sv.m1, a, k + 1), last_forming=False)
-                x["xag_corr"] = float(r.get("corr") or 0.0)
-                if r.get("ok") and r.get("corr_ok"):
-                    x["smt_m1"] = float(r.get("state") or 0)
+                st, cr = smt_state(gwin, sub(sv.m1, a, k + 1))
+                x["xag_corr"], x["smt_m1"] = float(cr or 0.0), float(st)
                 if j5 >= 0:
                     g5 = self.tf["M5"]
                     gw5 = sub(g5, max(0, j5 - SMT_BARS + 1), j5 + 1)
                     k5 = bisect_right(sv.m5_close, q) - 1
                     if k5 >= 0:
                         a5 = bisect_left(sv.m5.t, gw5.t[0])
-                        r5 = self.smt_reader.update("M5", gw5, sub(sv.m5, a5, k5 + 1), last_forming=False)
-                        if r5.get("ok") and r5.get("corr_ok"):
-                            x["smt_m5"] = float(r5.get("state") or 0)
+                        x["smt_m5"] = float(smt_state(gw5, sub(sv.m5, a5, k5 + 1))[0])
         dx = self.dxy
         if dx is not None:
             k = dx.idx(t[i])
