@@ -52,7 +52,9 @@
     const rows = await get(`/api/candles?tf=${want}&count=1200`).catch(() => null);
     if (!Array.isArray(rows) || want !== tf) return;
     series.setData(rows);
-    if (rows.length > 160) chart.timeScale().setVisibleLogicalRange({ from: rows.length - 150, to: rows.length + 28 });   // recent bars, room for the forecast
+    const room = want === "M1" ? LIVE_MIN + 18 : 28;                // empty bars on the right for the forecast
+    chart.timeScale().applyOptions({ rightOffset: want === "M1" ? LIVE_MIN + 16 : 14 });
+    if (rows.length > 160) chart.timeScale().setVisibleLogicalRange({ from: rows.length - 150, to: rows.length + room });   // recent bars, room for the forecast
     loadedTf = want;
     first = rows.length ? rows[0].time : 0;
     times = rows.map((r) => r.time);
@@ -556,7 +558,9 @@
     const end = pts[pts.length - 1], x0 = pts[0].x, mv = k.target - k.last, l = leanOf(k);
     zx.fillStyle = "rgba(236,232,223,.07)"; zx.fillRect(Math.round(x0), 0, 1, zc.getBoundingClientRect().height - ts.height());   // now | next 10 min
     zx.fillStyle = "rgba(214,173,82,.9)"; zx.beginPath(); zx.arc(x0, y(k.last), 3, 0, 7); zx.fill();   // starts at the live price
-    tag(`${LIVE_MIN} min  ${fmt(k.target)} ${mv >= 0 ? "+" : "−"}${fmt(Math.abs(mv))}`, end.x + 6, y(k.target), C.gold, { pri: 90, must: true });
+    const ye = y(k.target);                                        // the tip: a dot, and the label just above it
+    zx.beginPath(); zx.arc(end.x, ye, 3, 0, 7); zx.fill();
+    tag(`${LIVE_MIN} min  ${fmt(k.target)} ${mv >= 0 ? "+" : "−"}${fmt(Math.abs(mv))}`, end.x, ye - TH / 2 - 6, C.gold, { align: "right", pri: 90, must: true });
   }
   chart.timeScale().subscribeVisibleLogicalRangeChange(() => requestAnimationFrame(drawZones));
   new ResizeObserver(() => requestAnimationFrame(drawZones)).observe(zc);
