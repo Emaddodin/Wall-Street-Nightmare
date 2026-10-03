@@ -78,6 +78,10 @@ def clock_build(path: str) -> dict:
                 a["m60"] += abs(e60[4] - r[1])
     hours = {str(h): {"move_10": round(a["m10"] / a["n10"], 2), "move_60": round(a["m60"] / max(a["n60"], 1), 2)}
              for h, a in sorted(acc.items()) if a["n10"]}
+    from nowcast import hour_sd30
+    for h, v in hour_sd30(m1).items():                 # the 30-minute line's hour term (nowcast.sigma_end)
+        if str(h) in hours:
+            hours[str(h)]["sd30_log"] = round(v, 6)
     avg = sum(v["move_60"] for v in hours.values()) / len(hours)
     out = {"source": Path(path).name, "built": time.strftime("%Y-%m-%d"), "avg_move_60": round(avg, 2),
            "hours_ny": hours, "checked": "hour ranking of move size, Jun-Sep vs Oct-May: correlation 0.79; "
@@ -92,6 +96,10 @@ class Clock:
             self.d = json.loads(CLOCK_FILE.read_text())
         except (OSError, ValueError):
             self.d = None
+
+    def sd30(self, utc: int) -> float | None:
+        v = (self.d or {}).get("hours_ny", {}).get(str(_ny_hour(utc)[0])) or {}
+        return v.get("sd30_log")
 
     def node(self, utc: int) -> dict:
         if not self.d:

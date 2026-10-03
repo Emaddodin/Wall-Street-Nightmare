@@ -70,6 +70,9 @@ class BoomTracker:
         self.desks: dict = {}                    # each timeframe's own concepts and call (tfdesk.py)
         self.nowcast: dict | None = None         # the 10-minute line from the live price, every poll (nowcast.py)
         self.sig: float | None = None            # one-minute sigma of the last closed candles
+        self.nowcast30: dict | None = None       # the 30-minute line, band and sample paths (nowcast.py)
+        self._utc = lambda t: t
+        self._m1c: list = []
         self.nodes = None                        # nodes.Nodes: clock, calendar, cross-markets (set by the server)
         self.flow: dict = {"raids": [], "cisd": [], "orders": []}
         self.watch: list = []
@@ -116,6 +119,8 @@ class BoomTracker:
         ("boom", call) a new limit order, ("boom_fill", call), ("boom_end", call)."""
         out = []
         m1 = src.rates("M1", HISTORY["M1"] + 1)
+        self._utc = lambda t: t - offset(t)
+        self._m1c = m1.c[-2900:-1] if len(m1) else []
         a = self.active
         if a and a["status"] == "waiting" and quote and len(m1):   # fill on the live quote
             if (quote["ask"] <= a["entry"]) if a["dir"] == 1 else (quote["bid"] >= a["entry"]):
@@ -128,7 +133,7 @@ class BoomTracker:
         if m1.t[n - 1] == self.fed_t:
             self._nowcast(m1.t[n], self._live_px(quote, m1.c[n]))
             return out
-        utc = lambda t: t - offset(t)
+        utc = self._utc
         try:
             bars = {"M1": _closed(m1)}
             for tf in ("M5", "M15", "H1", "H4"):
@@ -205,8 +210,16 @@ class BoomTracker:
         line = self.consensus["score"] if self.consensus else None
         k = self.kronos if self.kronos and abs((self.kronos.get("t") or 0) - t) < 1800 else None
         self.nowcast = nc.nowcast(t, price, self.sig, nc.score(self.desks, line), k, self.digits)
+        self.nowcast30 = None
+        closes = list(self._m1c) + [price]
+        hsd = self.nodes.clock.sd30(self._utc(t)) if self.nodes is not None else None
+        sde = nc.sigma_end(closes, 30, hsd)
+        if sde:
+            self.nowcast30 = nc.nowcast(t, price, self.sig, 0.0, None, self.digits, minutes=30, sd_end=sde,
+                                        samples=nc.bootstrap(closes, 30, seed=t // 60))
         if self.consensus is not None:
             self.consensus["live"] = self.nowcast
+            self.consensus["live30"] = self.nowcast30
 
     # ------------------------------------------------------------ calls
     def _order(self, e: dict, spread: float, t: int) -> dict | None:
