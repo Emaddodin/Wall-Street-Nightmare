@@ -33,11 +33,10 @@ from __future__ import annotations
 
 import argparse
 import glob
-import json
 import math
 import os
-import sys
 import time
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -101,7 +100,7 @@ def build(h1, silver=None, log=print) -> dict:
                     "orig": np.array(orig, float).reshape(len(orig), len(names)), "orig_names": names,
                     "features": list(qs.FEATURES[hyp])}
     if log:
-        log(f"  session samples: " + ", ".join(f"{h} {len(out[h]['y'])}" for h in out) +
+        log("  session samples: " + ", ".join(f"{h} {len(out[h]['y'])}" for h in out) +
             f" ({time.time() - t0:.1f} s)")
     out["_builder"] = sb
     return out
@@ -162,7 +161,7 @@ def train_hyp(ds: dict, split_day: int, folds: int = 4, grid=SGRID, max_trees: i
     met["cv"] = {"direction": sel["all"], "move": rsel["all"], "chosen": cfg, "trees": sel["trees"],
                  "move_trees": rsel["trees"], "platt": [round(ab[0], 5), round(ab[1], 5)]}
     met["n_test"], met["n_train"] = int(len(yte)), int(len(ytr))
-    ent = {"hypothesis": None, "features": feats, "cls": cls.export(edges), "reg": reg.export(edges),
+    ent = {"hypothesis": None, "features": feats, "trees": {"cls": cls.export(edges), "reg": reg.export(edges)},
            "platt": {"a": ab[0], "b": ab[1]}, "metrics": met, "beats_coin": qt.beats_coin(met),
            "trained_period": f"{day_str(dtr[0])} to {day_str(dtr[-1])}",
            "test_period": f"{day_str(day[te][0])} to {day_str(day[te][-1])}",
@@ -207,9 +206,12 @@ def reference_models(repo: str, sb, days, y, log=print) -> list:
     for f in files:
         name = os.path.basename(f)
         try:
-            m = joblib.load(f)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")                        # "pickled by an older XGBoost"
+                m = joblib.load(f)
             bst = m.get_booster() if hasattr(m, "get_booster") else m
-            names = list(getattr(m, "feature_names_in_", None) or bst.feature_names or [])
+            fn = getattr(m, "feature_names_in_", None)
+            names = [str(x) for x in (fn if fn is not None else (bst.feature_names or []))]
         except Exception as e:                                         # pickles from other versions
             rows.append({"model": name, "note": f"can't load ({type(e).__name__}: {str(e)[:80]})"})
             continue

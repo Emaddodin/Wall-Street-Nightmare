@@ -146,7 +146,7 @@ class QuantModel:
                     unknown = [f for f in d["features"] if f not in qf.FEATURES]
                     if unknown:
                         raise ValueError(f"inputs this version doesn't compute ({', '.join(unknown[:3])})")
-                    self.cls, self.reg = Booster(d["cls"]), Booster(d["reg"])
+                    self.cls, self.reg = Booster(d["trees"]["cls"]), Booster(d["trees"]["reg"])
                     self.feats = list(d["features"])
                     self.platt = (float(d["platt"]["a"]), float(d["platt"]["b"]))
                     kix = {self.feats.index(k) for k in qf.KRONOS_FEATURES if k in self.feats}
@@ -167,7 +167,7 @@ class QuantModel:
                             hyp = e["hypothesis"]
                             if list(e["features"]) != list(qs.FEATURES[hyp]):
                                 raise ValueError(f"{key} inputs differ from this version's")
-                            sm[key] = {"m": e, "cls": Booster(e["cls"]), "reg": Booster(e["reg"]),
+                            sm[key] = {"m": e, "cls": Booster(e["trees"]["cls"]), "reg": Booster(e["trees"]["reg"]),
                                        "platt": (float(e["platt"]["a"]), float(e["platt"]["b"]))}
                         self.sm, self.sessions_status = sm, "ok"
                     except (KeyError, TypeError, ValueError) as e:

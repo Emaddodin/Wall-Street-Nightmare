@@ -196,7 +196,7 @@ def test_purging_keeps_labels_out_of_the_test_period(planted):
 
 def test_json_roundtrip_matches_numpy(planted):
     """Booster (pure Python, from the JSON file) == the numpy model on raw and on binned inputs."""
-    ex, ds, model = planted["ex"], planted["ds"], planted["model"]
+    ex, ds = planted["ex"], planted["ds"]
     te = np.where(ex["test_mask"])[0][:300]
     X = ds["X"][te]
     loaded = json.loads(Path(planted["path"]).read_text())
@@ -212,7 +212,7 @@ def test_json_roundtrip_matches_numpy(planted):
 
 # ------------------------------------------------------------------ live
 def test_predict_schema_matches_numpy_and_is_fast(planted, tmp_path):
-    g, model, ex = planted["g"], planted["model"], planted["ex"]
+    g, ex = planted["g"], planted["ex"]
     qm = quant.QuantModel(planted["path"], sessions_path=tmp_path / "none.json")
     agg = {tf: qf.aggregate(g, qf.TF_SEC[tf]) for tf in ("M5", "M15", "H1")}
     i = len(g) - 200
@@ -270,3 +270,49 @@ def test_blend_follows_measured_skill():
     assert b["up_prob"] == 0.5 and b["weights"] == {"quant": 0.0, "kronos": 0.0}
     b = quant.blend_with_kronos({"ok": False}, k_good)
     assert b["weights"]["kronos"] == 1.0 and b["up_prob"] == 0.4
+
+
+def test_session_name_is_ictclock_session():
+    import ictclock as ck
+    rnd = random.Random(1)
+    for _ in range(3000):
+        u = 1_735_689_600 + rnd.randrange(0, 2 * 365 * 86400)          # 2025-2026, both DST regimes
+        assert qf.session_name(qf.ny_clock(u) % 86400 // 60) == ck.session(u)["name"]
+
+
+def test_mt5_history_is_converted_to_utc(monkeypatch):
+    """quant_train --mt5: broker candles (New York + 7 server clock) -> UTC, forming candle dropped, silver found
+    under the broker's own suffix."""
+    import types
+    from engine import ny7_offset
+    t_srv = 1_783_000_800 - 1_783_000_800 % 60                          # mid-2026: summer, server = UTC + 3 h
+
+    def bars(n, p0):
+        b = Bars(60)
+        for k in range(n):
+            b.append(t_srv + 60 * k, p0, p0 + 1, p0 - 1, p0 + 0.5)
+        return b
+
+    class FakeBridge:
+        def __init__(self, folder=None):
+            self.symbol = "XAUUSDm"
+
+        def server_offset(self):
+            return 3 * 3600
+
+        def rates(self, tf, count):
+            return bars(500, 2600.0)
+
+        def rates_of(self, sym, tf, count):
+            if sym != "XAGUSDm":
+                raise LookupError(sym)
+            return bars(500, 30.0)
+
+    monkeypatch.setitem(sys.modules, "mt5bridge", types.SimpleNamespace(MT5BridgeSource=FakeBridge))
+    gold, silver, what = qt.load_mt5("M1", 500, log=lambda *a, **k: None)
+    assert ny7_offset(t_srv) == 3 * 3600
+    assert len(gold) == 499 and gold.t[0] == t_srv - 3 * 3600            # the last (forming) candle dropped
+    assert silver is not None and len(silver) == 499 and silver.t == gold.t
+    assert "New York + 7" in what and "XAGUSDm" in what
+    off = qt.offset_rule(2 * 3600, t_srv, None)                          # a broker on a fixed UTC+2 clock
+    assert off(t_srv) == 2 * 3600 and qt.offset_rule(None, t_srv, 1.0)(0) == 3600

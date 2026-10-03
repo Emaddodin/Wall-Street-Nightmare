@@ -707,7 +707,7 @@ def train(ds: dict, split: int, folds: int = 4, embargo_min: int = 1440, grid=GR
         "hyper": {**cfg, **BASE_HP, "min_leaf": ml, "trees": sel["trees"], "move_trees": rsel["trees"],
                   "huber_delta": round(delta, 6), "max_bins": max_bins, "folds": folds, "embargo_min": embargo_min,
                   "step": ds["step"]},
-        "cls": cls.export(edges), "reg": reg.export(edges),
+        "trees": {"cls": cls.export(edges), "reg": reg.export(edges)},
         "platt": {"a": float(ab[0]), "b": float(ab[1])},
         "bins": {f: [float(v) for v in e] for f, e in zip(feats, edges)},
         "trained_period": trp, "test_period": tp, "metrics": met, "beats_coin": ok,
@@ -788,7 +788,7 @@ def check_roundtrip(model: dict, extras: dict, ds: dict, k: int = 200) -> float:
     from quant import Booster
     te = np.where(extras["test_mask"])[0][:k]
     X = ds["X"][te]
-    b = Booster(json.loads(json.dumps(model["cls"])))
+    b = Booster(json.loads(json.dumps(model["trees"]["cls"])))
     py = np.array([b.margin(list(x)) for x in X])
     nump = extras["cls"].margin_raw(X, extras["edges"])
     return float(np.max(np.abs(py - nump))) if len(te) else 0.0
