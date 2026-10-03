@@ -329,6 +329,109 @@ details.more > summary { cursor: pointer; font-size: 12px; color: var(--dim); pa
 .meter { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--raise); overflow: hidden; }
 .meter i { display: block; height: 100%; border-radius: 2px; }
 
+/* ICT desk: the chart talking (state.ict from playbook.py) */
+.ictw { display: grid; gap: 8px; }
+.card.ict { border-color: rgba(214,173,82,.45); gap: 5px 10px; }
+.card.ict.up { border-color: rgba(47,182,124,.75); background: rgba(47,182,124,.05); }
+.card.ict.down { border-color: rgba(229,72,77,.75); background: rgba(229,72,77,.05); }
+.card.ict.closed { border-color: var(--line); }
+.ict .hl { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 6px 10px; flex-wrap: wrap; font: 700 30px/1.05 var(--label); letter-spacing: .04em; margin: 2px 0 1px; }
+.ict .hl.up { color: var(--up); } .ict .hl.down { color: var(--down); } .ict .hl.dimh { color: var(--dim); }
+.ict .hl small { font: 600 13px var(--mono); color: var(--fg); letter-spacing: 0; }
+.ict .hl small em { font-style: normal; color: var(--dim); }
+.grade { display: inline-block; padding: 1px 6px; border-radius: 5px; font: 700 11.5px/16px var(--mono); letter-spacing: 0; border: 1px solid var(--line); color: var(--dim); vertical-align: 2px; }
+.grade.ap { background: var(--gold); border-color: var(--gold); color: #1a1405; }
+.grade.a { color: var(--gold); border-color: rgba(214,173,82,.6); }
+.grade.off { opacity: .5; }
+.ichips { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+.ichip { border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; font: 600 12px/18px var(--label); letter-spacing: .02em; color: var(--dim); white-space: nowrap; }
+.ichip b { font: 600 11.5px var(--mono); color: var(--fg); }
+.ichip.on { color: var(--gold); border-color: rgba(214,173,82,.55); background: rgba(214,173,82,.08); }
+.ichip.up { color: var(--up); border-color: rgba(47,182,124,.5); } .ichip.down { color: var(--down); border-color: rgba(229,72,77,.5); }
+.ichip.warn { color: #ffb9b5; border-color: rgba(229,72,77,.6); background: rgba(229,72,77,.1); }
+.ibias { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 12px; color: var(--dim); }
+.ibias .bar { height: 6px; background: var(--raise); border-radius: 3px; position: relative; }
+.ibias .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.ibias .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--dim); opacity: .5; }
+.ibias .why { grid-column: 1 / -1; margin-top: -3px; }
+.phases { grid-column: 1 / -1; display: grid; gap: 8px; margin: 3px 0 1px; padding-top: 7px; border-top: 1px solid var(--line); }
+.ph { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 0 8px; font-size: 13px; line-height: 1.45; color: #d9d5cb; }
+.ph i { font: 700 11px var(--mono); font-style: normal; color: var(--bg); background: var(--gold); border-radius: 50%; width: 18px; height: 18px; display: grid; place-items: center; margin-top: 1px; }
+.ph i.x { background: var(--dim); }
+.ph b { display: block; font: 700 10.5px var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.k30 { grid-column: 1 / -1; display: grid; gap: 2px; font-size: 12px; color: var(--dim); border-top: 1px solid var(--line); padding-top: 6px; }
+.k30 > b { font: 700 11px var(--label); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.k30 .v { color: var(--fg); } .k30 .v .up { color: var(--up); } .k30 .v .down { color: var(--down); }
+.k30 .num { font-size: 11.5px; }
+.card.best { gap: 5px 10px; }
+.card.best .mname { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; font: 700 19px var(--label); letter-spacing: .02em; }
+.card.best .sd { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 6px 10px; flex-wrap: wrap; font: 700 15px var(--label); letter-spacing: .05em; }
+.card.best .sd.up { color: var(--up); } .card.best .sd.down { color: var(--down); }
+.stat { font: 700 10.5px var(--label); letter-spacing: .1em; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
+.stat.armed { color: var(--gold); border-color: rgba(214,173,82,.6); } .stat.filled { color: var(--up); border-color: rgba(47,182,124,.6); }
+.stat.target { color: var(--up); } .stat.stopped, .stat.invalid { color: var(--down); }
+.lv4 { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 2px 0; }
+.lv4 span { background: var(--raise); border-radius: 7px; padding: 4px 6px 3px; display: flex; flex-direction: column; font: 600 10.5px var(--label); letter-spacing: .08em; color: var(--dim); min-width: 0; }
+.lv4 b { font: 700 13px var(--mono); color: var(--fg); letter-spacing: -.02em; }
+.lv4 em { font: 600 11px var(--mono); font-style: normal; letter-spacing: 0; }
+.lv4 .sl b { color: var(--down); } .lv4 .tp b { color: var(--up); } .lv4 .en b { color: var(--gold); }
+.card ul.why2 { grid-column: 1 / -1; margin: 0; padding-left: 16px; font-size: 12.5px; color: #d9d5cb; display: grid; gap: 1px; }
+.cks { grid-column: 1 / -1; display: grid; gap: 1px; font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 5px; }
+.cks > b { font: 700 11px var(--label); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); margin-bottom: 2px; }
+.ck { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; color: #d9d5cb; }
+.ck i { font-style: normal; font-weight: 700; text-align: center; }
+.ck i.ok { color: var(--up); } .ck i.no { color: var(--down); } .ck i.na { color: var(--dim); }
+.ck.na span { color: var(--dim); }
+.ck small { font: 600 10px var(--label); letter-spacing: .08em; color: var(--warn); margin-left: 4px; }
+.uselv { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.uselv button, .cpy { border: 1px solid rgba(214,173,82,.5); border-radius: 8px; padding: 7px 8px; font: 600 12.5px var(--label); color: var(--gold); }
+.uselv button:hover, .cpy:hover { background: rgba(214,173,82,.1); }
+.cpy { grid-column: 1 / -1; display: block; width: 100%; font: 600 13px var(--mono); letter-spacing: -.01em; color: var(--fg); background: var(--raise); word-break: break-word; }
+.cpy::after { content: "tap to copy"; display: block; font: 600 10px var(--label); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); margin-top: 2px; }
+.cpy.done::after { content: "copied"; color: var(--up); }
+.rank { grid-column: 1 / -1; display: grid; border-top: 1px solid var(--line); margin-top: 3px; }
+.rank > b { font: 700 11px var(--label); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); padding: 6px 0 3px; }
+.rk { display: grid; grid-template-columns: 16px minmax(0, 1fr) 34px 70px 30px; gap: 2px 6px; align-items: center; padding: 5px 2px; border-top: 1px solid rgba(38,42,47,.7); font-size: 12.5px; cursor: pointer; border-radius: 5px; }
+.rk:hover { background: rgba(28,31,35,.7); }
+.rk.top { background: rgba(214,173,82,.06); }
+.rk .n { font: 600 11px var(--mono); color: var(--dim); }
+.rk .nm { min-width: 0; display: grid; gap: 3px; }
+.rk .nm span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rk .sb { height: 3px; border-radius: 2px; background: var(--raise); overflow: hidden; }
+.rk .sb i { display: block; height: 100%; background: var(--gold); }
+.rk .f, .rk .rc { font: 600 11px var(--mono); color: var(--dim); text-align: right; white-space: nowrap; }
+.rk .rc.up { color: var(--up); } .rk .rc.down { color: var(--down); }
+.rk .g { text-align: right; color: var(--dim); }
+.rk .more { grid-column: 2 / -1; font-size: 12px; color: var(--dim); display: grid; gap: 2px; padding: 2px 0 3px; }
+.rk .more .v { color: var(--fg); }
+.rkhead { display: grid; grid-template-columns: 16px minmax(0, 1fr) 34px 70px 30px; gap: 6px; padding: 0 2px 2px; font: 600 10px var(--label); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.rkhead span:nth-child(n+3) { text-align: right; }
+.rkall { justify-self: start; margin-top: 4px; font: 600 12px var(--label); color: var(--dim); padding: 3px 0; }
+.rkall:hover { color: var(--gold); }
+.card.tfd .rows { grid-column: 1 / -1; display: grid; }
+.tr { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 2px 8px; padding: 6px 6px; border-top: 1px solid var(--line); align-items: baseline; border-radius: 6px; }
+.tr[data-tf] { cursor: pointer; } .tr[data-tf]:hover { background: rgba(28,31,35,.7); }
+.tr.here { background: var(--raise); }
+.tr .tf { font: 700 12.5px var(--mono); color: var(--fg); }
+.tr .role { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr .rd { font: 700 12px var(--label); letter-spacing: .06em; text-align: right; white-space: nowrap; }
+.tr .rd.up { color: var(--up); } .tr .rd.down { color: var(--down); } .tr .rd.flat { color: var(--dim); }
+.tr .ln { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 2px 8px; font: 500 11.5px var(--mono); color: var(--dim); }
+.tr .ln .up { color: var(--up); } .tr .ln .down { color: var(--down); }
+.tr .do { grid-column: 2 / -1; font-size: 12.5px; line-height: 1.4; color: var(--fg); }
+.tr .ph2 { grid-column: 2 / -1; font-size: 11.5px; line-height: 1.35; color: var(--dim); }
+.tr .smt { grid-column: 2 / -1; font-size: 11.5px; color: var(--gold); }
+.zp { font: 700 10px/15px var(--label); letter-spacing: .08em; padding: 0 5px; border-radius: 4px; background: var(--raise); color: var(--dim); }
+.zp.premium { color: #ff9f97; background: rgba(229,72,77,.12); } .zp.discount { color: #7fdcb0; background: rgba(47,182,124,.12); }
+.ovl button i.ict { width: 12px; height: 10px; border: 0; border-top: 2px solid var(--gold); border-bottom: 2px dashed var(--down); background: rgba(214,173,82,.25); }
+
+/* chart-only mode: analysis desk, trades placed on the phone */
+.modebtn { font: 700 11px var(--label); letter-spacing: .1em; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); white-space: nowrap; }
+.modebtn.on { color: var(--gold); border-color: rgba(214,173,82,.55); }
+body.chartonly #ticketWrap, body.chartonly #tradeOff, body.chartonly #chips, body.chartonly #protect, body.chartonly #result,
+body.chartonly .blotter, body.chartonly #ordersLog, body.chartonly .kpis { display: none !important; }
+body.chartonly .modebtn { margin-left: auto; }
+
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 @media (max-width: 900px) {
@@ -355,6 +458,7 @@ details.more > summary { cursor: pointer; font-size: 12px; color: var(--dim); pa
   <div class="brand"><b>GOLD DESK</b><span id="sym">XAUUSD</span><button class="helptop" id="helpTop" title="What every label on the chart means"><span lang="fa" dir="rtl">راهنما</span> ?</button></div>
   <span class="pill unknown" id="badge">…</span>
   <div class="conn" id="conn"><i></i><span id="connTxt">Connecting</span></div>
+  <button class="modebtn" id="modeBtn" title="Chart only: hide the order ticket and trades (you trade on your phone). Click to show the ticket.">CHART ONLY</button>
   <div class="kpis">
     <div class="kpi"><span class="eyebrow">Balance</span><b id="bal">-</b></div>
     <div class="kpi"><span class="eyebrow">Equity</span><b id="eq">-</b></div>
@@ -369,7 +473,7 @@ details.more > summary { cursor: pointer; font-size: 12px; color: var(--dim); pa
     <div class="chartwrap">
       <div class="chartbar">
         <div class="tfs" id="tfs"><button data-tf="M1">1m</button><button data-tf="M5">5m</button><button data-tf="M15">15m</button><button data-tf="H1">1h</button><button data-tf="H4">4h</button></div>
-        <div class="ovl" id="ovl"><button data-o="kronos" title="The gold line: what every timeframe, the ICT order flow and Kronos say together (1m-15m), Kronos 24 h on 1h"><i></i>Trend line</button><button data-o="flow" title="M1 order flow: liquidity raids ($), CISD levels and the limit-order gaps (CE) they led to"><i class="f"></i>Order flow</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button><button data-o="boom" title="Boom / Crash calls: arrows, entry, SL and TP"><i class="b"></i>Boom/Crash</button><button data-o="smc" title="Smart Money / ICT: structure (BOS, CHoCH), liquidity, FVG, order blocks, premium / discount, OTE, killzones, key levels"><i class="s"></i>SMC/ICT</button></div>
+        <div class="ovl" id="ovl"><button data-o="kronos" title="The gold line: what every timeframe, the ICT order flow and Kronos say together (1m-15m), Kronos 24 h on 1h"><i></i>Trend line</button><button data-o="flow" title="M1 order flow: liquidity raids ($), CISD levels and the limit-order gaps (CE) they led to"><i class="f"></i>Order flow</button><button data-o="scalper" title="Scalper zones, swing levels, signal levels and arrows"><i class="z"></i>Scalper</button><button data-o="boom" title="Boom / Crash calls: arrows, entry, SL and TP"><i class="b"></i>Boom/Crash</button><button data-o="ict" title="ICT setups: the best model's entry, stop and targets, its entry zone, the sweep and the shift (MSS / CISD), other A / A+ setups on this timeframe, SMT lines"><i class="ict"></i>ICT setups</button><button data-o="smc" title="Smart Money / ICT: structure (BOS, CHoCH), liquidity, FVG, order blocks, premium / discount, OTE, killzones, key levels"><i class="s"></i>SMC/ICT</button></div>
         <button class="helpbtn" id="helpBtn" title="What every word on the chart means" aria-label="Chart cheat sheet">?</button>
       </div>
       <div class="reads"><div class="smcread tfread" id="tfRead" hidden></div><div class="smcread" id="smcRead" hidden></div></div>
@@ -419,6 +523,13 @@ details.more > summary { cursor: pointer; font-size: 12px; color: var(--dim); pa
 
     <div class="result" id="result"><span class="ico">✓</span><div class="what">Ready to trade</div><div class="sub">Click SELL or BUY. The order goes out at once, with no confirm box.</div></div>
 
+    <div class="ictw" id="ictWrap">
+      <div class="eyebrow">ICT desk</div>
+      <div class="card ict" id="ictDesk"></div>
+      <div class="card best" id="ictBest" hidden></div>
+      <div class="card tfd" id="ictTf" hidden></div>
+    </div>
+
     <div class="sig">
       <div class="eyebrow">Trade assistant</div>
       <div class="heads" id="heads" hidden></div>
@@ -435,7 +546,7 @@ details.more > summary { cursor: pointer; font-size: 12px; color: var(--dim); pa
       </div></details>
     </div>
 
-    <div>
+    <div id="ordersLog">
       <div class="eyebrow" style="margin-bottom:4px">Your last orders</div>
       <div class="log" id="log"><div><time></time><span class="dim">Nothing sent yet.</span></div></div>
     </div>

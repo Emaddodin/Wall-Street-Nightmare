@@ -12,7 +12,8 @@
 
   let S = null;            // latest /api/state
   let Q = null;            // latest streamed quote
-  let tf = store.get("tf5", "M5");          // M5 is the main entry timeframe
+  let tf = store.get("tf5", "M1");          // M1 and M5 are the entry charts; M1 unless you picked another one
+  let chartOnly = store.get("chart_only", true);   // analysis desk: trades are placed on the phone, so the ticket hides
   let lastQuoteAt = 0;
   let shownNote = "";
   const fmt = (x) => (x == null || !Number.isFinite(+x)) ? "-" : (+x).toFixed(2);
@@ -45,7 +46,7 @@
       const lo = Math.min(bandRange[0], r ? r.priceRange.minValue : Infinity), hi = Math.max(bandRange[1], r ? r.priceRange.maxValue : -Infinity);
       return { priceRange: { minValue: lo, maxValue: hi } }; } });
   let last = null, loadedTf = null, first = 0, times = [];
-  const ovl = Object.assign({ kronos: true, scalper: false, boom: false, smc: true, flow: true }, store.get("ovl3", {}));   // signals off by default: the measured line comes first   // SMC/ICT covers the scalper's zones
+  const ovl = Object.assign({ kronos: true, scalper: false, boom: false, smc: true, flow: true, ict: true }, store.get("ovl3", {}));   // signals off by default: the measured line comes first   // SMC/ICT covers the scalper's zones
 
   async function loadCandles() {
     const want = tf;
@@ -128,8 +129,21 @@
     const ok = (f) => f && Array.isArray(f.path) && f.path.length ? f : null;
     if (tf === "H1") return ok(k && k.day);
     if (tf !== "M1" && tf !== "M5" && tf !== "M15") return null;
+    if (tf !== "M15") { const k30 = kronos30Line(); if (k30) return k30; }
     if (ok(c)) { const f = tf === "M1" ? liveLine(c) : c; return { ...f, band: Array.isArray(f.band) && f.band.length ? f.band : lineBand(f, k), mix: true }; }
     return tf === "M15" ? null : ok(k);
+  }
+  // Kronos' own 30-minute forecast (state.kronos.m30: M1 + M5 blended and calibrated). While it is fresh it is the gold
+  // line on the 1m and 5m charts, in the same look (dashed path, two-tone range, one tip label), moved onto the live
+  // price the way the 30-minute line is. Stale (older than 10 min, e.g. market closed) or missing: the usual line.
+  function kronos30Line() {
+    const m = S && S.kronos && S.kronos.m30;
+    if (!m || !Array.isArray(m.path) || !m.path.length || !last || loadedTf !== tf) return null;
+    if (last.time - m.t > 600) return null;
+    const px = last.time >= m.t ? last.close : +m.last, d = px - m.last;
+    const path = m.path.map((p) => ({ time: p.time, value: p.value + d }));
+    const band = (m.band || []).map((b) => ({ time: b.time, lo: b.lo + d, hi: b.hi + d, p25: b.p25 + d, p75: b.p75 + d }));
+    return { ...m, path, band, samples: [], last: px, target: path[path.length - 1].value, live: true, k30: true, minutes: m.minutes || 30 };
   }
   // On 1m the gold line looks 30 minutes ahead, one point per candle. The reading is redone at every candle close;
   // while a candle is forming the line starts from the live price, so it stays attached to the chart.
@@ -220,13 +234,13 @@
   function drawForecast() {
     const k = chartForecast();
     const ok = !!(ovl.kronos && loadedTf === tf && k && last);
-    const key = ok ? `${tf}${k.t}${k.mix ? "c" : "k"}${k.target}${k.live ? k.last : ""}` : "";
+    const key = ok ? `${tf}${k.t}${k.mix ? "c" : k.k30 ? "3" : "k"}${k.target}${k.live ? k.last : ""}` : "";
     if (key === fcKey) return;
     fcKey = key;
     bandRange = ok && Array.isArray(k.band) && k.band.length ? [Math.min(...k.band.map((b) => b.lo)), Math.max(...k.band.map((b) => b.hi))] : null;
     if (!ok) { forecast.setData([]); return; }
     forecast.applyOptions({ color: C.gold, lineStyle: 2, lineWidth: 2 });
-    if (k.live) ncRecord(k);
+    if (k.live && !k.k30) ncRecord(k);
     const sec = TFSEC[tf], start = k.t - (k.t % sec), byBar = new Map([[start, k.last]]);
     for (const p of k.path) { const b = p.time - (p.time % sec); if (b >= start) byBar.set(b, p.value); }
     forecast.setData([...byBar].sort((a, b) => a[0] - b[0]).map(([time, value]) => ({ time, value })));
@@ -236,7 +250,7 @@
   // the axis; the short name is a tag at the right edge, placed by the label engine so tags never sit on top of each other.
   function levelList() {
     const want = [];
-    for (const p of S.positions || []) {
+    for (const p of chartOnly ? [] : S.positions || []) {
       want.push([p.open, p.side === "BUY" ? C.buy : C.sell, `${p.side === "BUY" ? "B" : "S"} ${(+p.volume).toFixed(2)}`, 0, 100]);
       if (p.sl) want.push([p.sl, C.down, "SL", 2, 95]);
       if (p.tp) want.push([p.tp, C.up, "TP", 2, 95]);
@@ -244,8 +258,16 @@
     const kf = chartForecast();
     if (ovl.kronos && kf && !kf.live && Number.isFinite(+kf.target))
       want.push([+kf.target, C.gold, `${kf.mix ? "TREND" : "K"} ${kf.dir > 0 ? "▲" : kf.dir < 0 ? "▼" : "•"} ${horizon(kf.minutes).replace(" ", "")}`, 2, 70]);
+    const ib = ictDraw().find((x) => x.best);           // the best ICT model's setup: entry, stop, both targets
+    if (ib) {
+      const s = ib.s;
+      want.push([s.entry, C.gold, `${shortModel(s)} ${s.dir > 0 ? "▲" : "▼"} ${s.grade || ""}`.trim(), 0, 88]);
+      if (s.sl) want.push([s.sl, C.down, "ICT SL", 2, 87]);
+      if (s.tp1) want.push([s.tp1, C.up, `TP1${s.rr1 != null ? " " + (+s.rr1).toFixed(1) + "R" : ""}`, 2, 86]);
+      if (s.tp2) want.push([s.tp2, C.up, `TP2${s.rr2 != null ? " " + (+s.rr2).toFixed(1) + "R" : ""}`, 2, 84]);
+    }
     const ba = S.boom && S.boom.active;
-    if (ovl.boom && ba) {
+    if (ovl.boom && ba && !(ib && ba.setup_id && ba.setup_id === ib.s.id)) {     // the same setup is drawn once
       const n = (ba.dir === 1 || ba.side === "BUY") ? "BOOM" : "CRASH";
       want.push([ba.entry, C.gold, `${n} in`, 0, 85]);
       want.push([ba.sl, C.down, `${n} SL`, 2, 85]);
@@ -326,7 +348,8 @@
     if (!S || loadedTf !== tf || !last) return;
     const right = r.width - chart.priceScale("right").width();
     const sec = TFSEC[tf], ts = chart.timeScale();
-    if (ovl.smc) drawSmc(right, sec, ts);
+    if (ovl.smc) { drawSmc(right, sec, ts); drawIctLevels(right, sec, ts); }
+    if (ovl.ict) { drawSmt(right, sec, ts); drawIct(right, sec, ts); }
     if (ovl.flow) drawFlow(right, sec, ts);
     if (ovl.boom) { drawWatch(right, sec, ts); drawHeadsUp(right, sec, ts); }
     drawBand(right, sec, ts);
@@ -536,6 +559,139 @@
     }
   }
 
+  // ---------------------------------------------------------------- ICT playbook on the chart (state.ict, playbook.py)
+  const SHORT = { mss_fvg: "MSS+FVG", unicorn: "UNICORN", breaker: "BREAKER", pulse: "PULSE", pulse_rev: "PULSE REV", bpr: "BPR",
+    silver_bullet: "SB", ifvg: "IFVG", ote: "OTE", ob_mt: "OB MT", turtle_soup: "T.SOUP", hrlr: "HRLR", smt: "SMT", gap: "GAP",
+    cisd_fvg: "CISD+FVG", judas: "JUDAS" };
+  const shortModel = (s) => SHORT[s.model] || String(s.name || s.model || "ICT").toUpperCase().slice(0, 10);
+  const poolShort = (k) => String(k || "liquidity").replace(/swing high/i, "high").replace(/swing low/i, "low");
+  const k30Words = (k) => {
+    const up = k && k.up_prob != null ? +k.up_prob : null, c = (k && k.call) || (k && k.dir > 0 ? "UP" : k && k.dir < 0 ? "DOWN" : "FLAT");
+    if (up == null) return c;
+    return c === "DOWN" ? `DOWN ${Math.round((1 - up) * 100)}%` : c === "UP" ? `UP ${Math.round(up * 100)}%` : `FLAT ${Math.round(up * 100)}% up`;
+  };
+  // setups to draw: the best model's (armed or filled, any chart), then up to 3 other armed A / A+ on the chart's timeframe
+  function ictDraw() {
+    const I = S && S.ict;
+    if (!I || !ovl.ict) return [];
+    const live = (s) => s && (s.status === "armed" || s.status === "filled") && Number.isFinite(+s.entry);
+    const best = I.best && I.best.setup, out = [];
+    if (live(best)) out.push({ s: best, best: true });
+    const px = last ? last.close : I.price;
+    const others = (I.setups || []).filter((s) => s.status === "armed" && (s.grade === "A+" || s.grade === "A") && s.tf === tf && !(best && s.id === best.id) && live(s))
+      .sort((a, b) => Math.abs(a.entry - px) - Math.abs(b.entry - px));
+    for (const s of others) {
+      if (out.length >= 4) break;
+      if (out.some((o) => o.s.dir === s.dir && Math.abs(o.s.entry - s.entry) < 0.05)) continue;   // same order twice: once
+      out.push({ s });
+    }
+    return out;
+  }
+  const hseg = (x1, x2, yy, col, dash, w) => {
+    if (yy == null || x2 <= x1) return;
+    zx.beginPath(); zx.setLineDash(dash || []); zx.strokeStyle = col; zx.lineWidth = w || 1;
+    zx.moveTo(x1, Math.round(yy) + .5); zx.lineTo(x2, Math.round(yy) + .5); zx.stroke(); zx.setLineDash([]);
+  };
+  function drawIct(right, sec, ts) {
+    const list = ictDraw();
+    if (!list.length) return;
+    const y = (v) => (v == null ? null : series.priceToCoordinate(v));
+    const X = (t) => { const x = xOf(t, ts, sec); return x == null ? null : Math.min(right, x); };
+    for (const { s, best } of [...list].reverse()) {             // the best one last, on top
+      const up = s.dir > 0, rgb = up ? "47,182,124" : "229,72,77", ar = up ? "▲" : "▼";
+      const t0 = (s.shift && s.shift.time) || s.t, x1 = Math.max(0, X(t0) ?? 0);
+      const z = s.zone;
+      if (z && z.top != null && z.bottom != null) {                // the entry zone, from the shift to the right edge
+        const y1 = y(Math.max(z.top, z.bottom)), y2 = y(Math.min(z.top, z.bottom));
+        if (y1 != null && y2 != null && x1 < right) {
+          const h = Math.max(3, y2 - y1);
+          zx.fillStyle = `rgba(214,173,82,${best ? .16 : .08})`; zx.fillRect(x1, y1, right - x1, h);
+          zx.fillStyle = `rgba(${rgb},.9)`; zx.fillRect(x1, y1, 2, h);
+          zx.setLineDash(s.status === "armed" ? [4, 3] : []); zx.strokeStyle = `rgba(214,173,82,${best ? .7 : .4})`; zx.lineWidth = 1;
+          zx.strokeRect(x1 + .5, y1 + .5, right - x1 - 1, h - 1); zx.setLineDash([]);
+        }
+      }
+      if (!best) {                                                 // others: lines from the zone on, tags at the right edge
+        hseg(x1, right, y(s.entry), "rgba(214,173,82,.75)", [6, 3]);
+        hseg(x1, right, y(s.sl), "rgba(229,72,77,.55)", [2, 3]);
+        hseg(x1, right, y(s.tp1), "rgba(47,182,124,.55)", [2, 3]);
+        hseg(x1, right, y(s.tp2), "rgba(47,182,124,.35)", [2, 3]);
+        const e = y(s.entry);
+        if (e != null) tag(`${shortModel(s)} ${ar} ${s.grade}`, right - 4, e, C.gold, { align: "right", pri: 62, edge: true });
+        if (y(s.sl) != null) tag(`${shortModel(s)} SL`, right - 4, y(s.sl), C.down, { align: "right", pri: 39, edge: true, faint: true });
+        if (y(s.tp1) != null) tag(`${shortModel(s)} TP1`, right - 4, y(s.tp1), C.up, { align: "right", pri: 38, edge: true, faint: true });
+        if (y(s.tp2) != null) tag(`${shortModel(s)} TP2`, right - 4, y(s.tp2), C.up, { align: "right", pri: 30, edge: true, faint: true });
+      }
+      if (sec > 900) continue;                                     // sweep and shift markers on 1m-15m only
+      const sw = s.sweep;
+      if (sw && sw.time != null) {                                 // the raid: a ring at its extreme
+        const xs = X(sw.time), ys = y(sw.ext ?? sw.level);
+        if (xs != null && xs > 0 && xs < right && ys != null) {
+          zx.strokeStyle = `rgba(${rgb},.95)`; zx.lineWidth = 1.5; zx.beginPath(); zx.arc(xs, ys, 4.5, 0, 7); zx.stroke();
+          const yl = y(sw.level);
+          if (yl != null) hseg(xs - 18, xs + 8, yl, `rgba(${rgb},.6)`, [1, 2]);
+          tag(`$ ${poolShort(sw.kind)}`, xs, ys + (up ? TH / 2 + 7 : -TH / 2 - 7), `rgb(${rgb})`, { align: "center", pri: best ? 64 : 47, faint: !best });
+        }
+      }
+      const sh = s.shift;
+      if (sh && sh.time != null && sh.level != null) {             // the shift (MSS / CISD): a short line ending at the break
+        const xh = X(sh.time), yh = y(sh.level);
+        if (xh != null && xh > 0 && xh < right && yh != null) {
+          const x0 = Math.max(0, xh - 7 * ts.options().barSpacing);
+          hseg(x0, xh, yh, `rgba(${rgb},.95)`, [], 1.5);
+          tag(sh.kind || "MSS", x0, yh + (up ? -TH / 2 - 2 : TH / 2 + 2), `rgb(${rgb})`, { pri: best ? 63 : 46, faint: !best });
+        }
+      }
+    }
+  }
+  // state.ict.levels: Asian high / low, opening gaps, and any of PDH / PDL / PWH / PWL / NMO the SMC layer isn't drawing
+  function drawIctLevels(right, sec, ts) {
+    const L = S.ict && S.ict.levels;
+    if (!L) return;
+    const H = zc.getBoundingClientRect().height - ts.height();
+    const sl = (S.smc && S.smc.levels) || [], have = new Set(sl.map((l) => l.label));
+    const y = (v) => (v == null ? null : series.priceToCoordinate(v));
+    const inView = (yy) => yy != null && yy > 0 && yy < H;
+    for (const [k, lab, rgb] of [["pdh", "PDH"], ["pdl", "PDL"], ["pwh", "PWH"], ["pwl", "PWL"], ["nmo", "NMO"], ["asia_high", "ASIA H", "120,110,230"], ["asia_low", "ASIA L", "120,110,230"]]) {
+      const p = L[k];
+      if (p == null || have.has(lab) || sl.some((l) => Math.abs(l.price - p) < 0.02)) continue;
+      const yy = y(p);
+      if (!inView(yy)) continue;
+      const c = rgb || "236,232,223";
+      hseg(0, right, yy, `rgba(${c},.45)`, [8, 4]);
+      tag(lab, right - 4, yy, `rgb(${c})`, { align: "right", pri: 44, edge: true });
+    }
+    for (const [arr, name] of [[L.nwog, "NWOG"], [L.ndog, "NDOG"]]) for (const g of (arr || []).slice(0, 2)) {
+      const y1 = y(Math.max(g.top, g.bottom)), y2 = y(Math.min(g.top, g.bottom));
+      if (y1 == null || y2 == null || y2 < 0 || y1 > H) continue;
+      zx.fillStyle = "rgba(150,140,230,.07)"; zx.fillRect(0, y1, right, Math.max(2, y2 - y1));
+      hseg(0, right, y1, "rgba(150,140,230,.35)", [2, 4]); hseg(0, right, y2, "rgba(150,140,230,.35)", [2, 4]);
+      if (g.ce != null) hseg(0, right, y(g.ce), "rgba(150,140,230,.6)", [5, 4]);
+      tag(`${name}${g.ce != null ? " CE" : ""}`, right - 4, g.ce != null ? y(g.ce) : (y1 + y2) / 2, "rgb(170,160,240)", { align: "right", pri: 36, edge: true, faint: true });
+    }
+  }
+  // state.smt[tf].events / forming: gold's two swing points joined (a_time -> b_time at gold's prices), coloured by side
+  function drawSmt(right, sec, ts) {
+    const r = S.smt && S.smt[tf];
+    if (!r) return;
+    const evs = [...(r.events || []).slice(-3)];
+    if (r.forming) evs.push({ ...r.forming, forming: true });
+    const y = (v) => series.priceToCoordinate(v);
+    for (const e of evs) {
+      if (!e.gold || e.gold.length < 2 || e.a_time == null || e.b_time == null || e.a_time < first) continue;
+      const xa = xOf(e.a_time, ts, sec), xb = xOf(e.b_time, ts, sec), ya = y(e.gold[0]), yb = y(e.gold[1]);
+      if (xa == null || xb == null || ya == null || yb == null || xa >= right) continue;
+      const rgb = e.dir > 0 ? "47,182,124" : "229,72,77", a = e.forming ? .9 : e.intact === false ? .35 : .85;
+      zx.beginPath(); zx.setLineDash(e.forming ? [4, 3] : []); zx.strokeStyle = `rgba(${rgb},${a})`; zx.lineWidth = 1.5;
+      zx.moveTo(xa, ya); zx.lineTo(Math.min(xb, right), yb); zx.stroke(); zx.setLineDash([]);
+      zx.fillStyle = `rgba(${rgb},${a})`;
+      for (const [xx, yy] of [[xa, ya], [xb, yb]]) if (xx <= right) { zx.beginPath(); zx.arc(xx, yy, 2.5, 0, 7); zx.fill(); }
+      const hi = e.side === "high";
+      tag(e.forming ? "SMT?" : "SMT", (xa + Math.min(xb, right)) / 2, (ya + yb) / 2 + (hi ? -TH / 2 - 5 : TH / 2 + 5), `rgb(${rgb})`,
+        { align: "center", pri: e.forming ? 52 : 49, faint: e.intact === false });
+    }
+  }
+
   // the Kronos sample-path spread: outer shade = lowest to highest path, inner shade = middle half (p25 to p75)
   function drawBand(right, sec, ts) {
     const k = chartForecast();
@@ -574,7 +730,8 @@
     zx.fillStyle = "rgba(214,173,82,.9)"; zx.beginPath(); zx.arc(x0, y(k.last), 3, 0, 7); zx.fill();   // starts at the live price
     const ye = y(k.target);                                        // the tip: a dot, and the label just above it
     zx.beginPath(); zx.arc(end.x, ye, 3, 0, 7); zx.fill();
-    tag(`${LIVE_MIN} min  ${fmt(end.b.lo)} – ${fmt(end.b.hi)}`, end.x, y(end.b.hi) - TH / 2 - 4, C.gold, { align: "right", pri: 90, must: true });
+    const lbl = k.k30 ? `Kronos 30m ${k30Words(k)}` : `${LIVE_MIN} min  ${fmt(end.b.lo)} – ${fmt(end.b.hi)}`;
+    tag(lbl, end.x, y(end.b.hi) - TH / 2 - 4, C.gold, { align: "right", pri: 90, must: true });
   }
   chart.timeScale().subscribeVisibleLogicalRangeChange(() => requestAnimationFrame(drawZones));
   new ResizeObserver(() => requestAnimationFrame(drawZones)).observe(zc);
@@ -587,18 +744,35 @@
       ovl[b.dataset.o] = !ovl[b.dataset.o]; store.set("ovl3", ovl);
       b.classList.toggle("on", ovl[b.dataset.o]);
       markerKey = ""; fcKey = "x";
-      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); renderSmcRead(); renderTrend(); renderDesks(); renderAssist(); renderBoom(); renderScalper(); }
+      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); renderSmcRead(); renderTrend(); renderDesks(); renderAssist(); renderBoom(); renderScalper(); renderIct(); }
     });
   });
 
+  function setTf(t) {
+    if (!TFSEC[t]) return;
+    tf = t; store.set("tf5", tf);
+    document.querySelectorAll("#tfs button").forEach((x) => x.classList.toggle("on", x.dataset.tf === tf));
+    loadCandles();
+    if (S) { renderDesks(); renderIct(); }
+  }
   document.querySelectorAll("#tfs button").forEach((b) => {
     b.classList.toggle("on", b.dataset.tf === tf);
-    b.addEventListener("click", () => {
-      tf = b.dataset.tf; store.set("tf5", tf);
-      document.querySelectorAll("#tfs button").forEach((x) => x.classList.toggle("on", x === b));
-      loadCandles();
-    });
+    b.addEventListener("click", () => setTf(b.dataset.tf));
   });
+
+  // chart-only mode (on by default): an analysis desk, trades are placed on the phone. Hides the ticket, the trades
+  // list and your position lines; "use levels" buttons then show a line to copy into the phone app instead.
+  function applyMode() {
+    document.body.classList.toggle("chartonly", chartOnly);
+    const b = $("modeBtn");
+    b.classList.toggle("on", chartOnly);
+    b.textContent = chartOnly ? "CHART ONLY" : "TICKET ON";
+    b.title = chartOnly ? "Chart only: the order ticket and trades are hidden (you trade on your phone). Click to show the ticket."
+      : "The order ticket is showing. Click for chart only.";
+    linesKey = "";
+    if (S) { drawLines(); drawZones(); renderIct(); renderAssist(); renderBoom(); renderScalper(); }
+  }
+  $("modeBtn").addEventListener("click", () => { chartOnly = !chartOnly; store.set("chart_only", chartOnly); applyMode(); });
 
   // ---------------------------------------------------------------- "?" cheat sheet: what every word on the chart means
   let lang = store.get("lang", "fa");
@@ -762,11 +936,14 @@
   document.querySelector(".sig").addEventListener("click", (e) => {
     const u = e.target.closest(".use");
     if (!u || !S) return;
-    const ba = S.boom && S.boom.active;
+    const ba = S.boom && S.boom.active, sa = S.active;
     const A = u.dataset.src === "plan" ? assist() : null;
     if (A && A.plan) { lastPlan = { d: A.d, ...A.plan }; store.set("plan", lastPlan); }
-    const lv = A ? A.plan && { sl: A.plan.stop, tp: A.plan.tp2 } : u.dataset.src === "boom" ? ba && { sl: ba.sl, tp: ba.tp } : S.active && { sl: S.active.sl, tp: S.active.tp2 };
+    const lv = A ? A.plan && { side: A.d > 0 ? "BUY" : "SELL", order: "limit", entry: A.plan.entry, sl: A.plan.stop, tp1: A.plan.tp1, tp2: A.plan.tp2, tp: A.plan.tp2 }
+      : u.dataset.src === "boom" ? ba && { side: ba.side || (ba.dir === 1 ? "BUY" : "SELL"), order: ba.order, entry: ba.entry, sl: ba.sl, tp1: ba.tp, tp2: ba.tp2, tp: ba.tp }
+      : sa && { side: sa.side || (sa.dir === 1 ? "BUY" : "SELL"), entry: sa.entry, sl: sa.sl, tp1: sa.tp1, tp2: sa.tp2, tp: sa.tp2 };
     if (!lv) return;
+    if (chartOnly) { copyLine(phoneLine(lv), u); return; }
     $("sl").value = lv.sl ? fmt(lv.sl) : ""; $("tp").value = lv.tp ? fmt(lv.tp) : "";
     $("protect").open = true;
     sltpSummary();
@@ -1036,7 +1213,7 @@
         ${step(5, "Take profit", `TP1 ${lt(p.tp1)} (1.5R): close half, stop to entry · TP2 ${lt(p.tp2)}`)}
         ${step(6, "Cancel if", `a 1m close past ${lt(p.stop)}, or no fill by ${candleClock(p.until)}`)}
       </span>
-      <button class="use" data-src="plan">Load SL ${fmt(p.stop)} / TP ${fmt(p.tp2)} into the ticket</button>
+      <button class="use" data-src="plan">${chartOnly ? `Copy: ${phoneLine({ side, order: "limit", entry: p.entry, sl: p.stop, tp1: p.tp1, tp2: p.tp2 })}` : `Load SL ${fmt(p.stop)} / TP ${fmt(p.tp2)} into the ticket`}</button>
       ${coach(A)}`;
   }
   // in a trade: plain coaching from the plan you loaded and the live range. Never touches the trade.
@@ -1148,7 +1325,7 @@
     const s = S.active;
     $("scalper").hidden = !ovl.scalper;
     $("scalper").innerHTML = s
-      ? `<span class="name">Scalper</span><button class="use" data-src="scalper">Use SL/TP</button>
+      ? `<span class="name">Scalper</span><button class="use" data-src="scalper">${chartOnly ? "Copy levels" : "Use SL/TP"}</button>
          <span class="call ${s.dir === 1 ? "up" : "down"}">${s.dir === 1 ? "▲ BUY" : "▼ SELL"} <span class="num" style="font-size:14px">${fmt(s.entry)}</span></span>
          <span class="meta">SL ${fmt(s.sl)} · TP ${fmt(s.tp2)} · lost money in the backtest, use your own judgement</span>`
       : `<span class="name">Scalper</span><span></span><span class="call flat">No signal</span><span></span>
@@ -1221,6 +1398,7 @@
     renderAssist();
     renderMesh();
     renderSmcRead();
+    renderIct();
     drawMarkers();
     drawLines();
     drawForecast();
