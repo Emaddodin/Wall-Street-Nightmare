@@ -129,17 +129,22 @@
     if (ok(c)) { const f = tf === "M1" ? liveLine(c) : c; return { ...f, band: Array.isArray(f.band) && f.band.length ? f.band : lineBand(f, k), mix: true }; }
     return tf === "M15" ? null : ok(k);
   }
-  // On 1m the gold line looks 10 minutes ahead, one point per candle. The reading is redone at every candle close;
+  // On 1m the gold line looks 30 minutes ahead, one point per candle. The reading is redone at every candle close;
   // while a candle is forming the line starts from the live price, so it stays attached to the chart.
-  const LIVE_MIN = 10;
+  const LIVE_MIN = 30;
+  // The 1m line, 30 minutes ahead, glued to the live price. Best source first:
+  //   state.consensus.live30 / state.nowcast30   the backend's own 30-minute path and band, when it sends one
+  //   state.consensus.live (10 min)               its measured 10-minute path and band, carried on to 30 minutes:
+  //                                              the path follows the trend reading's lean, the band widens with
+  //                                              the square root of time (how far gold's random swings spread)
+  //   state.consensus.path                        the trend reading alone, with a band from the 1m ATR
   function liveLine(c) {
-    const lv = c.live, now0 = last && loadedTf === "M1" ? last : null;
-    if (lv && Array.isArray(lv.path) && lv.path.length) {     // the backend's own 10-minute forecast, when it sends one
-      const px = now0 && now0.time >= lv.t ? now0.close : lv.last, d = px - lv.last;   // moved onto the chart's own price
-      const path = lv.path.map((p) => ({ time: p.time, value: p.value + d }));
-      const band = (lv.band || []).map((b) => ({ time: b.time, lo: b.lo + d, hi: b.hi + d, p25: b.p25 + d, p75: b.p75 + d }));
-      return { ...c, ...lv, path, band, target: path[path.length - 1].value, last: px, live: true };
-    }
+    const now0 = last && loadedTf === "M1" ? last : null;
+    const glue = (lv) => {                       // moved onto the chart's own price while a candle is forming
+      const px = now0 && now0.time >= lv.t ? now0.close : lv.last, d = px - lv.last;
+      return { px, path: lv.path.map((p) => ({ time: p.time, value: p.value + d })),
+        band: (lv.band || []).map((b) => ({ time: b.time, lo: b.lo + d, hi: b.hi + d, p25: b.p25 + d, p75: b.p75 + d })) };
+    };
     const pts = [[c.t, +c.last], ...c.path.map((p) => [p.time, p.value])].sort((a, b) => a[0] - b[0]);
     const at = (x) => {
       for (let i = 1; i < pts.length; i++) if (pts[i][0] >= x) {
@@ -148,10 +153,26 @@
       }
       return pts[pts.length - 1][1];
     };
+    const l30 = c.live30 || S.nowcast30;
+    if (l30 && Array.isArray(l30.path) && l30.path.length) {
+      const g = glue(l30);
+      return { ...c, ...l30, path: g.path, band: g.band, target: g.path[g.path.length - 1].value, last: g.px, live: true, checked: LIVE_MIN };
+    }
+    const lv = c.live;
+    if (lv && Array.isArray(lv.path) && lv.path.length && Array.isArray(lv.band) && lv.band.length) {
+      const g = glue(lv), n = g.path.length, p10 = g.path[n - 1], b10 = g.band[g.band.length - 1], m10 = (p10.time - lv.t) / 60;
+      const path = [...g.path], band = [...g.band];
+      for (let m = m10 + 1; m <= LIVE_MIN; m++) {
+        const t = lv.t + m * 60, v = p10.value + (at(t) - at(p10.time)), k = Math.sqrt(m / m10);
+        path.push({ time: t, value: v });
+        band.push({ time: t, lo: v - (p10.value - b10.lo) * k, hi: v + (b10.hi - p10.value) * k, p25: v - (p10.value - b10.p25) * k, p75: v + (b10.p75 - p10.value) * k });
+      }
+      return { ...c, ...lv, path, band, minutes: LIVE_MIN, target: path[path.length - 1].value, last: g.px, live: true, checked: m10 };
+    }
     const path = [];
     for (let m = 1; m <= LIVE_MIN; m++) path.push({ time: c.t + m * 60, value: +at(c.t + m * 60).toFixed(2) });
-    const now = last && loadedTf === "M1" && last.time >= c.t ? last.close : null;
-    return { ...c, path, minutes: LIVE_MIN, target: path[path.length - 1].value, last: now ?? c.last, live: true };
+    const now = now0 && now0.time >= c.t ? now0.close : null;
+    return { ...c, path, minutes: LIVE_MIN, target: path[path.length - 1].value, last: now ?? c.last, live: true, checked: 0 };
   }
   // The lean: up / down odds from the backend. Called an edge only if the live scoreboard shows the 10-minute line
   // beating a coin flip; otherwise it is a lean and says so.
@@ -199,9 +220,9 @@
     const key = ok ? `${tf}${k.t}${k.mix ? "c" : "k"}${k.target}${k.live ? k.last : ""}` : "";
     if (key === fcKey) return;
     fcKey = key;
-    bandRange = ok && !k.live && Array.isArray(k.band) && k.band.length ? [Math.min(...k.band.map((b) => b.lo)), Math.max(...k.band.map((b) => b.hi))] : null;
+    bandRange = ok && Array.isArray(k.band) && k.band.length ? [Math.min(...k.band.map((b) => b.lo)), Math.max(...k.band.map((b) => b.hi))] : null;
     if (!ok) { forecast.setData([]); return; }
-    forecast.applyOptions({ color: C.gold, lineStyle: k.live ? 0 : 2, lineWidth: k.live ? 3 : 2 });
+    forecast.applyOptions({ color: C.gold, lineStyle: 2, lineWidth: 2 });
     if (k.live) ncRecord(k);
     const sec = TFSEC[tf], start = k.t - (k.t % sec), byBar = new Map([[start, k.last]]);
     for (const p of k.path) { const b = p.time - (p.time % sec); if (b >= start) byBar.set(b, p.value); }
@@ -528,12 +549,14 @@
       zx.closePath(); zx.fillStyle = fill; zx.fill();
     };
     if (!k.live) { shade("lo", "hi", "rgba(214,173,82,.10)"); shade("p25", "p75", "rgba(214,173,82,.20)"); return; }
-    // the runner: one line for the next 10 minutes from the live price and one label at its tip. The range, odds and
-    // plan live in the Trade Assistant cards.
+    // the next 30 minutes, in the Kronos look: a dashed gold path from the live price inside its two-tone range
+    // (light = 9 in 10 end inside, darker = the middle half) and one label at the tip. Odds and plan live in the cards.
+    shade("lo", "hi", "rgba(214,173,82,.10)");
+    shade("p25", "p75", "rgba(214,173,82,.22)");
     const end = pts[pts.length - 1], x0 = pts[0].x, mv = k.target - k.last, l = leanOf(k);
     zx.fillStyle = "rgba(236,232,223,.07)"; zx.fillRect(Math.round(x0), 0, 1, zc.getBoundingClientRect().height - ts.height());   // now | next 10 min
     zx.fillStyle = "rgba(214,173,82,.9)"; zx.beginPath(); zx.arc(x0, y(k.last), 3, 0, 7); zx.fill();   // starts at the live price
-    tag(l && !l.dir ? `WAIT · ${fmt(k.target)}` : `${fmt(k.target)} · ${mv >= 0 ? "+" : "−"}${fmt(Math.abs(mv))}`, end.x + 6, y(k.target), C.gold, { pri: 90, must: true });
+    tag(`${LIVE_MIN} min  ${fmt(k.target)} ${mv >= 0 ? "+" : "−"}${fmt(Math.abs(mv))}`, end.x + 6, y(k.target), C.gold, { pri: 90, must: true });
   }
   chart.timeScale().subscribeVisibleLogicalRangeChange(() => requestAnimationFrame(drawZones));
   new ResizeObserver(() => requestAnimationFrame(drawZones)).observe(zc);
@@ -894,8 +917,11 @@
       const w = live.filter((g) => Math.sign(g.now) === d).length;
       checks.push({ ok: w > live.length / 2, txt: `Proven sources agree (${w} of ${live.length})` });
     }
+    const nodes = (S.mesh && S.mesh.nodes) || [], cal = nodes.find((n) => n.id === "calendar");
+    const news = !!(cal && cal.wait);
+    if (d && cal && cal.status === "ok") checks.push({ ok: !news, txt: news ? cal.text : "No big US news in the next 15 min" });
     const met = checks.filter((x) => x.ok).length;
-    const stage = !d ? "watch" : met === checks.length ? "ready" : met >= 3 ? "build" : "watch";
+    const stage = news || !d ? "watch" : met === checks.length ? "ready" : met >= 3 ? "build" : "watch";
     // plan on side d: start in the nearest gap the right way, stop past the sweep, targets at 1.5R and the next pool
     let plan = null;
     if (d && e) {
@@ -915,7 +941,7 @@
       plan = { entry, stop, tp1, tp2, r, g, brk: brk != null && d * (brk - px) > 0 ? brk : null, risk: r * lots * 100, lots, until: now + 600 };
     }
     const chip = stage === "ready" ? `${d > 0 ? "BUY" : "SELL"} SETUP` : stage === "build" ? `BUILDING ${met}/${checks.length}` : "WAIT";
-    return { c, e, l, d, checks, met, stage, plan, chip, kz, mn };
+    return { c, e, l, d, checks, met, stage, plan, chip, kz, mn, nodes, news, cal };
   }
   // Knowledge mesh: sources that have beaten a coin flip on the live record, and which way each one reads right now
   function meshNow() {
@@ -955,17 +981,24 @@
     if (!A) return;
     const { c, e, l, d, stage, plan } = A, sc = ncScore(), ins = sc.filter((h) => h.inside).length;
     const parts = (S.consensus.parts || []).filter((p) => Math.abs(+p.score) >= 0.1).sort((a, b) => Math.abs(b.score) - Math.abs(a.score)).slice(0, 3);
-    const big = stage === "ready" ? `<b class="${d > 0 ? "up" : "down"}">${d > 0 ? "▲ BUY" : "▼ SELL"} SETUP</b>` : stage === "build" ? `<b>BUILDING ${d > 0 ? "▲" : "▼"} ${A.met}/${A.checks.length}</b>` : `<b>WAIT</b>`;
+    const big = A.news ? `<b class="down">WAIT · NEWS</b>` : stage === "ready" ? `<b class="${d > 0 ? "up" : "down"}">${d > 0 ? "▲ BUY" : "▼ SELL"} SETUP</b>` : stage === "build" ? `<b>BUILDING ${d > 0 ? "▲" : "▼"} ${A.met}/${A.checks.length}</b>` : `<b>WAIT</b>`;
     const mn = A.mn, mesh = !mn ? "" : mn.good.length
       ? `<span class="mesh"><b>Knowledge mesh</b> · beating a coin flip so far:${mn.good.slice(0, 3).map((g) => `<span>${esc(feat(g.name))} <b class="num">${Math.round(g.right * 100)}%</b> at ${horizon(g.h)} <small>${g.n} checks</small>${g.now != null && Math.abs(g.now) >= 0.1 ? ` · now <b class="${g.now > 0 ? "up" : "down"}">${g.now > 0 ? "▲" : "▼"}</b>` : " · now neutral"}</span>`).join("")}</span>`
       : !mn.total ? `<span class="mesh"><b>Knowledge mesh</b> · still collecting its first checks.</span>`
       : `<span class="mesh"><b>Knowledge mesh</b> · none of ${mn.total} sources has beaten a coin flip yet${mn.rows ? ` (${mn.rows.toLocaleString("en-US")} candles)` : ""}. Trade the range, not a direction.</span>`;
-    t2.innerHTML = `<span class="name">Next 10 min</span><span class="untested">RANGE CHECKED</span>
+    const clk = A.nodes.find((n) => n.id === "clock"), cross = A.nodes.filter((n) => /^cross:/.test(n.id));
+    const chips = cross.map((n) => { const okk = n.status === "ok" || n.status === "delayed", v = okk && n.value != null && Math.abs(n.value) >= 0.1 ? n.value : 0;
+      return `<span class="chip ${v > 0 ? "up" : v < 0 ? "down" : ""}" title="${esc(n.text || n.status)}">${esc(n.name)}${!okk ? `: ${esc(/^unreachable/.test(n.status || "") ? "unreachable" : n.status || "no data")}` : ` ${v > 0 ? "▲" : v < 0 ? "▼" : "•"}`}${n.status === "delayed" && n.delay_min ? `<small>${n.delay_min}m late</small>` : ""}</span>`; }).join("");
+    const nodeRows = `${A.news ? `<span class="say down">${esc(A.cal.text)}</span>` : ""}${clk && clk.status === "ok" ? `<span class="say dim">${esc(clk.text)}</span>` : ""}${[A.cal, clk].filter((n) => n && n.status !== "ok").map((n) => `<span class="say dim">${esc(n.name)}: ${esc(/^unreachable/.test(n.status || "") ? "data unreachable" : n.status)}</span>`).join("")}${chips ? `<span class="chips2">${chips}</span>` : ""}`;
+    const ck = c.checked, badge = ck >= LIVE_MIN ? "RANGE CHECKED" : ck ? `CHECKED TO ${ck} MIN` : "RANGE ESTIMATED";
+    t2.innerHTML = `<span class="name">Next ${LIVE_MIN} min</span><span class="untested">${badge}</span>
       <span class="verdict">${big}</span>
       ${e ? `<span class="say">Price should end between <b class="num">${fmt(e.lo)}</b> and <b class="num">${fmt(e.hi)}</b>, most likely <b class="num">${fmt(e.p25)}–${fmt(e.p75)}</b>. Normal swing ±${fmt((e.hi - e.lo) / 2)}.</span>` : ""}
       ${l ? `<span class="say">Lean: ${l.dir ? `<b class="${l.dir > 0 ? "up" : "down"}">${l.dir > 0 ? "up" : "down"} ${l.pct}%</b>` : `<b>none (${Math.round(l.up * 100)}% up)</b>`}${l.proven ? "" : ", which has been a coin flip in testing"}.</span>` : ""}
       ${parts.length ? `<span class="why">${parts.map((p) => `<span class="${tone(p.score)}">${p.score > 0 ? "+" : "−"} ${esc(p.name)}</span>`).join("")}</span>` : ""}
+      ${nodeRows}
       ${mesh}
+      ${ck && ck < LIVE_MIN ? `<span class="meta">The first ${ck} minutes of the range are measured on past gold (9 in 10 ended inside). After that it widens the way gold's swings usually spread; that part isn't checked yet.</span>` : ""}
       <span class="meta num">${sc.length ? `On this screen: ended inside the range ${ins} of ${sc.length} · ` : ""}updated ${candleClock(c.t)}</span>`;
     // card 3: the plan
     const step = (n, k, v) => `<span class="st"><i>${n}</i><b>${k}</b><span>${v}</span></span>`;
@@ -996,7 +1029,7 @@
     const pl = lastPlan && lastPlan.d === d ? lastPlan : null;
     if (!p0.sl) out.push(`No stop on your ${p0.side}.${pl ? ` The plan's stop was ${fmt(pl.stop)}.` : ""}`);
     if (pl && d * (px - pl.tp1) >= 0) out.push(`TP1 ${fmt(pl.tp1)} reached: close half and move the stop to ${fmt(+p0.open)}.`);
-    if (p0.sl && e && d * ((d > 0 ? e.lo : e.hi) - p0.sl) < 0) out.push(`Your stop ${fmt(p0.sl)} is inside the normal 10-minute swing (${fmt(d > 0 ? e.lo : e.hi)}), so noise alone can hit it.`);
+    if (p0.sl && e && d * ((d > 0 ? e.lo : e.hi) - p0.sl) < 0) out.push(`Your stop ${fmt(p0.sl)} is inside the normal ${LIVE_MIN}-minute swing (${fmt(d > 0 ? e.lo : e.hi)}), so noise alone can hit it.`);
     if (A.d && A.d !== d) out.push(`The higher timeframes now lean the other way.`);
     if (A.l && A.l.dir === -d) out.push(`The line leans against you (${A.l.pct}% ${A.l.dir > 0 ? "up" : "down"}).`);
     if (!out.length) out.push(`Your ${p0.side} is in line with the plan. Let it work.`);
