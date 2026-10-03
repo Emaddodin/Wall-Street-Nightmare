@@ -32,7 +32,7 @@
     layout: { background: { type: "solid", color: C.bg }, textColor: C.dim, fontSize: 12, fontFamily: "JetBrains Mono, ui-monospace, Menlo, monospace" },
     grid: { vertLines: { color: "#16181b" }, horzLines: { color: "#16181b" } },
     rightPriceScale: { borderColor: C.line, scaleMargins: { top: 0.12, bottom: 0.08 } },
-    timeScale: { borderColor: C.line, timeVisible: true, secondsVisible: false, rightOffset: 10 },
+    timeScale: { borderColor: C.line, timeVisible: true, secondsVisible: false, rightOffset: 14 },
     crosshair: { mode: 0 },
   });
   const series = chart.addCandlestickSeries({
@@ -199,10 +199,9 @@
     const key = ok ? `${tf}${k.t}${k.mix ? "c" : "k"}${k.target}${k.live ? k.last : ""}` : "";
     if (key === fcKey) return;
     fcKey = key;
-    bandRange = ok && Array.isArray(k.band) && k.band.length ? [Math.min(...k.band.map((b) => b.lo)), Math.max(...k.band.map((b) => b.hi))] : null;
+    bandRange = ok && !k.live && Array.isArray(k.band) && k.band.length ? [Math.min(...k.band.map((b) => b.lo)), Math.max(...k.band.map((b) => b.hi))] : null;
     if (!ok) { forecast.setData([]); return; }
-    const ax = k.live ? assist() : null, rd = ax && ax.stage === "ready" ? ax.d : 0;
-    forecast.applyOptions({ color: rd > 0 ? C.up : rd < 0 ? C.down : C.gold, lineStyle: rd ? 0 : 2 });
+    forecast.applyOptions({ color: C.gold, lineStyle: k.live ? 0 : 2, lineWidth: k.live ? 3 : 2 });
     if (k.live) ncRecord(k);
     const sec = TFSEC[tf], start = k.t - (k.t % sec), byBar = new Map([[start, k.last]]);
     for (const p of k.path) { const b = p.time - (p.time % sec); if (b >= start) byBar.set(b, p.value); }
@@ -528,25 +527,13 @@
       for (let i = pts.length - 1; i >= 0; i--) zx.lineTo(pts[i].x, y(pts[i].b[lo]));
       zx.closePath(); zx.fillStyle = fill; zx.fill();
     };
-    shade("lo", "hi", k.live ? "rgba(214,173,82,.13)" : "rgba(214,173,82,.10)");
-    shade("p25", "p75", k.live ? "rgba(214,173,82,.26)" : "rgba(214,173,82,.20)");
-    if (k.live) {                      // the measured range: dotted edges and where they end
-      zx.save(); zx.setLineDash([2, 3]); zx.strokeStyle = "rgba(214,173,82,.75)"; zx.lineWidth = 1;
-      for (const e of ["lo", "hi"]) { zx.beginPath(); pts.forEach((p, i) => (i ? zx.lineTo(p.x, y(p.b[e])) : zx.moveTo(p.x, y(p.b[e])))); zx.stroke(); }
-      zx.restore();
-      const end = pts[pts.length - 1], l = leanOf(k), ye = y(k.path[k.path.length - 1].value);
-      tag(`▲ ${fmt(end.b.hi)}  +${fmt(end.b.hi - k.last)}`, end.x + 4, y(end.b.hi), C.gold, { pri: 66 });
-      tag(`▼ ${fmt(end.b.lo)}  −${fmt(k.last - end.b.lo)}`, end.x + 4, y(end.b.lo), C.gold, { pri: 66 });
-      const ax = assist();
-      if (ax && ye != null) tag(ax.chip, end.x + 4, ye, ax.stage === "ready" ? (ax.d > 0 ? C.up : C.down) : C.gold, { pri: 90, must: true });
-      for (const h of ncScore().slice(-12)) {         // past ranges: a thin bar from low to high, a dot where price ended
-        const x = xOf(h.end - 60, ts, sec), y1 = y(h.hi), y2 = y(h.lo), yp = y(h.px);
-        if (x == null || y1 == null || y2 == null || yp == null || x >= right) continue;
-        zx.fillStyle = "rgba(214,173,82,.35)"; zx.fillRect(Math.round(x) - .5, y1, 1, y2 - y1);
-        zx.fillStyle = h.inside ? "rgba(214,173,82,.95)" : "rgba(229,72,77,.95)";
-        zx.beginPath(); zx.arc(x, yp, 2.5, 0, 7); zx.fill();
-      }
-    }
+    if (!k.live) { shade("lo", "hi", "rgba(214,173,82,.10)"); shade("p25", "p75", "rgba(214,173,82,.20)"); return; }
+    // the runner: one line for the next 10 minutes from the live price and one label at its tip. The range, odds and
+    // plan live in the Trade Assistant cards.
+    const end = pts[pts.length - 1], x0 = pts[0].x, mv = k.target - k.last, l = leanOf(k);
+    zx.fillStyle = "rgba(236,232,223,.07)"; zx.fillRect(Math.round(x0), 0, 1, zc.getBoundingClientRect().height - ts.height());   // now | next 10 min
+    zx.fillStyle = "rgba(214,173,82,.9)"; zx.beginPath(); zx.arc(x0, y(k.last), 3, 0, 7); zx.fill();   // starts at the live price
+    tag(l && !l.dir ? `WAIT · ${fmt(k.target)}` : `${fmt(k.target)} · ${mv >= 0 ? "+" : "−"}${fmt(Math.abs(mv))}`, end.x + 6, y(k.target), C.gold, { pri: 90, must: true });
   }
   chart.timeScale().subscribeVisibleLogicalRangeChange(() => requestAnimationFrame(drawZones));
   new ResizeObserver(() => requestAnimationFrame(drawZones)).observe(zc);

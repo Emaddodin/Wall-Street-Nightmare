@@ -23,7 +23,7 @@ window.GLOSSARY = (() => {
     ] },
     { title: "Trend line and reading", fa: "خط روند و خوانش تایم‌فریم‌ها", items: [
       { term: "Dashed gold line", fa: "خط روند ترکیبی", sw: { t: "line", c: GOLD, dash: true },
-        text: "On the 1m chart: where every timeframe, the ICT order flow and Kronos lean for the next 10 minutes, redone at every candle close and starting at the live price. On 5m and 15m: the same reading for the next 2 h. On the 1h chart: Kronos's 24 h forecast. It describes the chart; on a year of gold it did not predict the next 30-120 min better than a coin flip.",
+        text: "On the 1m chart: a solid runner line for the next 10 minutes, from the live price to where the reading says price will be, with the price and move at its tip. It is redone with every price. The likely range and the plan are in the Trade Assistant cards. On 5m and 15m: the same reading for the next 2 h. On the 1h chart: Kronos's 24 h forecast. It describes the chart; on a year of gold it did not predict the next 30-120 min better than a coin flip.",
         faText: "روی چارت ۱m: جهتی که همه تایم‌فریم‌ها، جریان سفارش ICT و Kronos برای ۱۰ دقیقه آینده نشان می‌دهند؛ با بسته شدن هر کندل دوباره حساب می‌شود و از قیمت زنده شروع می‌شود. روی ۵m و ۱۵m: همان جمع‌بندی برای ۲ ساعت آینده. روی چارت ۱h: پیش‌بینی ۲۴ ساعته Kronos. فقط وضعیت چارت را توصیف می‌کند؛ روی یک سال داده طلا، ۳۰ تا ۱۲۰ دقیقه بعد را بهتر از شیر یا خط پیش‌بینی نکرد." },
       { term: "1D 4h 1h 15m 5m 1m", fa: "روند هر تایم‌فریم", sw: { t: "text", c: UP, label: "▲ ▲ ▼ • ▲ ▲" },
         text: "The pill at the top left: each timeframe's own call from its ICT concepts (▲ up, ▼ down, • mixed); the Top-down card lists why, then the overall reading, e.g. BULLISH +0.42 (−1 all bearish, +1 all bullish).",
