@@ -581,7 +581,7 @@
     const others = (I.setups || []).filter((s) => s.status === "armed" && (s.grade === "A+" || s.grade === "A") && s.tf === tf && !(best && s.id === best.id) && live(s))
       .sort((a, b) => Math.abs(a.entry - px) - Math.abs(b.entry - px));
     for (const s of others) {
-      if (out.length >= 4) break;
+      if (out.length >= 3) break;
       if (out.some((o) => o.s.dir === s.dir && Math.abs(o.s.entry - s.entry) < 0.05)) continue;   // same order twice: once
       out.push({ s });
     }
@@ -597,6 +597,7 @@
     if (!list.length) return;
     const y = (v) => (v == null ? null : series.priceToCoordinate(v));
     const X = (t) => { const x = xOf(t, ts, sec); return x == null ? null : Math.min(right, x); };
+    const bs = (list.find((x) => x.best) || {}).s, same = (a, k) => bs && a != null && bs[k] != null && Math.abs(a - bs[k]) < 0.3;
     for (const { s, best } of [...list].reverse()) {             // the best one last, on top
       const up = s.dir > 0, rgb = up ? "47,182,124" : "229,72,77", ar = up ? "▲" : "▼";
       const t0 = (s.shift && s.shift.time) || s.t, x1 = Math.max(0, X(t0) ?? 0);
@@ -605,22 +606,23 @@
         const y1 = y(Math.max(z.top, z.bottom)), y2 = y(Math.min(z.top, z.bottom));
         if (y1 != null && y2 != null && x1 < right) {
           const h = Math.max(3, y2 - y1);
-          zx.fillStyle = `rgba(214,173,82,${best ? .16 : .08})`; zx.fillRect(x1, y1, right - x1, h);
+          zx.fillStyle = `rgba(214,173,82,${best ? .16 : .05})`; zx.fillRect(x1, y1, right - x1, h);
           zx.fillStyle = `rgba(${rgb},.9)`; zx.fillRect(x1, y1, 2, h);
           zx.setLineDash(s.status === "armed" ? [4, 3] : []); zx.strokeStyle = `rgba(214,173,82,${best ? .7 : .4})`; zx.lineWidth = 1;
           zx.strokeRect(x1 + .5, y1 + .5, right - x1 - 1, h - 1); zx.setLineDash([]);
         }
       }
       if (!best) {                                                 // others: lines from the zone on, tags at the right edge
-        hseg(x1, right, y(s.entry), "rgba(214,173,82,.75)", [6, 3]);
-        hseg(x1, right, y(s.sl), "rgba(229,72,77,.55)", [2, 3]);
-        hseg(x1, right, y(s.tp1), "rgba(47,182,124,.55)", [2, 3]);
-        hseg(x1, right, y(s.tp2), "rgba(47,182,124,.35)", [2, 3]);
-        const e = y(s.entry);
-        if (e != null) tag(`${shortModel(s)} ${ar} ${s.grade}`, right - 4, e, C.gold, { align: "right", pri: 62, edge: true });
-        if (y(s.sl) != null) tag(`${shortModel(s)} SL`, right - 4, y(s.sl), C.down, { align: "right", pri: 39, edge: true, faint: true });
-        if (y(s.tp1) != null) tag(`${shortModel(s)} TP1`, right - 4, y(s.tp1), C.up, { align: "right", pri: 38, edge: true, faint: true });
-        if (y(s.tp2) != null) tag(`${shortModel(s)} TP2`, right - 4, y(s.tp2), C.up, { align: "right", pri: 30, edge: true, faint: true });
+        const lv = [["entry", "rgba(214,173,82,.75)", [6, 3], `${shortModel(s)} ${ar} ${s.grade}`, C.gold, 62],     // a level the best
+          ["sl", "rgba(229,72,77,.55)", [2, 3], `${shortModel(s)} SL`, C.down, 39],                               // setup already
+          ["tp1", "rgba(47,182,124,.55)", [2, 3], `${shortModel(s)} TP1`, C.up, 38],                              // draws within
+          ["tp2", "rgba(47,182,124,.35)", [2, 3], `${shortModel(s)} TP2`, C.up, 30]];                             // 0.30 is left out
+        for (const [k, col, dash, txt, tc, pri] of lv) {
+          const yy = y(s[k]);
+          if (yy == null || (k !== "entry" && same(s[k], k))) continue;
+          hseg(x1, right, yy, col, dash);
+          tag(txt, right - 4, yy, tc, { align: "right", pri, edge: true, faint: k !== "entry" });
+        }
       }
       if (sec > 900) continue;                                     // sweep and shift markers on 1m-15m only
       const sw = s.sweep;
@@ -664,9 +666,10 @@
     for (const [arr, name] of [[L.nwog, "NWOG"], [L.ndog, "NDOG"]]) for (const g of (arr || []).slice(0, 2)) {
       const y1 = y(Math.max(g.top, g.bottom)), y2 = y(Math.min(g.top, g.bottom));
       if (y1 == null || y2 == null || y2 < 0 || y1 > H) continue;
-      zx.fillStyle = "rgba(150,140,230,.07)"; zx.fillRect(0, y1, right, Math.max(2, y2 - y1));
-      hseg(0, right, y1, "rgba(150,140,230,.35)", [2, 4]); hseg(0, right, y2, "rgba(150,140,230,.35)", [2, 4]);
-      if (g.ce != null) hseg(0, right, y(g.ce), "rgba(150,140,230,.6)", [5, 4]);
+      const x0 = g.time != null ? Math.max(0, Math.min(right, xOf(g.time, ts, sec) ?? 0)) : 0;   // from the open that made it
+      zx.fillStyle = "rgba(150,140,230,.07)"; zx.fillRect(x0, y1, right - x0, Math.max(2, y2 - y1));
+      hseg(x0, right, y1, "rgba(150,140,230,.35)", [2, 4]); hseg(x0, right, y2, "rgba(150,140,230,.35)", [2, 4]);
+      if (g.ce != null) hseg(x0, right, y(g.ce), "rgba(150,140,230,.6)", [5, 4]);
       tag(`${name}${g.ce != null ? " CE" : ""}`, right - 4, g.ce != null ? y(g.ce) : (y1 + y2) / 2, "rgb(170,160,240)", { align: "right", pri: 36, edge: true, faint: true });
     }
   }
@@ -1025,8 +1028,14 @@
         <span class="v">${tr.resolved ? `Direction right ${tr.direction_right} of ${tr.resolved} (${Math.round(tr.direction_pct)}%) · ended inside the range ${tr.inside_range} of ${tr.resolved}` : "Nothing scored yet"}${tr.waiting ? ` · ${tr.waiting} waiting` : ""}</span></div>` : ""}
       <span class="meta">Gold dashed line and shading on the ${kView === "day" ? "1h" : "1m and 5m"} chart.${k.backtest && k.backtest.status === "done" ? "" : " Not proven on gold yet."}${k.error ? " " + esc(k.error) : ""}</span>${btHtml(k.backtest)}`;
   }
-  // state.boom: {active: {kind, side, dir, entry, sl, tp, move, move_atr, minutes, expires, strong, why[]} | null,
-  //              history: [...with exit, how, r, usd_001], stats: {calls, wins, losses, net_r, net_usd_001}, proven}
+  // state.boom: {active: {kind, side, dir, entry, sl, tp, tp2, tf, model, model_id, grade, checks[], status, order, why[], ...} | null,
+  //              history: [...with exit, how, r, usd_001, model, grade], stats, gate (why a setup was held back), kronos30, rules, proven}
+  const gateText = (g) => !g ? "" : typeof g === "string" ? g : [g.text || g.why || g.reason || g.note].filter(Boolean).join(" ") || JSON.stringify(g);
+  function checkSummary(cks) {
+    if (!Array.isArray(cks) || !cks.length) return "";
+    const ok = cks.filter((c) => c.ok === true).length, no = cks.filter((c) => c.ok === false), na = cks.filter((c) => c.ok == null).length;
+    return `<span class="meta">Checks <b class="up">✓ ${ok}</b> · <b class="${no.length ? "down" : ""}">✗ ${no.length}</b> · – ${na}${no.length ? `: ${no.map((c) => esc(c.label)).join("; ")}` : ""}</span>`;
+  }
   function renderBoom() {
     const bm = S.boom, el = $("boom");
     el.hidden = !bm || !ovl.boom;
@@ -1036,13 +1045,18 @@
       ? `${st.calls} call${st.calls === 1 ? "" : "s"} · ${st.wins}W ${st.losses}L · <span class="${tone(st.net_r)}">${st.net_r > 0 ? "+" : ""}${(+st.net_r).toFixed(1)}R</span> · <span class="${tone(st.net_usd_001)}">${signed(st.net_usd_001)}</span> per 0.01 lot`
       : "No calls yet";
     const tag = `<span class="untested">${bm.proven ? "TESTED" : "UNTESTED"}</span>`;
+    const gate = gateText(bm.gate), k3 = bm.kronos30;
+    const gateRow = gate ? `<span class="meta" style="color:var(--warn)">Held back: ${esc(gate)}</span>` : "";
+    const k3Row = k3 && k3.up_prob != null ? `<span class="meta">Kronos 30m ${esc(k30Words(k3))}${k3.move != null ? ` (${k3.move >= 0 ? "+" : ""}${fmt(k3.move)})` : ""}${bm.rules && bm.rules.kronos ? ` · Kronos rule: ${esc(bm.rules.kronos)}` : ""}</span>` : "";
+    const hist = (bm.history || []).slice(-5).reverse();
+    const histRows = hist.length ? `<span class="meta" style="display:grid;gap:1px">${hist.map((h) => `<span class="num">${h.t ? candleClock(h.t) : ""} ${esc(h.side || h.kind || "")}${h.tf ? " " + esc(h.tf) : ""} · ${esc(h.model || h.kind || "")}${h.grade ? " " + esc(h.grade) : ""} · ${h.how === "target" ? "target" : h.how === "stop" ? "stop" : esc(h.how || "open")}${h.r != null ? ` <b class="${tone(h.r)}">${h.r > 0 ? "+" : ""}${(+h.r).toFixed(2)}R</b>` : ""}</span>`).join("")}</span>` : "";
     el.className = "card boom" + (a ? (a.dir === 1 || a.side === "BUY" ? " live up" : " live down") : "");
     if (!a) {
-      const h = (bm.history || [])[bm.history.length - 1];
       const w = (bm.watch || [])[0];
       el.innerHTML = `<span class="name">Boom / Crash</span>${tag}<span class="call flat">${w ? `Watching ${w.dir === 1 ? "▲ BUY" : "▼ SELL"}` : "Waiting"}</span><span></span>
         ${w ? `<span class="meta">${w.dir === 1 ? "Swept a low, CHoCH up" : "Swept a high, CHoCH down"} through ${fmt(w.choch)}. Waiting for price back into <b class="num">${fmt(w.poi[0])}-${fmt(w.poi[1])}</b>${w.until ? ` until ${clock(w.until)}` : ""}.</span>` : ""}
-        <span class="meta">${h ? `Last: ${esc(h.kind)} ${esc(h.side)} ${h.how === "target" ? "hit target" : h.how === "stop" ? "hit stop" : "timed out"}, ${h.r > 0 ? "+" : ""}${(+h.r).toFixed(2)}R · ` : ""}${tally}</span>`;
+        ${gateRow}${k3Row}${histRows}
+        <span class="meta">${tally}</span>`;
       return;
     }
     const up = a.dir === 1 || a.side === "BUY";
@@ -1050,13 +1064,18 @@
     const waiting = a.status === "waiting";
     const left = Math.max(0, Math.ceil(((waiting && a.fill_by ? a.fill_by : a.expires) - now) / 60));
     const mins = left >= 60 ? `${Math.floor(left / 60)} h ${left % 60}` : left;
-    el.innerHTML = `<span class="name">${up ? "BOOM" : "CRASH"}${bm.tf ? " · " + esc(bm.tf.replace(/^M(\d+)$/, "$1m")) : ""}${a.strong ? " · strong" : ""}</span>${tag}
+    const tfA = a.tf || bm.tf;
+    el.innerHTML = `<span class="name">${up ? "BOOM" : "CRASH"}${tfA ? " · " + esc(tfName(tfA)) : ""}${a.strong ? " · strong" : ""}</span>${tag}
       <span class="call ${up ? "up" : "down"}">${up ? "▲ BUY" : "▼ SELL"}${waiting ? " LIMIT" : a.order === "limit" ? " · filled" : ""} <span class="num" style="font-size:14px">@ ${fmt(a.entry)}</span></span>
-      <button class="use" data-src="boom">Use SL/TP</button>
-      <span class="lvls num"><span>SL <b class="down">${fmt(a.sl)}</b></span><span>TP <b class="up">${fmt(a.tp)}</b></span><span>${waiting ? `valid <b>${mins}</b> more min` : `<b>${mins}</b> min left`}</span></span>
+      <button class="use" data-src="boom">${chartOnly ? "Copy levels" : "Use SL/TP"}</button>
+      ${a.model ? `<span class="meta" style="color:var(--fg)">${esc(a.model)} ${gradeHtml(a.grade)}${tfA ? ` on ${esc(tfA)}` : ""}</span>` : ""}
+      <span class="lvls num"><span>SL <b class="down">${fmt(a.sl)}</b></span><span>TP <b class="up">${fmt(a.tp)}</b></span>${a.tp2 ? `<span>TP2 <b class="up">${fmt(a.tp2)}</b></span>` : ""}<span>${waiting ? `valid <b>${mins}</b> more min` : `<b>${mins}</b> min left`}</span></span>
+      ${chartOnly ? `<span class="meta num" style="color:var(--fg)">${esc(phoneLine({ side: up ? "BUY" : "SELL", order: a.order, entry: a.entry, sl: a.sl, tp1: a.tp, tp2: a.tp2 }))}</span>` : ""}
       ${waiting ? `<span class="meta">A limit order idea: place it yourself at ${fmt(a.entry)} if you agree. It is void if price doesn't come back in time.</span>` : ""}
       ${a.why && a.why.length ? `<span class="meta">${a.why.map(esc).join(" · ")}</span>` : ""}
+      ${checkSummary(a.checks)}
       ${a.move ? `<span class="meta">Kronos ${a.move > 0 ? "+" : ""}${fmt(a.move)}${a.up_prob != null ? ` · up ${pct(a.up_prob)}` : ""}</span>` : ""}
+      ${gateRow}${k3Row}${histRows}
       <span class="meta">${tally}</span>`;
   }
   // state.alerts: {push, topic, sent, error, recent: [{kind, side, dir, t, minutes, area, what, why, up_prob, title, text}]}
@@ -1332,6 +1351,189 @@
          <span class="meta">Lost money in the backtest. Shown for reference only.</span>`;
   }
 
+  // ---------------------------------------------------------------- ICT desk: the chart talking (state.ict, playbook.py)
+  // Three cards at the top of the side panel: the desk (what to do now, the 4 phases, the clock, regime, bias, Kronos 30m,
+  // SMT), the best model for the live market with its setup, checklist and the ranking of every model, and the
+  // timeframes read top-down. Advice only: nothing here places an order.
+  const gradeHtml = (g, off) => (g ? `<span class="grade ${g === "A+" ? "ap" : g === "A" ? "a" : ""}${off ? " off" : ""}">${esc(g)}</span>` : "");
+  const phoneLine = (lv) => `${lv.side}${lv.order === "limit" ? " LIMIT" : ""} ${fmt(lv.entry)} SL ${fmt(lv.sl)} TP1 ${fmt(lv.tp1)}${lv.tp2 ? ` TP2 ${fmt(lv.tp2)}` : ""}`;
+  const setHtml = (el, html) => { if (el._h !== html) { el._h = html; el.innerHTML = html; } };
+  async function copyText(txt) {
+    try { await navigator.clipboard.writeText(txt); return true; } catch { /* http on a LAN address: no clipboard API */ }
+    try {
+      const t = document.createElement("textarea");
+      t.value = txt; t.setAttribute("readonly", ""); t.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+      document.body.appendChild(t); t.select(); const ok = document.execCommand("copy"); t.remove(); return ok;
+    } catch { return false; }
+  }
+  async function copyLine(txt, btn) {
+    const ok = await copyText(txt);
+    if (btn) { btn.classList.add("done"); setTimeout(() => btn.classList.remove("done"), 1500); }
+    if (!ok) window.prompt("Copy this line into your phone app", txt);
+  }
+  const STATUS = { armed: "ARMED", filled: "FILLED", target: "HIT TARGET", stopped: "STOPPED", invalid: "VOID", expired: "EXPIRED" };
+  let rankOpen = null, rankAll = false;
+  const rec = (st) => (st && st.n && st.mean_r != null ? `${st.mean_r > 0 ? "+" : ""}${(+st.mean_r).toFixed(2)}R/${st.n}` : "no record");
+  // Kronos 30 minutes: state.kronos.m30 (full, with its calibration) or the playbook's copy (state.ict.kronos30)
+  function k30Block(I) {
+    const k = S.kronos, m = k && k.m30, kk = m || (I && I.kronos30) || (S.boom && S.boom.kronos30);
+    if (!kk || kk.up_prob == null) {
+      const why = k && (k.m30_error || k.m30_status);
+      return { chip: `<span class="ichip">Kronos 30m ${why ? esc(String(why).slice(0, 40)) : "off"}</span>`, html: "" };
+    }
+    const d = kk.call === "UP" || kk.dir > 0 ? 1 : kk.call === "DOWN" || kk.dir < 0 ? -1 : 0;
+    const chip = `<span class="ichip ${d > 0 ? "up" : d < 0 ? "down" : ""}" title="Kronos' blended M1 + M5 forecast for the next 30 minutes">Kronos 30m ${d > 0 ? "▲" : d < 0 ? "▼" : "•"} <b>${esc(k30Words(kk))}</b></span>`;
+    if (!m) return { chip, html: "" };
+    const cal = m.calibration || {}, NAMES = { M1x30: "M1", M5x30: "M5", M30: "Blend" };
+    const rows = Object.keys(NAMES).filter((x) => cal[x]).map((x) => {
+      const c = cal[x], n = c.n_dir ?? c.n, cb = c.coin_band != null ? +c.coin_band : n ? 1.96 * Math.sqrt(0.25 / n) : null;
+      return `<span class="num">${NAMES[x]} skill ${c.skill != null ? (+c.skill).toFixed(2) : "-"} on ${c.n ?? 0} forecasts${c.hit_rate != null ? `, hit ${Math.round(c.hit_rate * 100)}%` : ""}${cb != null && n ? ` (coin ${Math.round((0.5 - cb) * 100)}-${Math.round((0.5 + cb) * 100)}%)` : ""}${c.beats_coin ? ` <b class="up">beats a coin</b>` : ""}</span>`;
+    });
+    const w = m.weights || {};
+    return { chip, html: `<span class="k30"><b>Kronos next 30 min</b>
+      <span class="v">${d > 0 ? `<span class="up">▲ UP</span>` : d < 0 ? `<span class="down">▼ DOWN</span>` : "• FLAT"} · up ${pct(m.up_prob)}${m.up_prob_raw != null ? ` (raw ${pct(m.up_prob_raw)})` : ""} · move ${m.move >= 0 ? "+" : ""}${fmt(m.move)}${m.move_raw != null ? ` (raw ${m.move_raw >= 0 ? "+" : ""}${fmt(m.move_raw)})` : ""}${m.confidence != null ? ` · confidence ${(+m.confidence).toFixed(2)}` : ""}</span>
+      ${w.M1 != null || w.M5 != null ? `<span class="num">Blend M1 ${w.M1 != null ? (+w.M1).toFixed(2) : "-"} / M5 ${w.M5 != null ? (+w.M5).toFixed(2) : "-"}${m.agree != null ? ` · M1 and M5 ${m.agree ? "agree" : "disagree"}` : ""}</span>` : ""}
+      ${rows.join("")}${cal.note ? `<span>${esc(cal.note)}</span>` : ""}</span>` };
+  }
+  function smtChip() {
+    const sm = S.smt;
+    if (!sm) return "";
+    const su = sm.summary || {}, fd = sm.feed || {};
+    const feed = !fd.source ? `silver feed ${esc(fd.status || "off")}` : `silver ${esc(fd.source)}${fd.delayed ? ` ${fd.delay_min != null ? fd.delay_min + "m " : ""}late` : ""}`;
+    return `<span class="ichip ${su.state > 0 ? "up" : su.state < 0 ? "down" : ""}" title="${esc(su.note || "")}${fd.symbol ? ` · ${esc(fd.symbol)}` : ""}">SMT ${su.state > 0 ? "▲" : su.state < 0 ? "▼" : "•"} <b>${esc(feed)}</b></span>`;
+  }
+  function renderIct() {
+    const I = S.ict, desk = $("ictDesk"), bestEl = $("ictBest"), tfEl = $("ictTf");
+    const closed = !!(S.market && S.market.open === false);
+    if (!I) {
+      desk.className = "card ict" + (closed ? " closed" : "");
+      setHtml(desk, `<span class="name">ICT desk</span><span class="untested">NOT PROVEN</span>
+        <span class="hl dimh">${closed ? "MARKET CLOSED" : "READING THE CHART…"}</span>
+        <span class="meta">${closed ? "Gold is closed. The read of every timeframe appears once candles load." : "The playbook reads every timeframe once enough candles have closed. It shows here in a moment."}</span>
+        ${S.smt ? `<span class="ichips">${smtChip()}</span>` : ""}`);
+      bestEl.hidden = tfEl.hidden = true;
+      return;
+    }
+    // ---- card 1: the desk
+    const tk = I.talk || {}, act = tk.action || {}, c = I.clock || {};
+    let head = tk.headline || act.do || "WAIT";
+    if (closed && !/CLOSED/.test(head)) head = "MARKET CLOSED";
+    const isClosed = /CLOSED/.test(head), d = isClosed ? 0 : (act.dir || 0), wait = /^WAIT/.test(head);
+    const hcls = isClosed || wait ? "dimh" : d > 0 ? "up" : d < 0 ? "down" : "";
+    const now = (S.clock && S.clock.server_time) || I.t, gone = Math.max(0, Math.floor((now - I.t) / 60));
+    const sub = isClosed ? `<small><em>last read · NY ${esc(c.ny || "")}</em></small>`
+      : act.level != null ? `<small>${/^(BUY|SELL)/.test(head) ? "at" : "from"} ${fmt(act.level)}</small>${gradeHtml(act.grade)}` : "";
+    const nx = (c.next || [])[0], nxIn = nx ? Math.max(0, nx.start_t != null ? Math.ceil((nx.start_t - now) / 60) : nx.in_min - gone) : null;
+    const chips = [
+      `<span class="ichip"><b>NY ${esc(c.ny || "-")}</b></span>`,
+      c.killzone && !/lunch/i.test(c.killzone) ? `<span class="ichip on">${esc(c.killzone)} killzone</span>` : c.killzone ? "" : `<span class="ichip">No killzone</span>`,
+      c.silver_bullet ? `<span class="ichip on" title="Silver Bullet window">${esc(c.silver_bullet)}</span>` : "",
+      c.macro ? `<span class="ichip on" title="ICT macro window">${esc(c.macro)}</span>` : "",
+      c.lunch ? `<span class="ichip warn">NY lunch: stand aside</span>` : "",
+      I.news ? `<span class="ichip warn">USD news: wait</span>` : "",
+      nx && !isClosed ? `<span class="ichip" title="${esc(nx.kind)} ${esc(nx.start)}-${esc(nx.end)} NY">Next ${esc(nx.name)} <b>${nxIn ? `in ${nxIn >= 60 ? `${Math.floor(nxIn / 60)}h ${nxIn % 60}m` : nxIn + " min"}` : "now"}</b></span>` : "",
+      c.amd ? `<span class="ichip" title="Power of 3: accumulation, manipulation, distribution">Po3: ${esc(c.amd)}</span>` : "",
+    ];
+    const rg = I.regime || {}, b = Math.max(-1, Math.min(1, +I.bias || 0));
+    const regime = `<span class="ichip ${rg.kind === "trend" ? (rg.dir > 0 ? "up" : rg.dir < 0 ? "down" : "") : ""}" title="Efficiency ratio ${rg.er ?? "-"}: near 1 = trending, near 0 = ranging">${rg.kind === "trend" ? `Trend ${rg.dir > 0 ? "▲" : rg.dir < 0 ? "▼" : ""}` : rg.kind === "range" ? "Range" : "Regime ?"} <b>ER ${rg.er != null ? (+rg.er).toFixed(2) : "-"}</b></span>`;
+    const k3 = k30Block(I);
+    const phases = (tk.lines || []).map((l) => {
+      const m = /^(\d)\s+(.*)$/.exec(l.phase || ""), n = m ? m[1] : "!", nm = m ? m[2] : l.phase;
+      return `<span class="ph"><i class="${m ? "" : "x"}">${n}</i><span><b>${esc(nm || "")}</b>${esc(l.text || "")}</span></span>`;
+    }).join("");
+    desk.className = "card ict" + (isClosed ? " closed" : !wait && d > 0 ? " up" : !wait && d < 0 ? " down" : "");
+    setHtml(desk, `<span class="name">ICT desk${I.price != null ? ` · <span class="num">${fmt(I.price)}</span>` : ""}</span><span class="untested">${I.proven ? "TESTED" : "NOT PROVEN"}</span>
+      <span class="hl ${hcls}">${!isClosed && !wait && d ? (d > 0 ? "▲ " : "▼ ") : ""}${esc(head)} ${sub}</span>
+      <span class="ichips">${chips.join("")}</span>
+      <span class="ichips">${regime}${k3.chip}${smtChip()}</span>
+      <span class="ibias"><span>HTF bias</span><span class="bar"><i style="${b >= 0 ? `left:50%;width:${b * 50}%;background:var(--up)` : `right:50%;width:${-b * 50}%;background:var(--down)`}"></i></span><b class="num ${tone(b)}">${b > 0 ? "+" : ""}${b.toFixed(2)}</b>
+        ${I.bias_why ? `<span class="why">${esc(I.bias_why)}</span>` : ""}</span>
+      ${phases ? `<span class="phases">${phases}</span>` : ""}
+      ${k3.html}
+      ${S.smt && S.smt.summary && S.smt.summary.note ? `<span class="meta">${esc(S.smt.summary.note)}</span>` : ""}
+      ${I.error ? `<span class="meta" style="color:var(--warn)">${esc(I.error)}</span>` : ""}
+      <span class="meta num">Read at ${candleClock(I.t)} chart time${I.ms != null ? ` · ${I.ms} ms` : ""} · advice only, nothing is sent</span>`);
+    // ---- card 2: the best model now, its setup and checklist, every model ranked
+    const B = I.best, s = B && B.setup, rk = I.ranking || [];
+    bestEl.hidden = !B;
+    if (B) {
+      let body = "";
+      if (s) {
+        const up = s.dir > 0, live = s.status === "armed" || s.status === "filled";
+        const lots = +$("lots").value || 0.01;
+        const until = s.status === "armed" && s.fill_by ? ` until ${candleClock(s.fill_by)}` : "";
+        const cks = s.checks || [], okN = cks.filter((x) => x.ok === true).length;
+        const lv = { side: s.side, order: s.order, entry: s.entry, sl: s.sl, tp1: s.tp1, tp2: s.tp2 };
+        body = `<span class="sd ${up ? "up" : "down"}">${up ? "▲" : "▼"} ${esc(s.boom || (up ? "BOOM" : "CRASH"))} · ${esc(s.side)} ${s.order === "limit" ? "LIMIT" : "AT MARKET"} <span class="stat ${esc(s.status)}">${STATUS[s.status] || esc(String(s.status).toUpperCase())}${until}</span></span>
+          <span class="lv4 num"><span class="en">ENTRY<b>${fmt(s.entry)}</b><em class="dim">${s.order === "limit" ? "limit" : "market"}</em></span>
+            <span class="sl">STOP<b>${fmt(s.sl)}</b><em class="down">−1R</em></span>
+            <span class="tp">TP1<b>${fmt(s.tp1)}</b><em class="up">+${s.rr1 != null ? (+s.rr1).toFixed(1) : "-"}R</em></span>
+            <span class="tp">TP2<b>${s.tp2 ? fmt(s.tp2) : "-"}</b><em class="up">${s.rr2 != null ? `+${(+s.rr2).toFixed(1)}R` : ""}</em></span></span>
+          ${s.risk ? `<span class="meta">Risk ${fmt(s.risk)} an ounce = $${(s.risk * lots * 100).toFixed(2)} at ${lots.toFixed(2)} lots. Close half at TP1 and move the stop to entry.</span>` : ""}
+          ${(s.why || []).length ? `<ul class="why2">${s.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
+          ${s.invalid_if ? `<span class="meta">Void if ${esc(s.invalid_if)}.</span>` : ""}
+          ${s.kronos ? `<span class="meta">Kronos: ${esc(typeof s.kronos === "string" ? s.kronos : k30Words(s.kronos))}</span>` : ""}
+          ${cks.length ? `<span class="cks"><b>Checklist ${okN}/${cks.length}${s.score != null ? ` · score ${(+s.score).toFixed(2)}` : ""}</b>${cks.map((x) => `<span class="ck ${x.ok == null ? "na" : ""}"><i class="${x.ok === true ? "ok" : x.ok === false ? "no" : "na"}">${x.ok === true ? "✓" : x.ok === false ? "✗" : "–"}</i><span>${esc(x.label)}${x.required ? "<small>REQUIRED</small>" : ""}</span></span>`).join("")}</span>` : ""}
+          ${live ? (chartOnly ? `<button class="cpy" data-line="${esc(phoneLine(lv))}" title="Copy for your phone app">${esc(phoneLine(lv))}</button>`
+            : `<span class="uselv"><button data-lv="tp1" title="Puts the stop and TP1 into the Stop loss / Take profit boxes. Nothing is sent.">Use SL + TP1</button><button data-lv="tp2" title="Puts the stop and TP2 into the Stop loss / Take profit boxes. Nothing is sent.">Use SL + TP2</button></span>`) : ""}`;
+      } else {
+        body = `<span class="say" style="grid-column:1/-1;font-size:13px">No setup from it yet.${B.waiting_for ? ` Waiting for ${esc(B.waiting_for)}.` : ""}</span>`;
+      }
+      const list = rankAll ? rk : rk.slice(0, 6);
+      const rows = list.map((r, i) => {
+        const st = r.stats || {}, open = rankOpen === r.model, rs = r.setup;
+        const g = rs ? gradeHtml(rs.grade, rs.status !== "armed" && rs.status !== "filled") : `<span title="waiting for ${esc(r.waiting_for || "its setup")}">…</span>`;
+        const more = open ? `<span class="more">
+            ${(r.why || []).length ? `<span>${esc(r.why.join(" · "))}</span>` : ""}
+            ${rs ? `<span class="v num">${esc(rs.side)} ${esc(rs.tf)} ${rs.order === "limit" ? "limit" : "market"} ${fmt(rs.entry)} · SL ${fmt(rs.sl)} · TP1 ${fmt(rs.tp1)} · ${STATUS[rs.status] || esc(rs.status)}</span>` : ""}
+            ${r.waiting_for ? `<span>Waiting for ${esc(r.waiting_for)}</span>` : ""}
+            <span class="num">Score ${(+r.score).toFixed(2)} · fit ${Math.round((+r.fit || 0) * 100)}% · edge ${(+r.edge || 0).toFixed(3)} · ${st.n_live || 0} live, ${st.n_backtest || 0} backtest${st.win_pct != null ? `, won ${Math.round(st.win_pct * 100)}%` : ""}${st.pending ? `, ${st.pending} open` : ""}</span></span>` : "";
+        return `<span class="rk${i === 0 ? " top" : ""}" data-m="${esc(r.model)}" title="${esc(r.waiting_for ? "Waiting for " + r.waiting_for : (r.why || []).join(" · "))}">
+          <span class="n">${rk.indexOf(r) + 1}</span><span class="nm"><span>${esc(r.name)}</span><span class="sb"><i style="width:${Math.round(Math.max(0, Math.min(1, +r.score || 0)) * 100)}%"></i></span></span>
+          <span class="f">${Math.round((+r.fit || 0) * 100)}%</span><span class="rc ${st.n ? tone(st.mean_r) : ""}">${rec(st)}</span><span class="g">${g}</span>${more}</span>`;
+      }).join("");
+      setHtml(bestEl, `<span class="name">Best model now</span><span class="untested">${s ? esc(tfName(s.tf)) + " · " : ""}NOT PROVEN</span>
+        <span class="mname">${esc(B.name)} ${s ? gradeHtml(s.grade) : ""}</span>
+        ${(B.why || []).length ? `<span class="meta">${esc(B.why.join(" · "))}</span>` : ""}
+        ${body}
+        ${rk.length ? `<span class="rank"><b>Every model, best fit first</b><span class="rkhead"><span></span><span>Model · score</span><span>Fit</span><span>Record</span><span>Setup</span></span>${rows}
+          ${rk.length > 6 ? `<button class="rkall" data-all="1">${rankAll ? "Show the top 6" : `All ${rk.length} models`}</button>` : ""}</span>` : ""}`);
+    }
+    // ---- card 3: timeframes, top-down
+    const T = I.timeframes || {}, tfs = TF6.filter((t) => T[t]);
+    tfEl.hidden = !tfs.length;
+    if (tfs.length) setHtml(tfEl, `<span class="name">Timeframes top-down</span><span></span>
+      <span class="rows">${tfs.map((t) => {
+        const x = T[t], lb = x.last_break, r = x.range, ph = x.phase, cls = x.trend > 0 ? "up" : x.trend < 0 ? "down" : "flat";
+        const zone = r && r.zone ? `<span class="zp ${esc(r.zone)}">${esc(String(r.zone).toUpperCase())}${r.pos != null ? ` ${Math.round(r.pos * 100)}%` : ""}</span>` : "";
+        const brk = lb ? `<span class="${lb.dir > 0 ? "up" : "down"}">${esc(lb.kind)} ${lb.dir > 0 ? "▲" : "▼"} ${fmt(lb.level)}</span><span>${esc(lb.ago || "")}</span>` : "<span>no break yet</span>";
+        const smt = x.smt && x.smt.state && x.smt.note ? `<span class="smt">${esc(x.smt.note)}</span>` : "";
+        return `<span class="tr${t === tf ? " here" : ""}"${TFSEC[t] ? ` data-tf="${t}" title="Open the ${tfName(t)} chart"` : ` title="No ${tfName(t)} chart here"`}>
+          <span class="tf">${tfName(t)}</span><span class="role">${esc(x.role || "")}</span><span class="rd ${cls}">${x.trend > 0 ? "▲" : x.trend < 0 ? "▼" : "•"} ${esc(String(x.label || "mixed").toUpperCase())}</span>
+          <span class="ln">${brk}${zone}${ph && ph.from ? `<span>${esc(ph.from)}→${esc(ph.to)}</span>` : ""}</span>
+          ${x.do ? `<span class="do">${esc(x.do)}</span>` : ""}
+          ${ph && ph.text ? `<span class="ph2">${esc(ph.text)}</span>` : ""}${smt}</span>`;
+      }).join("")}</span>
+      <span class="meta">Read top-down: 1D and 4h give the bias, 1h the draw, 15m the setup, 5m and 1m the entry. Tap a row to open its chart${T.D1 ? " (1D has no chart here)" : ""}.</span>`);
+  }
+  $("ictWrap").addEventListener("click", (e) => {
+    const t = e.target.closest(".tr[data-tf]");
+    if (t) { setTf(t.dataset.tf); return; }
+    const cp = e.target.closest(".cpy");
+    if (cp) { copyLine(cp.dataset.line, cp); return; }
+    if (e.target.closest(".rkall")) { rankAll = !rankAll; renderIct(); return; }
+    const r = e.target.closest(".rk[data-m]");
+    if (r) { rankOpen = rankOpen === r.dataset.m ? null : r.dataset.m; renderIct(); return; }
+    const u = e.target.closest(".uselv button");
+    const s = u && S && S.ict && S.ict.best && S.ict.best.setup;
+    if (!s) return;
+    const tp = u.dataset.lv === "tp2" && s.tp2 ? s.tp2 : s.tp1;
+    $("sl").value = s.sl ? fmt(s.sl) : ""; $("tp").value = tp ? fmt(tp) : "";
+    $("protect").open = true;
+    sltpSummary();
+    result("idle", `Levels loaded: SL ${fmt(s.sl)} · TP ${fmt(tp)}`, `From ${s.name} ${s.grade} (${s.side} ${s.order === "limit" ? "limit" : ""} ${fmt(s.entry)}). Nothing was sent; click ${s.side} yourself when you agree.`, true);
+  });
+
   // ---------------------------------------------------------------- state (balance, trades, signals)
   function render() {
     const a = S.account || {};
@@ -1417,6 +1619,7 @@
     refreshing = false;
   }
 
+  applyMode();
   refresh().then(loadCandles);
   connectLive();
   setInterval(refresh, 1000);

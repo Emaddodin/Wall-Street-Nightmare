@@ -202,6 +202,8 @@ class Ctx:
         self.price = m1.b.c[-1] if m1 and m1.n else None
         self.t = (m1.b.t[-1] + 60) if m1 and m1.n else 0
         self.clock = ck.clock(utc(self.t)) if self.t else {}
+        for x in self.clock.get("next", []):
+            x["start_t"] = self.t + 60 * x["in_min"]                       # candle clock, for an exact countdown
         self.bias, self.bias_why = self._bias()
         self.regime = self._regime()
 
@@ -928,8 +930,8 @@ def _levels_out(lv: dict) -> dict:
             out[k] = _r(lv[k]["price"])
     if lv.get("asia"):
         out["asia_high"], out["asia_low"] = _r(lv["asia"]["high"]), _r(lv["asia"]["low"])
-    out["ndog"] = [{k: _r(v) for k, v in g.items() if k != "from"} for g in lv.get("ndog", [])]
-    out["nwog"] = [{k: _r(v) for k, v in g.items() if k != "from"} for g in lv.get("nwog", [])]
+    out["ndog"] = [dict({k: _r(v) for k, v in g.items() if k != "from"}, time=g["from"]) for g in lv.get("ndog", [])]
+    out["nwog"] = [dict({k: _r(v) for k, v in g.items() if k != "from"}, time=g["from"]) for g in lv.get("nwog", [])]
     return out
 
 
