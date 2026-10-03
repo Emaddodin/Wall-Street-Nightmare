@@ -134,8 +134,12 @@
   const LIVE_MIN = 10;
   function liveLine(c) {
     const lv = c.live, now0 = last && loadedTf === "M1" ? last : null;
-    if (lv && Array.isArray(lv.path) && lv.path.length)       // the backend's own 10-minute forecast, when it sends one
-      return { ...c, ...lv, target: lv.path[lv.path.length - 1].value, last: now0 && now0.time >= lv.t ? now0.close : lv.last, live: true };
+    if (lv && Array.isArray(lv.path) && lv.path.length) {     // the backend's own 10-minute forecast, when it sends one
+      const px = now0 && now0.time >= lv.t ? now0.close : lv.last, d = px - lv.last;   // moved onto the chart's own price
+      const path = lv.path.map((p) => ({ time: p.time, value: p.value + d }));
+      const band = (lv.band || []).map((b) => ({ time: b.time, lo: b.lo + d, hi: b.hi + d, p25: b.p25 + d, p75: b.p75 + d }));
+      return { ...c, ...lv, path, band, target: path[path.length - 1].value, last: px, live: true };
+    }
     const pts = [[c.t, +c.last], ...c.path.map((p) => [p.time, p.value])].sort((a, b) => a[0] - b[0]);
     const at = (x) => {
       for (let i = 1; i < pts.length; i++) if (pts[i][0] >= x) {
@@ -148,6 +152,30 @@
     for (let m = 1; m <= LIVE_MIN; m++) path.push({ time: c.t + m * 60, value: +at(c.t + m * 60).toFixed(2) });
     const now = last && loadedTf === "M1" && last.time >= c.t ? last.close : null;
     return { ...c, path, minutes: LIVE_MIN, target: path[path.length - 1].value, last: now ?? c.last, live: true };
+  }
+  // The lean: up / down odds from the backend. Called an edge only if the live scoreboard shows the 10-minute line
+  // beating a coin flip; otherwise it is a lean and says so.
+  function leanOf(c) {
+    const up = c && c.up_prob != null ? +c.up_prob : null;
+    if (up == null) return null;
+    const src = S.mesh && (S.mesh.sources || []).find((x) => x.name === "10-min line");
+    const proven = !!(src && Object.values(src.by_h || {}).some((v) => v && v.beats_coin && v.right > 0.5));
+    const dir = up >= 0.55 ? 1 : up <= 0.45 ? -1 : 0;
+    return { up, dir, proven, pct: Math.round((dir < 0 ? 1 - up : up) * 100) };
+  }
+  // Past 10-minute ranges, one per 1m candle, scored once their 10 minutes are up: did price end inside the range,
+  // and did it go the way the lean said. Kept in this browser only.
+  let ncHist = store.get("nc_hist", []);
+  function ncRecord(c) {
+    if (!c || !c.live || !Array.isArray(c.band) || !c.band.length || ncHist.some((h) => h.t === c.t)) return;
+    const e = c.band[c.band.length - 1], l = leanOf(c);
+    ncHist.push({ t: c.t, end: c.path[c.path.length - 1].time, last: c.last, lo: e.lo, hi: e.hi, p25: e.p25, p75: e.p75, dir: l ? l.dir : 0 });
+    ncHist = ncHist.slice(-60); store.set("nc_hist", ncHist);
+  }
+  function ncScore() {
+    if (loadedTf !== "M1") return [];
+    const bars = new Map(series.data().map((b) => [b.time, b.close]));
+    return ncHist.map((h) => { const px = bars.get(h.end - 60); return px == null || (last && h.end > last.time) ? null : { ...h, px, inside: px >= h.lo && px <= h.hi, right: h.dir ? Math.sign(px - h.last) === h.dir : null }; }).filter(Boolean);
   }
   const candleClock = (sec) => new Date(sec * 1000).toISOString().slice(11, 16);
   // Shading for the trend line, the same two tones as Kronos's: around the line, as wide as Kronos's own sample
@@ -173,6 +201,9 @@
     fcKey = key;
     bandRange = ok && Array.isArray(k.band) && k.band.length ? [Math.min(...k.band.map((b) => b.lo)), Math.max(...k.band.map((b) => b.hi))] : null;
     if (!ok) { forecast.setData([]); return; }
+    const ax = k.live ? assist() : null, rd = ax && ax.stage === "ready" ? ax.d : 0;
+    forecast.applyOptions({ color: rd > 0 ? C.up : rd < 0 ? C.down : C.gold, lineStyle: rd ? 0 : 2 });
+    if (k.live) ncRecord(k);
     const sec = TFSEC[tf], start = k.t - (k.t % sec), byBar = new Map([[start, k.last]]);
     for (const p of k.path) { const b = p.time - (p.time % sec); if (b >= start) byBar.set(b, p.value); }
     forecast.setData([...byBar].sort((a, b) => a[0] - b[0]).map(([time, value]) => ({ time, value })));
@@ -188,7 +219,7 @@
       if (p.tp) want.push([p.tp, C.up, "TP", 2, 95]);
     }
     const kf = chartForecast();
-    if (ovl.kronos && kf && Number.isFinite(+kf.target))
+    if (ovl.kronos && kf && !kf.live && Number.isFinite(+kf.target))
       want.push([+kf.target, C.gold, `${kf.mix ? "TREND" : "K"} ${kf.dir > 0 ? "▲" : kf.dir < 0 ? "▼" : "•"} ${horizon(kf.minutes).replace(" ", "")}`, 2, 70]);
     const ba = S.boom && S.boom.active;
     if (ovl.boom && ba) {
@@ -334,8 +365,10 @@
     const liq = (m.liquidity || []);
     const near = (side) => liq.filter((l) => !l.swept && px != null && (side > 0 ? l.price >= px : l.price < px))
       .sort((a, b) => Math.abs(a.price - px) - Math.abs(b.price - px)).slice(0, 2);
-    return { ...m, killzones: recent(m.killzones, 4), fvg: openFirst(m.fvg, 4, 1), ob: openFirst(m.ob, 3, 1), structure: recent(m.structure, 2),
-      swings: recent(m.swings, 4), ote: recent(m.ote, 1), liquidity: px == null ? recent(liq, 4) : [...near(1), ...near(-1), ...liq.filter((l) => l.swept).slice(-1)] };
+    const nearest = (a, n) => px == null ? recent(a, n) : (a || []).filter((z) => !z.to_time)
+      .sort((p, q) => Math.abs((p.top + p.bottom) / 2 - px) - Math.abs((q.top + q.bottom) / 2 - px)).slice(0, n);
+    return { ...m, killzones: recent(m.killzones, 3), fvg: nearest(m.fvg, 2), ob: nearest(m.ob, 1), structure: recent(m.structure, 1),
+      swings: recent(m.swings, 3), ote: recent(m.ote, 1).filter((o) => px != null && px <= o.top + (o.top - o.bottom) && px >= o.bottom - (o.top - o.bottom)), liquidity: px == null ? recent(liq, 4) : [...near(1), ...near(-1), ...liq.filter((l) => l.swept).slice(-1)] };
   }
   function drawSmc(right, sec, ts) {
     const m = S && S.smc && trimSmc(S.smc);
@@ -348,35 +381,38 @@
       zx.beginPath(); zx.setLineDash(dash || []); zx.strokeStyle = col; zx.lineWidth = 1;
       zx.moveTo(x1, Math.round(yy) + .5); zx.lineTo(x2, Math.round(yy) + .5); zx.stroke(); zx.setLineDash([]);
     };
+    // a zone is a soft beam: a bright edge where it was born, fading out toward the price, no outline
     const box = (b, rgb, a, txt) => {
       const x1 = X(b.from_time), x2 = X(b.to_time), y1 = y(b.top), y2 = y(b.bottom);
       if (x1 == null || y1 == null || y2 == null || x2 <= x1) return;
-      zx.fillStyle = `rgba(${rgb},${a})`; zx.fillRect(x1, y1, x2 - x1, Math.max(1, y2 - y1));
-      zx.strokeStyle = `rgba(${rgb},${a * 3})`; zx.strokeRect(x1 + .5, y1 + .5, x2 - x1 - 1, Math.max(1, y2 - y1) - 1);
-      if (txt) tag(txt, x1 + 3, y1 + TH / 2 + 1, `rgb(${rgb})`, { pri: b.to_time ? 32 : 40, faint: !!b.to_time });
+      const h = Math.max(2, y2 - y1), g = zx.createLinearGradient(x1, 0, x2, 0);
+      g.addColorStop(0, `rgba(${rgb},${a * 2.2})`); g.addColorStop(.35, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`);
+      zx.fillStyle = g; zx.fillRect(x1, y1, x2 - x1, h);
+      zx.fillStyle = `rgba(${rgb},.85)`; zx.fillRect(x1, y1, 2, h);
+      if (txt && h >= 6) tag(txt, x1 + 5, (y1 + y2) / 2, `rgb(${rgb})`, { pri: 40, faint: true });
     };
     if (sec <= 900) for (const k of m.killzones || []) {            // sessions only make sense on 1m-15m
       const x1 = X(k.start), x2 = X(k.end), rgb = KZ[k.name] || "142,138,128";
       if (x1 == null || x2 <= x1) continue;
-      zx.fillStyle = `rgba(${rgb},.06)`; zx.fillRect(x1, 0, x2 - x1, H);
-      tag(k.name, Math.max(x1 + 3, 64), H - 40, `rgb(${rgb})`, { pri: 15 });
-      if (k.high && k.low) { hline(x1, x2, y(k.high), `rgba(${rgb},.6)`, [2, 2]); hline(x1, x2, y(k.low), `rgba(${rgb},.6)`, [2, 2]); }
+      const hb = H - ts.height();                      // bottom of the plot, above the time axis
+      zx.fillStyle = `rgba(${rgb},.55)`; zx.fillRect(x1, hb - 3, x2 - x1, 3);
+      zx.fillStyle = `rgba(${rgb},.025)`; zx.fillRect(x1, 0, x2 - x1, hb - 3);
+      tag(k.name, Math.max(x1 + 3, 64), hb - 14, `rgb(${rgb})`, { pri: 15, faint: true });
     }
     const pd = m.pd;
     if (pd && pd.high && pd.low) {
       const x1 = X(pd.from_time) ?? 0, eq = pd.eq ?? (pd.high + pd.low) / 2, yh = y(pd.high), ye = y(eq), yl = y(pd.low);
       if (yh != null && ye != null && yl != null) {
-        zx.fillStyle = "rgba(229,72,77,.05)"; zx.fillRect(x1, yh, right - x1, ye - yh);
-        zx.fillStyle = "rgba(47,182,124,.05)"; zx.fillRect(x1, ye, right - x1, yl - ye);
-        hline(x1, right, ye, "rgba(236,232,223,.35)", [6, 4]);
-        tag("PREM", lab, yh + TH / 2 + 1, "rgb(229,72,77)", { align: "right", pri: 25, edge: true, faint: true });
-        tag("EQ", lab, ye, "rgb(236,232,223)", { align: "right", pri: 26, edge: true, faint: true });
-        tag("DISC", lab, yl - TH / 2 - 1, "rgb(47,182,124)", { align: "right", pri: 25, edge: true, faint: true });
+        const gx = right - 5;
+        zx.fillStyle = "rgba(229,72,77,.55)"; zx.fillRect(gx, yh, 3, ye - yh);
+        zx.fillStyle = "rgba(47,182,124,.55)"; zx.fillRect(gx, ye, 3, yl - ye);
+        hline(Math.max(x1, right - 90), right, ye, "rgba(236,232,223,.3)", [3, 3]);
+        tag("EQ", gx - 6, ye, "rgb(236,232,223)", { align: "right", pri: 26, faint: true });
       }
     }
-    for (const o of m.ote || []) box(o, "214,173,82", .08, "OTE");
-    for (const g of m.fvg || []) box(g, g.dir === 1 ? "47,182,124" : "229,72,77", g.to_time ? .04 : .09, g.kind || "FVG");
-    for (const o of m.ob || []) box(o, o.dir === 1 ? "47,123,245" : "229,83,60", o.to_time ? .05 : .12, o.kind || "OB");
+    for (const o of m.ote || []) box(o, "214,173,82", .07, "OTE");
+    for (const g of m.fvg || []) box(g, g.dir === 1 ? "47,182,124" : "229,72,77", .09, g.kind || "FVG");
+    for (const o of m.ob || []) box(o, o.dir === 1 ? "47,123,245" : "229,83,60", .1, o.kind || "OB");
     for (const l of m.liquidity || []) {
       const x1 = X(l.from_time) ?? 0, x2 = X(l.to_time), yy = y(l.price);
       if (yy == null) continue;
@@ -394,7 +430,7 @@
     for (const w of m.swings || []) {
       const xx = X(w.time), yy = y(w.price);
       if (xx == null || yy == null || xx >= right) continue;
-      tag(w.kind, xx, yy + (/H$/.test(w.kind) ? -TH / 2 - 3 : TH / 2 + 3), "rgb(190,186,176)", { align: "center", pri: 30 });
+      tag(w.kind, xx, yy + (/H$/.test(w.kind) ? -TH / 2 - 3 : TH / 2 + 3), "rgb(190,186,176)", { align: "center", pri: 30, faint: true });
     }
     for (const l of m.levels || []) {
       const x1 = l.time ? X(l.time) : 0, yy = y(l.price);
@@ -498,9 +534,18 @@
       zx.save(); zx.setLineDash([2, 3]); zx.strokeStyle = "rgba(214,173,82,.75)"; zx.lineWidth = 1;
       for (const e of ["lo", "hi"]) { zx.beginPath(); pts.forEach((p, i) => (i ? zx.lineTo(p.x, y(p.b[e])) : zx.moveTo(p.x, y(p.b[e])))); zx.stroke(); }
       zx.restore();
-      const end = pts[pts.length - 1];
-      tag(`HI ${fmt(end.b.hi)}`, end.x + 4, y(end.b.hi), C.gold, { pri: 66, faint: true });
-      tag(`LO ${fmt(end.b.lo)}`, end.x + 4, y(end.b.lo), C.gold, { pri: 66, faint: true });
+      const end = pts[pts.length - 1], l = leanOf(k), ye = y(k.path[k.path.length - 1].value);
+      tag(`▲ ${fmt(end.b.hi)}  +${fmt(end.b.hi - k.last)}`, end.x + 4, y(end.b.hi), C.gold, { pri: 66 });
+      tag(`▼ ${fmt(end.b.lo)}  −${fmt(k.last - end.b.lo)}`, end.x + 4, y(end.b.lo), C.gold, { pri: 66 });
+      const ax = assist();
+      if (ax && ye != null) tag(ax.chip, end.x + 4, ye, ax.stage === "ready" ? (ax.d > 0 ? C.up : C.down) : C.gold, { pri: 90, must: true });
+      for (const h of ncScore().slice(-12)) {         // past ranges: a thin bar from low to high, a dot where price ended
+        const x = xOf(h.end - 60, ts, sec), y1 = y(h.hi), y2 = y(h.lo), yp = y(h.px);
+        if (x == null || y1 == null || y2 == null || yp == null || x >= right) continue;
+        zx.fillStyle = "rgba(214,173,82,.35)"; zx.fillRect(Math.round(x) - .5, y1, 1, y2 - y1);
+        zx.fillStyle = h.inside ? "rgba(214,173,82,.95)" : "rgba(229,72,77,.95)";
+        zx.beginPath(); zx.arc(x, yp, 2.5, 0, 7); zx.fill();
+      }
     }
   }
   chart.timeScale().subscribeVisibleLogicalRangeChange(() => requestAnimationFrame(drawZones));
@@ -514,7 +559,7 @@
       ovl[b.dataset.o] = !ovl[b.dataset.o]; store.set("ovl3", ovl);
       b.classList.toggle("on", ovl[b.dataset.o]);
       markerKey = ""; fcKey = "x";
-      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); renderSmcRead(); renderTrend(); renderDesks(); renderBoom(); renderScalper(); }
+      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); renderSmcRead(); renderTrend(); renderDesks(); renderAssist(); renderBoom(); renderScalper(); }
     });
   });
 
@@ -690,7 +735,9 @@
     const u = e.target.closest(".use");
     if (!u || !S) return;
     const ba = S.boom && S.boom.active;
-    const lv = u.dataset.src === "boom" ? ba && { sl: ba.sl, tp: ba.tp } : S.active && { sl: S.active.sl, tp: S.active.tp2 };
+    const A = u.dataset.src === "plan" ? assist() : null;
+    if (A && A.plan) { lastPlan = { d: A.d, ...A.plan }; store.set("plan", lastPlan); }
+    const lv = A ? A.plan && { sl: A.plan.stop, tp: A.plan.tp2 } : u.dataset.src === "boom" ? ba && { sl: ba.sl, tp: ba.tp } : S.active && { sl: S.active.sl, tp: S.active.tp2 };
     if (!lv) return;
     $("sl").value = lv.sl ? fmt(lv.sl) : ""; $("tp").value = lv.tp ? fmt(lv.tp) : "";
     $("protect").open = true;
@@ -831,6 +878,143 @@
   const TF6 = ["D1", "H4", "H1", "M15", "M5", "M1"];
   const tfName = (t) => t.replace(/^M(\d+)$/, "$1m").replace(/^H(\d+)$/, "$1h").replace(/^D1$/, "1D");
   const arrow = (v) => v > 0 ? `<b class="up">▲</b>` : v < 0 ? `<b class="down">▼</b>` : `<b>•</b>`;
+  // ---------------------------------------------------------------- trade assistant
+  // One reading of everything for the right-hand cards and the chip on the line: which side the higher timeframes
+  // favour, which ICT steps toward a trade on that side are done, and a plan built from live levels. Advice only.
+  const HTF = ["D1", "H4", "H1"];
+  function assist() {
+    const c0 = S && S.consensus;
+    if (!c0 || !Array.isArray(c0.path) || !c0.path.length) return null;
+    const c = liveLine(c0), ds = S.timeframes || {}, b = Array.isArray(c.band) && c.band.length ? c.band : lineBand(c, S.kronos);
+    const e = b[b.length - 1], px = c.last, now = c.t, l = leanOf(c);
+    const hs = HTF.reduce((a, t) => a + ((ds[t] && ds[t].bias) || 0), 0);
+    const d = hs > 0 ? 1 : hs < 0 ? -1 : 0;
+    const f = S.flow || {}, recent = (x) => x && x.time >= now - 1800;
+    const raid = d && [...(f.raids || [])].reverse().find((r) => r.dir === d && recent(r));
+    const cisd = d && [...(f.cisd || [])].reverse().find((r) => r.dir === d && recent(r));
+    const low = (["M1", "M5"].map((t) => ds[t]).filter(Boolean));
+    const kz = ((S.smc && S.smc.killzones) || []).find((k) => k.start <= now && now < k.end);
+    const word = d > 0 ? "up" : "down";
+    const checks = d ? [
+      { ok: true, txt: `Higher timeframes lean ${word} (${HTF.filter((t) => ds[t] && ds[t].bias === d).map(tfName).join(", ")})` },
+      { ok: !!raid, txt: raid ? `Swept ${raid.name || "liquidity"} at ${fmt(raid.ext)}` : `Sweep of liquidity ${d > 0 ? "below" : "above"}` },
+      { ok: !!cisd || low.some((x) => x.bias === d), txt: cisd ? `CISD ${word} at ${fmt(cisd.price)}` : low.some((x) => x.bias === d) ? `1m / 5m turned ${word}` : `1m / 5m shift ${word} (CISD)` },
+      { ok: !!kz, txt: kz ? `In the ${kz.name} killzone` : "A killzone (London or New York)" },
+      { ok: !l || (d > 0 ? l.up >= 0.5 : l.up <= 0.5), txt: l ? `Line not against it (${Math.round((d > 0 ? l.up : 1 - l.up) * 100)}% ${word})` : "Line not against it" },
+    ] : [];
+    const mn = meshNow(), live = mn ? mn.good.filter((g) => g.now != null && Math.abs(g.now) >= 0.1) : [];
+    if (d && live.length) {                    // only once something has earned it: the proven sources must side with us
+      const w = live.filter((g) => Math.sign(g.now) === d).length;
+      checks.push({ ok: w > live.length / 2, txt: `Proven sources agree (${w} of ${live.length})` });
+    }
+    const met = checks.filter((x) => x.ok).length;
+    const stage = !d ? "watch" : met === checks.length ? "ready" : met >= 3 ? "build" : "watch";
+    // plan on side d: start in the nearest gap the right way, stop past the sweep, targets at 1.5R and the next pool
+    let plan = null;
+    if (d && e) {
+      const gaps = ["M1", "M5", "M15"].map((t) => ds[t] && ds[t].levels && ds[t].levels.gap && { tf: t, ...ds[t].levels.gap }).filter((g) => g && g.dir === d);
+      const reach = e.hi - e.lo, g = gaps.find((x) => (d > 0 ? x.ce <= px : x.ce >= px) && Math.abs(x.ce - px) <= reach);
+      const entry = g ? g.ce : d > 0 ? Math.min(px, e.p25) : Math.max(px, e.p75);
+      const atr = (ds.M1 && ds.M1.levels && ds.M1.levels.atr) || c.sigma_1m || 1;
+      const far = g ? (d > 0 ? Math.min(g.top, g.bottom) : Math.max(g.top, g.bottom)) - d * 0.25 * atr : null;
+      let stop = raid ? raid.ext - d * 0.25 * atr : d > 0 ? e.lo : e.hi;
+      if (far != null && d * (far - stop) < 0) stop = far;          // whichever sits further away
+      if (d * (entry - stop) < 0.8 * atr) stop = entry - d * 0.8 * atr;
+      const r = Math.abs(entry - stop), tp1 = entry + d * 1.5 * r;
+      const pools = ["M15", "H1", "H4"].map((t) => ds[t] && ds[t].levels && ds[t].levels[d > 0 ? "liquidity_above" : "liquidity_below"]).filter((v) => v != null && d * (v - tp1) > 0);
+      const tp2 = pools.length ? pools[0] : entry + d * 3 * r;
+      const brk = ds.M1 && ds.M1.levels && ds.M1.levels[d > 0 ? "liquidity_above" : "liquidity_below"];
+      const lots = +$("lots").value || 0.01;
+      plan = { entry, stop, tp1, tp2, r, g, brk: brk != null && d * (brk - px) > 0 ? brk : null, risk: r * lots * 100, lots, until: now + 600 };
+    }
+    const chip = stage === "ready" ? `${d > 0 ? "BUY" : "SELL"} SETUP` : stage === "build" ? `BUILDING ${met}/${checks.length}` : "WAIT";
+    return { c, e, l, d, checks, met, stage, plan, chip, kz, mn };
+  }
+  // Knowledge mesh: sources that have beaten a coin flip on the live record, and which way each one reads right now
+  function meshNow() {
+    const m = S.mesh;
+    if (!m || !Array.isArray(m.sources)) return null;
+    const ds = S.timeframes || {}, parts = Object.fromEntries(((S.consensus && S.consensus.parts) || []).map((p) => [p.name, +p.score]));
+    const reading = (n) => /^Desk /.test(n) ? (ds[n.slice(5)] ? +ds[n.slice(5)].score : null) : parts[n] != null ? parts[n] : n === "Trend line" && S.consensus ? +S.consensus.score : null;
+    const good = [];
+    for (const src of m.sources) {
+      if (/^(Always up|Last 30 min)$/.test(src.name)) continue;
+      let best = null;
+      for (const [h, v] of Object.entries(src.by_h || {})) if (v && v.n && v.beats_coin && v.right > 0.5 && (!best || v.right > best.right)) best = { h: +h, ...v };
+      if (best) good.push({ name: src.name, ...best, now: reading(src.name) });
+    }
+    good.sort((a, b) => b.right - a.right);
+    return { good, total: m.sources.length, rows: m.rows };
+  }
+  let lastPlan = store.get("plan", null);
+  function renderAssist() {
+    const ds = S.timeframes || {}, rows = TF6.filter((t) => ds[t]), A = assist();
+    // card 1: what each timeframe thinks
+    const t1 = $("aTf");
+    t1.hidden = !rows.length;
+    if (rows.length) {
+      const ups = rows.filter((t) => ds[t].bias > 0).length, dns = rows.filter((t) => ds[t].bias < 0).length;
+      const hs = HTF.filter((t) => ds[t]).map((t) => ds[t].bias), hw = hs.every((x) => x > 0) ? "all up" : hs.every((x) => x < 0) ? "all down" : hs.filter((x) => x > 0).length > hs.filter((x) => x < 0).length ? "mostly up" : hs.filter((x) => x < 0).length > hs.filter((x) => x > 0).length ? "mostly down" : "split";
+      t1.innerHTML = `<span class="name">Timeframes</span><span class="untested">NOT PROVEN</span>
+        <span class="tfx">${rows.map((t) => { const x = ds[t], n = Math.max(1, Math.min(5, Math.ceil(Math.abs(+x.score) * 5))), cls = x.bias > 0 ? "up" : x.bias < 0 ? "down" : "";
+          const w = (x.why || [])[0];
+          return `<span class="r"><b class="tf">${tfName(t)}</b><b class="w ${cls}">${x.bias > 0 ? "▲ Up" : x.bias < 0 ? "▼ Down" : "◆ Range"}</b><span class="seg ${cls}">${"<i></i>".repeat(n)}${"<i class=o></i>".repeat(5 - n)}</span>
+            <span class="th">${w ? esc(w.text) : "nothing strong"}${x.with_above === false ? ` · <em>against ${tfName(x.above)}</em>` : ""}</span></span>`; }).join("")}</span>
+        <span class="meta"><b>${ups} of ${rows.length} up, ${dns} down</b> · higher timeframes ${hw}${ds.M1 ? `, 1m ${ds.M1.bias > 0 ? "up" : ds.M1.bias < 0 ? "down" : "ranging"}` : ""}.</span>`;
+    }
+    // card 2: the yellow line in one look
+    const t2 = $("aLine"), t3 = $("aPlan");
+    t2.hidden = t3.hidden = !A;
+    if (!A) return;
+    const { c, e, l, d, stage, plan } = A, sc = ncScore(), ins = sc.filter((h) => h.inside).length;
+    const parts = (S.consensus.parts || []).filter((p) => Math.abs(+p.score) >= 0.1).sort((a, b) => Math.abs(b.score) - Math.abs(a.score)).slice(0, 3);
+    const big = stage === "ready" ? `<b class="${d > 0 ? "up" : "down"}">${d > 0 ? "▲ BUY" : "▼ SELL"} SETUP</b>` : stage === "build" ? `<b>BUILDING ${d > 0 ? "▲" : "▼"} ${A.met}/${A.checks.length}</b>` : `<b>WAIT</b>`;
+    const mn = A.mn, mesh = !mn ? "" : mn.good.length
+      ? `<span class="mesh"><b>Knowledge mesh</b> · beating a coin flip so far:${mn.good.slice(0, 3).map((g) => `<span>${esc(feat(g.name))} <b class="num">${Math.round(g.right * 100)}%</b> at ${horizon(g.h)} <small>${g.n} checks</small>${g.now != null && Math.abs(g.now) >= 0.1 ? ` · now <b class="${g.now > 0 ? "up" : "down"}">${g.now > 0 ? "▲" : "▼"}</b>` : " · now neutral"}</span>`).join("")}</span>`
+      : !mn.total ? `<span class="mesh"><b>Knowledge mesh</b> · still collecting its first checks.</span>`
+      : `<span class="mesh"><b>Knowledge mesh</b> · none of ${mn.total} sources has beaten a coin flip yet${mn.rows ? ` (${mn.rows.toLocaleString("en-US")} candles)` : ""}. Trade the range, not a direction.</span>`;
+    t2.innerHTML = `<span class="name">Next 10 min</span><span class="untested">RANGE CHECKED</span>
+      <span class="verdict">${big}</span>
+      ${e ? `<span class="say">Price should end between <b class="num">${fmt(e.lo)}</b> and <b class="num">${fmt(e.hi)}</b>, most likely <b class="num">${fmt(e.p25)}–${fmt(e.p75)}</b>. Normal swing ±${fmt((e.hi - e.lo) / 2)}.</span>` : ""}
+      ${l ? `<span class="say">Lean: ${l.dir ? `<b class="${l.dir > 0 ? "up" : "down"}">${l.dir > 0 ? "up" : "down"} ${l.pct}%</b>` : `<b>none (${Math.round(l.up * 100)}% up)</b>`}${l.proven ? "" : ", which has been a coin flip in testing"}.</span>` : ""}
+      ${parts.length ? `<span class="why">${parts.map((p) => `<span class="${tone(p.score)}">${p.score > 0 ? "+" : "−"} ${esc(p.name)}</span>`).join("")}</span>` : ""}
+      ${mesh}
+      <span class="meta num">${sc.length ? `On this screen: ended inside the range ${ins} of ${sc.length} · ` : ""}updated ${candleClock(c.t)}</span>`;
+    // card 3: the plan
+    const step = (n, k, v) => `<span class="st"><i>${n}</i><b>${k}</b><span>${v}</span></span>`;
+    if (!d) {
+      t3.innerHTML = `<span class="name">Position plan</span><span class="untested">ADVICE ONLY</span>
+        <span class="say">No side yet: 1D, 4h and 1h don't agree. Wait until they do, then look for a sweep and a 1m shift the same way.</span>`;
+      return;
+    }
+    const p = plan, side = d > 0 ? "BUY" : "SELL", lt = (v) => `<b class="num">${fmt(v)}</b>`;
+    t3.innerHTML = `<span class="name">Position plan · ${side}</span><span class="untested">ADVICE ONLY</span>
+      <span class="checks">${A.checks.map((x) => `<span class="${x.ok ? "ok" : ""}">${x.ok ? "✓" : "○"} ${esc(x.txt)}</span>`).join("")}</span>
+      <span class="steps">
+        ${step(1, "Wait for", p.g ? `a pullback into the ${tfName(p.g.tf)} gap ${lt(Math.min(p.g.top, p.g.bottom))}–${lt(Math.max(p.g.top, p.g.bottom))}` : `price near ${lt(p.entry)} (the ${d > 0 ? "lower" : "upper"} middle of the range)`)}
+        ${step(2, "Start", `half size, ${side.toLowerCase()} limit at ${lt(p.entry)}`)}
+        ${step(3, "Add", p.brk ? `the other half only after a 1m close ${d > 0 ? "above" : "below"} ${lt(p.brk)}` : "the other half only after a strong 1m close your way")}
+        ${step(4, "Protect", `stop ${lt(p.stop)} (${fmt(p.r)} away${A.checks[1].ok ? ", past the sweep" : ""}) · risk $${p.risk.toFixed(2)} at ${p.lots.toFixed(2)} lots`)}
+        ${step(5, "Take profit", `TP1 ${lt(p.tp1)} (1.5R): close half, stop to entry · TP2 ${lt(p.tp2)}`)}
+        ${step(6, "Cancel if", `a 1m close past ${lt(p.stop)}, or no fill by ${candleClock(p.until)}`)}
+      </span>
+      <button class="use" data-src="plan">Load SL ${fmt(p.stop)} / TP ${fmt(p.tp2)} into the ticket</button>
+      ${coach(A)}`;
+  }
+  // in a trade: plain coaching from the plan you loaded and the live range. Never touches the trade.
+  function coach(A) {
+    const ps = S.positions || [];
+    if (!ps.length) return "";
+    const p0 = ps[ps.length - 1], d = p0.side === "BUY" ? 1 : -1, px = A.c.last, e = A.e, out = [];
+    const pl = lastPlan && lastPlan.d === d ? lastPlan : null;
+    if (!p0.sl) out.push(`No stop on your ${p0.side}.${pl ? ` The plan's stop was ${fmt(pl.stop)}.` : ""}`);
+    if (pl && d * (px - pl.tp1) >= 0) out.push(`TP1 ${fmt(pl.tp1)} reached: close half and move the stop to ${fmt(+p0.open)}.`);
+    if (p0.sl && e && d * ((d > 0 ? e.lo : e.hi) - p0.sl) < 0) out.push(`Your stop ${fmt(p0.sl)} is inside the normal 10-minute swing (${fmt(d > 0 ? e.lo : e.hi)}), so noise alone can hit it.`);
+    if (A.d && A.d !== d) out.push(`The higher timeframes now lean the other way.`);
+    if (A.l && A.l.dir === -d) out.push(`The line leans against you (${A.l.pct}% ${A.l.dir > 0 ? "up" : "down"}).`);
+    if (!out.length) out.push(`Your ${p0.side} is in line with the plan. Let it work.`);
+    return `<span class="coach"><b>Your ${p0.side} ${fmt(+p0.open)}</b>${out.map((x) => `<span>${esc(x)}</span>`).join("")}</span>`;
+  }
   // state.timeframes: each timeframe's own desk (D1 bias down to M1 trigger), read top-down like ICT does
   const deskDir = (t) => { const d = S.timeframes && S.timeframes[t]; return d ? d.bias : ((S.consensus && S.consensus.tf) || {})[t]; };
   function renderDesks() {
@@ -856,16 +1040,23 @@
       `<b class="${cls === "flat" ? "" : cls}">${c.bias > 0 ? "▲" : c.bias < 0 ? "▼" : "•"} ${word} ${sc}</b>`;
     const lb = Array.isArray(c.band) && c.band.length ? c.band : lineBand(c, S.kronos), le = lb[lb.length - 1];
     if (c.live && c.up_prob != null && le) {
-      const up = Math.round(+c.up_prob * 100);
+      const up = Math.round(+c.up_prob * 100), l = leanOf(c), sc = ncScore(), ins = sc.filter((h) => h.inside).length;
+      const dirs = sc.filter((h) => h.right != null), rt = dirs.filter((h) => h.right).length;
+      const room = (c.last - le.lo + le.hi - c.last) / 2;
       el.innerHTML = `<span class="name">Next 10 minutes</span><span class="untested">RANGE CHECKED</span>
-        <span class="call" style="grid-column:1 / -1;color:var(--fg)"><span class="num" style="white-space:nowrap">${fmt(le.lo)} – ${fmt(le.hi)}</span></span>
-        <span class="meta num">Middle half ${fmt(le.p25)} – ${fmt(le.p75)} · line ends ${fmt(c.target)} (${c.target - c.last >= 0 ? "+" : ""}${fmt(c.target - c.last)})</span>
-        <span class="odds"><span>Up <b class="up">${up}%</b></span><span>Down <b class="down">${100 - up}%</b></span></span>
+        <span class="ncgrid">
+          <span class="k">Room up</span><b class="num up">+${fmt(le.hi - c.last)}</b><span class="num dim">to ${fmt(le.hi)}</span>
+          <span class="k">Room down</span><b class="num down">−${fmt(c.last - le.lo)}</b><span class="num dim">to ${fmt(le.lo)}</span>
+          <span class="k">Most likely</span><b class="num">${fmt(le.p25)} – ${fmt(le.p75)}</b><span class="num dim">half the time</span>
+        </span>
+        <span class="meta">Normal 10-minute swing is about <b class="num">±${fmt(room)}</b>. A stop or target closer than that is mostly noise.</span>
+        <span class="odds"><span>${l && l.dir ? `${l.proven ? "Edge" : "Lean"} <b class="${l.dir > 0 ? "up" : "down"}">${l.dir > 0 ? "▲ up" : "▼ down"} ${l.pct}%</b>` : `No lean <b>${up}% up</b>`}</span><span>${l && l.proven ? "beating a coin on the scoreboard" : "direction not proven"}</span></span>
         <span class="split"><i style="width:${up}%"></i></span>
+        ${sc.length ? `<span class="meta num">On this screen: ended inside the range <b>${ins} of ${sc.length}</b>${dirs.length ? ` · lean right <b>${rt} of ${dirs.length}</b>` : ""}</span>` : ""}
         <span class="tfs6">${TF6.map((t) => `<span>${tfName(t)}${arrow(deskDir(t))}</span>`).join("")}</span>
         <span class="parts">${(c0.parts || []).map((p) => { const v = Math.max(-1, Math.min(1, +p.score || 0));
           return `<span>${esc(p.name)}</span><span class="bar"><i style="${v >= 0 ? `left:50%;width:${v * 50}%;background:var(--up)` : `right:50%;width:${-v * 50}%;background:var(--down)`}"></i></span><span class="num ${tone(v)}">${v > 0 ? "+" : ""}${v.toFixed(2)}</span>`; }).join("")}</span>
-        <span class="meta">Gold line and shading on the 1m chart, redone with every price. Checked on past gold: about 9 in 10 ten-minute moves ended inside the light shading and half inside the dark one, so the range is honest. Which way it goes was a coin flip, so read the up/down odds as a lean, not a call.${c.kronos ? " Kronos is in it." : ""}</span>`;
+        <span class="meta">On the 1m chart: the cone is where price should be over the next 10 minutes, redone with every price. On past gold about 9 in 10 moves ended inside it and half inside the darker middle. Which way was a coin flip, so the line turns green or red only to show a lean.${c.kronos ? " Kronos is in it." : ""}</span>`;
       return;
     }
     el.innerHTML = `<span class="name">Trend reading</span><span class="untested">${c.proven ? "TESTED" : "NOT A FORECAST"}</span>
@@ -989,6 +1180,7 @@
     renderHeadsUp();
     renderTrend();
     renderDesks();
+    renderAssist();
     renderMesh();
     renderSmcRead();
     drawMarkers();

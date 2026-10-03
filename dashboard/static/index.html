@@ -252,6 +252,36 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
 .card.trend .parts .bar { height: 6px; background: var(--raise); border-radius: 3px; position: relative; }
 .card.trend .parts .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
 .card.trend .parts .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line); }
+.card.trend .ncgrid { grid-column: 1 / -1; display: grid; grid-template-columns: auto auto 1fr; gap: 4px 12px; align-items: baseline; margin: 2px 0 4px; }
+.card.trend .ncgrid .k { font-size: 12px; color: var(--dim); }
+.card.trend .ncgrid b { font-size: 17px; } .card.trend .ncgrid .dim { font-size: 12px; color: var(--dim); }
+.card.assist .tfx { grid-column: 1 / -1; display: grid; }
+.card.assist .tfx .r { display: grid; grid-template-columns: 30px 68px 1fr; gap: 0 8px; align-items: center; padding: 5px 0; border-top: 1px solid var(--line); }
+.card.assist .tfx .tf { font: 600 12px var(--mono); }
+.card.assist .tfx .w { font: 700 12px var(--label); letter-spacing: .03em; }
+.card.assist .tfx .seg { display: flex; gap: 3px; justify-self: end; }
+.card.assist .tfx .seg i { width: 12px; height: 6px; border-radius: 2px; background: var(--dim); }
+.card.assist .tfx .seg.up i { background: var(--up); } .card.assist .tfx .seg.down i { background: var(--down); }
+.card.assist .tfx .seg i.o { background: var(--raise); }
+.card.assist .tfx .th { grid-column: 2 / -1; font-size: 12px; color: var(--dim); }
+.card.assist .tfx .th em { font-style: normal; color: var(--gold); }
+.card.assist .verdict { grid-column: 1 / -1; font: 700 22px var(--label); letter-spacing: .04em; color: var(--fg); margin: 2px 0; }
+.card.assist .verdict .up { color: var(--up); } .card.assist .verdict .down { color: var(--down); }
+.card.assist .say { grid-column: 1 / -1; font-size: 13px; line-height: 1.45; }
+.card.assist .why { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; }
+.card.assist .checks { grid-column: 1 / -1; display: grid; gap: 2px; font-size: 12.5px; color: var(--dim); }
+.card.assist .checks .ok { color: var(--fg); }
+.card.assist .steps { grid-column: 1 / -1; display: grid; gap: 6px; margin: 4px 0; }
+.card.assist .st { display: grid; grid-template-columns: 18px 78px 1fr; gap: 0 6px; font-size: 12.5px; align-items: baseline; }
+.card.assist .st i { font: 600 11px var(--mono); font-style: normal; color: var(--bg); background: var(--gold); border-radius: 50%; width: 16px; height: 16px; display: grid; place-items: center; }
+.card.assist .st b { color: var(--dim); font-weight: 600; }
+.card.assist .st b.num { color: var(--fg); }
+.card.assist .use { grid-column: 1 / -1; grid-row: auto; justify-self: stretch; padding: 7px 10px; color: var(--gold); border-color: rgba(214,173,82,.5); }
+.card.assist .coach { grid-column: 1 / -1; display: grid; gap: 3px; border-top: 1px solid var(--line); padding-top: 6px; font-size: 12.5px; }
+.card.assist .coach b { color: var(--gold); }
+.card.assist .mesh { grid-column: 1 / -1; display: grid; gap: 2px; font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 6px; color: var(--dim); }
+.card.assist .mesh > b { color: var(--gold); } .card.assist .mesh span { color: var(--fg); } .card.assist .mesh small { color: var(--dim); }
+details.more > summary { cursor: pointer; font-size: 12px; color: var(--dim); padding: 6px 0; }
 .card.desks .rows { grid-column: 1 / -1; display: grid; gap: 0; }
 .card.desks .row { display: grid; grid-template-columns: 34px 1fr auto; gap: 1px 8px; padding: 5px 6px; border-top: 1px solid var(--line); align-items: baseline; }
 .card.desks .row.here { background: var(--raise); border-radius: 6px; }
@@ -386,14 +416,19 @@ aside { border-left: 1px solid var(--line); background: var(--panel); padding: 1
     <div class="result" id="result"><span class="ico">✓</span><div class="what">Ready to trade</div><div class="sub">Click SELL or BUY. The order goes out at once, with no confirm box.</div></div>
 
     <div class="sig">
-      <div class="eyebrow">Signals</div>
+      <div class="eyebrow">Trade assistant</div>
       <div class="heads" id="heads" hidden></div>
+      <div class="card assist" id="aTf" hidden></div>
+      <div class="card assist" id="aLine" hidden></div>
+      <div class="card assist plan" id="aPlan" hidden></div>
+      <details class="more" id="more"><summary>Details and scoreboards</summary><div class="sig">
       <div class="card trend" id="trend" hidden></div>
       <div class="card desks" id="desks" hidden></div>
       <div class="card mesh" id="mesh" hidden></div>
       <div class="card boom" id="boom" hidden></div>
       <div class="card kron" id="kronos"></div>
       <div class="card" id="scalper"></div>
+      </div></details>
     </div>
 
     <div>
