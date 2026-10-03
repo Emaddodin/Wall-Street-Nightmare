@@ -1,6 +1,7 @@
 """Download gold M1 history for the backtests (Dukascopy and LiteFinance) into gzipped CSVs.
 
     python3 fetch_history.py dukascopy 2025-10-01 2026-09-30     # -> data/dukascopy_xauusd_m1.csv.gz
+    python3 fetch_history.py dukascopy 2025-10-01 2026-09-30 XAGUSD   # another instrument (silver, USA500IDXUSD, ...)
     python3 fetch_history.py litefinance 90                       # last 90 days -> data/litefinance_xauusd_m1.csv.gz
 
 Columns: time (UTC epoch seconds), open, high, low, close, volume. Bid prices.
@@ -38,8 +39,12 @@ def _get(url: str, tries: int = 4) -> bytes:
     return b""
 
 
-def dukascopy_day(d: date) -> list:
-    url = f"https://datafeed.dukascopy.com/datafeed/XAUUSD/{d.year}/{d.month - 1:02d}/{d.day:02d}/BID_candles_min_1.bi5"
+SCALE = {"EURUSD": 100000, "GBPUSD": 100000, "USDCHF": 100000, "AUDUSD": 100000}   # everything else: 1000
+
+
+def dukascopy_day(d: date, sym: str = "XAUUSD") -> list:
+    div = SCALE.get(sym, 1000)
+    url = f"https://datafeed.dukascopy.com/datafeed/{sym}/{d.year}/{d.month - 1:02d}/{d.day:02d}/BID_candles_min_1.bi5"
     raw = _get(url)
     if not raw:
         return []
@@ -53,21 +58,21 @@ def dukascopy_day(d: date) -> list:
         s, o, c, l, h, v = struct.unpack(">5if", buf[k:k + 24])
         if v <= 0 and h == l:
             continue                                  # padding for closed minutes
-        rows.append([t0 + s, o / 1000, h / 1000, l / 1000, c / 1000, round(v, 4)])
+        rows.append([t0 + s, o / div, h / div, l / div, c / div, round(v, 4)])
     return rows
 
 
-def dukascopy(start: str, end: str) -> Path:
+def dukascopy(start: str, end: str, sym: str = "XAUUSD") -> Path:
     a, b = date.fromisoformat(start), date.fromisoformat(end)
     days = [a + timedelta(n) for n in range((b - a).days + 1)]
     days = [d for d in days if d.weekday() != 5]      # no gold on Saturdays
     rows = []
     with ThreadPoolExecutor(8) as ex:
-        for n, part in enumerate(ex.map(dukascopy_day, days)):
+        for n, part in enumerate(ex.map(lambda d: dukascopy_day(d, sym), days)):
             rows += part
             print(f"  {n + 1}/{len(days)} days, {len(rows)} bars", end="\r", flush=True)
     print()
-    return _write("dukascopy_xauusd_m1.csv.gz", rows)
+    return _write(f"dukascopy_{sym.lower()}_m1.csv.gz", rows)
 
 
 def litefinance(days: int) -> Path:
@@ -103,7 +108,7 @@ def _write(name: str, rows: list) -> Path:
 
 if __name__ == "__main__":
     if len(sys.argv) >= 4 and sys.argv[1] == "dukascopy":
-        dukascopy(sys.argv[2], sys.argv[3])
+        dukascopy(sys.argv[2], sys.argv[3], *(sys.argv[4:5]))
     elif len(sys.argv) >= 3 and sys.argv[1] == "litefinance":
         litefinance(int(sys.argv[2]))
     else:
