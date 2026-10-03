@@ -575,6 +575,21 @@ class Hub:
         out["feed"] = self.silver.info()
         return out
 
+    def _positions(self) -> dict:
+        """Your open gold positions as MT5 reports them (opened on your phone or anywhere on the same account).
+        Read-only: Gold Desk shows them, never touches them."""
+        try:
+            rows = self.src.positions() if hasattr(self.src, "positions") else []
+        except Exception as e:
+            return {"ok": False, "rows": [], "note": f"positions unavailable: {e}"}
+        rows = [{k: p.get(k) for k in ("ticket", "side", "volume", "open", "sl", "tp", "price", "profit", "time", "comment")}
+                for p in rows]
+        net = sum((p["volume"] or 0) * (1 if p["side"] == "BUY" else -1) for p in rows)
+        return {"ok": True, "rows": rows, "count": len(rows), "net_lots": round(net, 2),
+                "profit": round(sum(p["profit"] or 0 for p in rows), 2),
+                "note": "from your MT5 account (read-only); trades opened on your phone show here when the Mac's MT5 is "
+                        "logged into the same account"}
+
     def _overall(self, market_open: bool) -> dict | None:
         try:
             return brain.overall(self.boom.ict, self._news_state(), self.boom.quant, self.boom.kronos30, self.boom.smt,
@@ -656,6 +671,7 @@ class Hub:
                 "error": self.error or getattr(self.src, "feed_note", None) or mk["note"],
                 "market": mk,
                 "analysis_only": True,
+                "positions": self._positions(),       # read-only: your MT5 account's open gold trades (phone included)
                 "broker": self.src.broker() if hasattr(self.src, "broker") else {"connected": True, "message": None},
                 "kronos": self.kronos.state() if self.kronos else None,
                 "boom": self.boom.state(),
