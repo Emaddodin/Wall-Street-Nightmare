@@ -382,6 +382,8 @@ COMP2 = re.compile(rf"\b(above|beats?|beating|tops?|topping|exceeds?|exceeding|s
                    rf"missing|undershoots?|falls? short of|fell short of) {_EXP}\b")
 COMP_UPSET = set(_UPW.split("|")) | {"beat", "beats", "beating", "top", "tops", "topping", "exceed", "exceeds",
                                      "exceeding", "surpass", "surpasses"}
+# judgement words (good / bad for the economy) ignore a subject's polarity; size words ("more claims") don't
+COMP_QUALITY = re.compile(r"^(?:better|worse|stronger|weaker|beat\w*|miss\w*|falls? short|fell short)")
 VS = re.compile(r"(-?\d+(?:\.\d+)?)\s*(%|k|m|bp)?\s*(?:vs\.?|versus)\s*(?:an?\s+)?(?:expected\s+|forecast\s+|"
                 r"est\.?\s+|consensus\s+|exp\.?\s+)?(-?\d+(?:\.\d+)?)\s*(%|k|m|bp)?\s*(expected|forecast|est\b|"
                 r"estimate|consensus|exp\b|f'cast)?")
@@ -678,9 +680,10 @@ def _cues(cl: str, tok_at, subs: list) -> list:
             prev = [c for c in cues if not c[3] and c[1] and c[5] <= m.start() and tok_at(m.start()) - c[0] <= 2]
             if prev:
                 d = prev[-1][1] * (1 if word == "more" else -1)
-        cues.append((tok_at(m.start()), d, True, True, m.start(), m.end()))
+        cues.append((tok_at(m.start()), d, bool(COMP_QUALITY.match(word)), True, m.start(), m.end()))
     for m in COMP2.finditer(cl):
-        cues.append((tok_at(m.start()), 1 if m.group(1) in COMP_UPSET else -1, True, True, m.start(), m.end()))
+        cues.append((tok_at(m.start()), 1 if m.group(1) in COMP_UPSET else -1, bool(COMP_QUALITY.match(m.group(1))),
+                     True, m.start(), m.end()))
     for m in VS.finditer(cl):
         if m.group(5) or re.search(r"expected|forecast|est|consensus", m.group(0)):
             cues.append((tok_at(m.start()), _sgn(float(m.group(1)) - float(m.group(3))), True, True,
@@ -903,8 +906,8 @@ def analyze_headline(title: str) -> dict:
 EVENT_KINDS = tuple((k, re.compile(p)) for k, p in (
     ("speech", r"speaks|speech|testif|press conference|minutes|statement|projections|beige book|monetary policy report|"
                r"jackson hole|fomc member|fed chair|powell|lagarde|ueda|bailey"),
-    ("rate", r"funds rate|rate decision|interest rate|refinancing rate|cash rate|bank rate|policy rate|deposit (?:facility )?"
-             r"rate|loan prime rate|overnight rate|official bank rate"),
+    ("rate", r"funds rate|rate decision|interest rate|refinancing rate|cash rate|bank rate|policy rate|"
+             r"deposit (?:facility )?rate|loan prime rate|overnight rate|official bank rate"),
     ("jobs_inv", r"unemployment|jobless|claims|challenger|job cuts"),
     ("inflation", r"cpi|pce|ppi|inflation|price index|prices|hourly earnings|employment cost|deflator"),
     ("jobs", r"non ?-?farm|nfp|employment change|payrolls|jolts|job openings|adp|employment"),
@@ -1179,9 +1182,9 @@ class NewsDesk:
         """One round: due headline feeds (in parallel), the calendar, the LLM summary. Safe to call by hand."""
         with self._lock:
             now = int(now if now is not None else time.time())
-            self._tried = True
             self._refresh_calendar(now)
             self._refresh_headlines(now)
+            self._tried = True
             if now in (self._headline_ok, self._cal_ok):          # something answered in this round
                 self._updated = now
             self._save_cache(now)
@@ -1218,8 +1221,9 @@ class NewsDesk:
         return base
 
     def _refresh_calendar(self, now: int) -> None:
-        errs = []
+        errs, tried = [], False
         if self.calendar is None and now - self._own_fetched >= CAL_EVERY:
+            tried = True
             evs = self._read_node_cache(now)
             if evs is None:
                 evs = []
@@ -1240,6 +1244,7 @@ class NewsDesk:
         fast = any(e.get("country") == "USD" and e.get("impact") == "High" and 0 <= now - e["t"] <= 3600
                    and not e.get("actual") for e in base)
         if now - self._xml_fetched >= (XML_FAST if fast else XML_EVERY):
+            tried = True
             try:
                 xml = parse_ff_xml(self._fetch_url(CAL_XML))
                 self._xml_offset = _learn_offset(self._base_events(), xml, self._xml_offset)
@@ -1249,7 +1254,8 @@ class NewsDesk:
             except Exception as e:
                 errs.append(f"calendar xml: {_err(e)}")
                 self._xml_fetched = now - (XML_FAST if fast else XML_EVERY) + 600
-        self._cal_err = "; ".join(errs) or None
+        if tried:
+            self._cal_err = "; ".join(errs) or None
 
     def _read_node_cache(self, now: int):
         """The Calendar node's own cache (~/.golddesk/calendar.json) when it is fresh: no second download."""
@@ -1306,7 +1312,7 @@ class NewsDesk:
             self._own_fetched = float(d.get("events_fetched", 0))
             self._xml_events = d.get("xml_events", [])
             self._xml_offset = int(d.get("xml_offset", 0))
-            self._updated = d.get("saved")
+            self._updated = d.get("updated")
         except (OSError, ValueError, KeyError, TypeError):
             pass
 
@@ -1315,7 +1321,7 @@ class NewsDesk:
             CACHE.mkdir(parents=True, exist_ok=True)
             items = [{k: v for k, v in it.items() if k != "tok"} for it in self._items]
             (CACHE / "news.json").write_text(json.dumps({
-                "saved": now, "items": items, "events": self._own_events, "events_fetched": self._own_fetched,
+                "saved": now, "updated": self._updated, "items": items, "events": self._own_events, "events_fetched": self._own_fetched,
                 "xml_events": self._xml_events, "xml_offset": self._xml_offset}))
         except (OSError, TypeError, ValueError):
             pass
@@ -1411,22 +1417,22 @@ class NewsDesk:
                 now - self._llm["at"] <= 1200:
             summary, llm = (wait_text + " " if wait_text else "") + self._llm["text"], True
 
-        if items or raw:
-            if self._headline_ok and now - self._headline_ok <= LIVE_S:
-                status = "ok"
-            elif items or self._headline_ok:
-                status = "stale"
-            else:
-                status = "offline: no headline source reachable" + (" (calendar ok)" if raw else "")
+        if self._headline_ok and now - self._headline_ok <= LIVE_S:
+            status = "ok"
+        elif items or self._headline_ok:
+            status = "stale"                                 # headlines from the cache or from >10 min ago
+        elif raw:
+            status = "offline: no headline source reachable (calendar ok)"
         elif not self.fetch and not self._tried:
             status = "offline: fetching is off"
         elif not self._tried:
             status = "offline: starting (first fetch running)"
         else:
-            errs = [f"{s['name']}: {s['err']}" for s in self._src.values() if s["err"]][:3]
-            if self._cal_err:
-                errs.append(self._cal_err)
-            status = "offline: no source reachable" + (f" ({'; '.join(errs)})" if errs else "")
+            errs = [s["err"] for s in self._src.values() if s["err"]]
+            errs += [e.split(": ", 1)[-1] for e in (self._cal_err or "").split("; ") if e]
+            uniq = list(dict.fromkeys(errs))
+            why = (f"all {len(errs)} sources: {uniq[0]}" if len(uniq) == 1 else "; ".join(uniq[:2])) if errs else ""
+            status = _short("offline: no source reachable" + (f" ({why})" if why else ""), 160)
         return {"status": status, "updated": int(self._updated) if self._updated else None, "wait": bool(win),
                 "wait_text": wait_text, "next_event": next_event, "events": events, "headlines": headlines,
                 "bias": bias, "bias_text": bias_text, "summary": summary, "analysis": analysis, "llm": llm}
@@ -1468,7 +1474,7 @@ class NewsDesk:
             a.append(next_event["gold_effect"] if next_event["time_utc"] > now else
                      f"{next_event['title']}: {next_event['gold_effect']}.")
         elif events or self._events_raw():
-            a.append("No high-impact USD event in the next 24 h.")
+            a.append("No high-impact USD event ahead in this week's calendar.")
         else:
             a.append("Economic calendar unavailable" + (f" ({self._cal_err})." if self._cal_err else "."))
         a.append("News sets the backdrop, not the entry: read it with the chart. Headlines are scored by keyword "

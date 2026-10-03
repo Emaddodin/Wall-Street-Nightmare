@@ -473,18 +473,15 @@ class Hub:
             if new:
                 eng.set_htf(*self._htf(len(new) + 10))
                 for i in new:
-                    opened = eng.add_bar(m1.t[i], m1.o[i], m1.h[i], m1.l[i], m1.c[i], m1.v[i], m1.spread[i])
-                    if opened and i == len(m1) - 2:
-                        self._event("execute", self.exec_text(opened), opened["side"])
-                        if self.coach:
-                            self.coach.ready_trade(opened, eng.ctx, self.tf, self.spec.digits)
+                    eng.add_bar(m1.t[i], m1.o[i], m1.h[i], m1.l[i], m1.c[i], m1.v[i], m1.spread[i])
+                    # the old scalper engine still runs for the HTF context it shares, but it no longer signals:
+                    # one brain (brain.py) speaks, so the page and your phone never get two different answers
             self.forming = self._bar_dict(m1, len(m1) - 1)
             try:                                         # Boom / Crash (M1) and the trend reading
                 for kind, call in self.boom.update(self.src, self.offset, self._quote()):
                     self._boom_event(kind, call)
             except Exception as e:
                 self.boom.error = f"Boom / Crash skipped: {e}"
-            self._radar()
             self._update_smc()
 
     def _update_smc(self) -> None:
@@ -592,7 +589,20 @@ class Hub:
         rows = [{k: p.get(k) for k in ("ticket", "side", "volume", "open", "sl", "tp", "price", "profit", "time", "comment")}
                 for p in rows]
         net = sum((p["volume"] or 0) * (1 if p["side"] == "BUY" else -1) for p in rows)
-        return {"ok": True, "rows": rows, "count": len(rows), "net_lots": round(net, 2),
+        read = None
+        if rows and self.boom.ict:                    # how your open trade sits with the current read (backend-made)
+            dec, ov = self.boom.ict.get("decision") or {}, self.boom.overall or {}
+            side = 1 if net > 0 else (-1 if net < 0 else 0)
+            lean = dec.get("dir") or (1 if ov.get("score", 0) >= 0.25 else (-1 if ov.get("score", 0) <= -0.25 else 0))
+            pl = sum(p["profit"] or 0 for p in rows)
+            what = f"You're {'long' if side > 0 else 'short' if side < 0 else 'flat'} {abs(net):.2f} lots ({pl:+.2f})"
+            if side and lean == side:
+                read = f"{what}; the read agrees ({dec.get('action', '')})."
+            elif side and lean == -side:
+                read = f"{what}; the read now leans the other way ({dec.get('action', '')}): consider protecting it."
+            else:
+                read = f"{what}; the read is neutral ({dec.get('action', 'WAIT')})."
+        return {"ok": True, "rows": rows, "count": len(rows), "net_lots": round(net, 2), "read": read,
                 "profit": round(sum(p["profit"] or 0 for p in rows), 2),
                 "note": "from your MT5 account (read-only); trades opened on your phone show here when the Mac's MT5 is "
                         "logged into the same account"}
@@ -964,17 +974,13 @@ def main() -> None:
     HUB.ntfy, HUB.ntfy_topic = ntfy, (topic if ntfy else None)
     if ntfy:
         print(f"Phone pushes (models forming / ready / enter): subscribe to '{topic}' in the ntfy app ({where})")
-    if ntfy and a.session != "off":
-        HUB.coach = SessionCoach(HUB.coach_snapshot, ntfy, a.session)
-        print(f"Trading session pushes: {a.session} Tehran time, market days ({where})")
+    # One push channel: the brain's announcer (models forming / ready / enter). The session coach and the Kronos
+    # heads-ups stayed quiet so they can't contradict it.
     if a.kronos:
         from kronos_signal import DEFAULT_REPO, HORIZON, KronosWorker
-        HUB.soon = SoonAlerts(topic, where, ntfy_server(), push=ntfy is not None, ntfy=ntfy,
-                              allow=HUB.coach.in_session if HUB.coach else None, hello=HUB.coach is None)
         HUB.kronos = KronosWorker(HUB, repo=a.kronos_repo or DEFAULT_REPO, size=a.kronos,
                                   horizon=HORIZON.get(a.entry_tf, 15))
         print(f"Kronos-{a.kronos}: loading in the background (first run downloads it)")
-        print("Setup heads-ups: " + (f"pushed to ntfy ({where})" if HUB.soon.ntfy else "shown on the page only"))
     url = f"http://127.0.0.1:{a.port}"
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
     srv.daemon_threads = True

@@ -972,11 +972,11 @@ class Playbook:
             rd = brain.read_candle(ctx, tf) if tf in self.tapes else None
             if rd:
                 reads[tf] = rd
-        decision = brain.decide(ctx, setups, ranking, reads, market_open)
         try:
             forming = brain.forming(ctx, setups, ranking, trust)
         except Exception as e:
             forming, self.error = [], f"forming: {e}"
+        decision = brain.decide(ctx, setups, ranking, reads, market_open, forming)
         for tf, rd in reads.items():                                   # the read of each candle, kept for the chart
             hist = self.history.setdefault(tf, [])
             if not hist or hist[-1]["time"] != rd["time"]:

@@ -102,11 +102,21 @@ def read_candle(ctx, tf: str) -> dict | None:
 
 
 # ====================================================================== the answer for right now
-def decide(ctx, setups: list, ranking: list, reads: dict, market_open: bool = True) -> dict:
+def decide(ctx, setups: list, ranking: list, reads: dict, market_open: bool = True, forming_: list | None = None) -> dict:
     """One action for right now and why, from the setups (with their candle-close triggers), the reads, the
     higher timeframes, the clock, SMT and Kronos."""
     rank = {r["model"]: k for k, r in enumerate(ranking)}
-    order = lambda s: (rank.get(s["model"], 99), -s["score"])
+    conf = {(x["model"], x["tf"], x["dir"]): x for x in forming_ or []}
+    # the same order as "most reliable now" (brain.forming), so the panel never says two different things
+    order = lambda s: (-(conf.get((s["model"], s["tf"], s["dir"])) or {}).get("confidence", 0.0),
+                       rank.get(s["model"], 99), -s["score"])
+    top = next((x for x in forming_ or [] if x["stage"] in ("set", "ready", "enter")), None)
+    if market_open and not ctx.news and top and top.get("conflict"):
+        c = top["conflict"]
+        return {"action": "WAIT", "dir": 0, "level": None, "model": None, "conflict": True,
+                "text": (f"Two-way market: {top['name']} {top['side']} ({top['confidence']:.0%}) against "
+                         f"{c['name']} {c['side']} ({c['confidence']:.0%}). Let one of them fail first; "
+                         "enter only when the other side is invalidated."), "why": [], "checks": []}
     kv_text = lambda d: ctx.kronos_vote(d)[1]
     if not market_open:
         base = _wait_plan(ctx, setups, ranking)
@@ -683,7 +693,34 @@ def forming(ctx, setups: list, ranking: list, trust: dict | None = None) -> list
                       f"{STAGE_TXT[it['stage']]}. Next: {it['next']}.")
         items.append(it)
     items.sort(key=lambda x: (-x["confidence"], -x["progress"]))
-    return items
+    # one trade, many names: models built on the same sweep / shift (same timeframe, side and anchor candle) are
+    # one setup; the strongest leads and the others are its confluence (each adds 10 %, up to 30 %)
+    merged, lead = [], {}
+    for it in items:
+        g = (it["tf"], it["dir"], it["anchor_time"]) if it["anchor_time"] is not None and it["stage"] != "watch" else None
+        if g is not None and g in lead:
+            p = lead[g]
+            p.setdefault("confluence", []).append(it["name"])
+            continue
+        if g is not None:
+            lead[g] = it
+        merged.append(it)
+    for it in merged:
+        extra = len(it.get("confluence") or [])
+        if extra:
+            it["confidence"] = round(min(1.0, it["confidence"] * (1 + 0.1 * min(3, extra))), 3)
+            it["text"] += f" Confirmed by {', '.join(it['confluence'])}."
+    merged.sort(key=lambda x: (-x["confidence"], -x["progress"]))
+    # a two-way market: the best buy and the best sell are both live and close in confidence
+    live = [x for x in merged if x["stage"] in ("set", "ready", "enter")]
+    if live:
+        top = live[0]
+        opp = next((x for x in live if x["dir"] == -top["dir"]), None)
+        if opp and opp["confidence"] >= 0.8 * top["confidence"]:
+            for x in (top, opp):
+                o = opp if x is top else top
+                x["conflict"] = {"name": o["name"], "side": o["side"], "confidence": o["confidence"]}
+    return merged
 
 
 class Announcer:
@@ -712,6 +749,8 @@ class Announcer:
         for it in items:
             if it["stage"] not in self.PUSH_STAGES or it["confidence"] < self.min_conf:
                 continue
+            if it.get("conflict") and it["stage"] == "enter":
+                continue                                              # two-way market: the page says wait
             prev = self.done.get(it["key"])
             ck = (it["model"], it["tf"], it["dir"], it["stage"])
             if now - self.cool.get(ck, -10 ** 9) < self.cool_s:
