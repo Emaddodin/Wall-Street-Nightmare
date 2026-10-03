@@ -33,7 +33,6 @@ ever evaluated in that training report (--ref-repo), never used live.
 """
 from __future__ import annotations
 
-import math
 from bisect import bisect_left, bisect_right
 from datetime import datetime, timedelta, timezone
 
