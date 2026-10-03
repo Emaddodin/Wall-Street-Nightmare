@@ -34,6 +34,7 @@ REBUILD_DAYS = 120
 FEATURE_EVERY = 300
 SNAPSHOT_EVERY = 1800           # the scoreboard is saved to board.json this often, so a restart reads only the tail
 MIN_FREE = 1 << 30             # stop writing (never delete) when the disk has less than 1 GB free
+CROSS_NAMES = ("Silver SMT", "Dollar (DXY)", "US 10y yield", "S&P futures")
 GROUPS = ("Higher timeframes", "Intraday structure", "ICT order flow", "Kronos")
 
 
@@ -94,6 +95,10 @@ class Board:
                 for name, s in sg.items():
                     if s:
                         sc.setdefault(name, Score()).add(s == out)
+        tr = row.get("trade")
+        if tr:                                            # a trade placed from Gold Desk: scored like a source
+            for h in HORIZONS:
+                self.pending[h].append((t, c, {"Your trades": 1 if tr == "BUY" else -1}))
         if row.get("x") is None:
             return
         if self.first_t is None:
@@ -133,7 +138,8 @@ class Board:
     def view(self) -> dict:
         names = sorted({n for h in HORIZONS for n in self.score[h]},
                        key=lambda n: (n not in GROUPS and not n.startswith("Desk ")
-                                      and n not in ("Trend line", "10-min line", "Always up", "Last 30 min"), n))
+                                      and n not in ("Trend line", "10-min line", "Your trades", "Always up", "Last 30 min")
+                                      and n not in CROSS_NAMES, n))
         return {"sources": [{"name": n, "by_h": {str(h): self.score[h][n].view() if n in self.score[h] else None
                                                  for h in HORIZONS}} for n in names]}
 
@@ -144,6 +150,7 @@ class Mesh:
         self.board = Board()
         self.last_t = 0
         self.error = None
+        self._trades: list = []
         if folder:
             try:
                 self._rebuild()
@@ -186,7 +193,11 @@ class Mesh:
         if t <= self.last_t:
             return
         row = {"t": t, "o": o, "h": h, "l": l, "c": c}
-        if reading and t % FEATURE_EVERY == 0:
+        if self._trades:
+            row["trade"] = self._trades.pop(0)
+        if reading and reading.get("news"):
+            row["news"] = 1
+        if reading and reading.get("x") and t % FEATURE_EVERY == 0:
             row["x"] = {k: round(v, 3) for k, v in reading["x"].items()}
             row["g"] = reading.get("g") or {}
             row["k"] = reading.get("k")
@@ -208,6 +219,10 @@ class Mesh:
                 self.error = None
             except OSError as e:
                 self.error = f"Mesh write: {e}"
+
+    def trade(self, side: str) -> None:
+        """A BUY / SELL sent from Gold Desk; it is written with the next closed candle and scored from its close."""
+        self._trades.append(side)
 
     def trust(self) -> dict:
         return self.board.trust()

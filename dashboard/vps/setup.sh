@@ -100,6 +100,7 @@ UNIT
   fi
   research "$KREPO"
   boom_kronos "$KREPO"
+  mesh_nodes
   local free
   free=$(df -Pm /root 2>/dev/null | awk 'NR==2 {print $4}')
   if [ -n "$free" ] && [ "$free" -lt 2048 ]; then   # the knowledge mesh adds about 30 MB a month in /root/.golddesk/mesh
@@ -118,6 +119,17 @@ boom_kronos() {
     -p WorkingDirectory="$APP/dashboard" --setenv=HOME=/root \
     /bin/sh vps/boom_kronos_test.sh "$PY" "$1" "$KRONOS" \
     && echo "BOOM/CRASH Kronos test started on the VPS in the background (low priority)." || true
+}
+# Once, for the "Rebuild BOOM/CRASH" thread: are silver SMT, the dollar, bonds and the S&P worth a vote for gold?
+# Free Dukascopy history, Nice 19, changes no service. Result: /api/research/mesh_nodes_cross.txt.
+mesh_nodes() {
+  local P=$CONF/kronos_research/mesh_nodes_progress.txt
+  grep -q "All mesh node tests done" "$P" 2>/dev/null && return 0
+  systemctl is-active -q mesh-nodes-test && { echo "Cross-market test: $(cat "$P" 2>/dev/null || echo starting)"; return 0; }
+  systemd-run -q --unit mesh-nodes-test --collect -p Nice=19 -p CPUQuota=100% -p MemoryMax=1500M \
+    -p WorkingDirectory="$APP/dashboard" --setenv=HOME=/root \
+    /bin/sh vps/mesh_nodes_test.sh "$PY" \
+    && echo "Cross-market test started on the VPS in the background (low priority)." || true
 }
 # Once, for the "Improve Kronos accuracy" thread: how often is Kronos's direction right, and which settings help?
 # Nice 19 with CPU and memory capped, resumable (each icon run restarts it if it stopped), changes no service.

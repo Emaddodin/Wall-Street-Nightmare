@@ -74,6 +74,14 @@ Like the [Kronos BTC demo](https://shiyu-coder.github.io/Kronos-demo/), Gold Des
 
 **Trend reading** (`ictmodel.py`, `state.consensus`, `state.flow`): every M1 candle Gold Desk scores what D1, H4, H1, M15, M5 and M1 structure, the H1 / H4 EMA regime, the ICT events (M15 turtle soup, M5 CISD, the London / New York Judas swing of the Asian range, M15 fair value gaps) and Kronos say together, from -1 to +1, and draws it as the gold line (half the Kronos path, leaning with the score). `ict_train.py` shows the same inputs do not predict the next 30-120 minutes better than a coin flip, so the reading describes the chart; it is not a forecast.
 
+**Mesh nodes** (`nodes.py`, `state.mesh.nodes`): more knowledge for deciding, all free and keyless.
+- **Clock:** how much gold usually moves in this New York hour. The ranking of the busiest hours held out of sample (correlation 0.79), but direction by hour did not.
+- **Calendar:** Forex Factory's free weekly feed. It says WAIT from 15 minutes before to 10 minutes after a high-impact USD event.
+- **Cross-markets:** Yahoo's free 1-minute feed for silver (SMT divergence), the dollar index, the US 10-year yield and S&P futures. These votes are scored in the mesh like every other source.
+- **Your trades:** each BUY or SELL sent from Gold Desk is scored at 10, 30, 60 and 120 minutes.
+
+Every node shows whether its source is ok, delayed or unreachable from where the dashboard runs. `vps/mesh_nodes_test.sh` checks the cross-market votes on a year of Dukascopy history on the VPS.
+
 **10-minute line** (`nowcast.py`, `state.consensus.live`, also `state.nowcast`): on every poll, the line starts at the live price and runs 10 M1 candles ahead. It leans by the M1 and M5 desks and the trend line, plus half the Kronos move when a fresh forecast covers those minutes. Its band is how far gold has been moving per minute over the last hour, widened with time: p25-p75 is the middle half and lo-hi runs 5% to 95%. On June to September gold the band held what it claims (54% inside the middle half, 90% inside lo-hi on Dukascopy; 54% and 90% on LiteFinance). The lean's direction was right 49% of the time, which is a coin flip. So the band is the measured part and the lean is not. `python3 nowcast.py data/dukascopy_xauusd_m1.csv.gz` repeats the check, and the mesh scores the line live at 10 minutes.
 
 **Timeframe desks** (`tfdesk.py`, `state.timeframes`): each timeframe reads its own concepts with its own weights and makes its own call, top-down the ICT way. D1 is the bias (structure, premium / discount of the month, daily gaps). H4 is the narrative (structure, EMA regime, gaps, sweeps). H1 is the draw on liquidity (nearest untaken highs / lows). M15 is the setup (turtle soup, gaps, CISD). M5 is the confirmation (CISD, structure). M1 is the trigger. Every desk gives its score, the active concepts in words, where it leans by its own look-ahead (15 minutes on M1 up to 5 days on D1), whether it sides with the desk above, and its own levels for the chart (liquidity above / below, the nearest open gap and its 50%, the range and its equilibrium). The weights are the doctrine written down, not fitted; the mesh scores each desk live, and on Dukascopy June-September none beat a coin.
@@ -125,6 +133,7 @@ A click reaches MT5 in a few milliseconds, because the page and the terminal are
 | `boom.py` | Boom / Crash M1 limit-order calls, the trend reading and their live scoring |
 | `ictmodel.py` / `ict_entries.py` | multi-timeframe ICT / SMC reading; M1 raid → CISD → FVG entries |
 | `ict_backtest.py` / `ict_train.py` | their backtest and the predictive check of the reading |
+| `nodes.py`, `clock_stats.json` | Mesh nodes: clock, economic calendar, cross-markets |
 | `nowcast.py` | The live 10-minute line and its band, and their out-of-sample check |
 | `tfdesk.py` | Timeframe desks: each timeframe's own concepts, call and chart levels |
 | `mesh.py` / `mesh_report.py` | Knowledge mesh: the live record of every signal and its scoreboard |
