@@ -159,6 +159,10 @@ def main() -> None:
     table("By model and timeframe", lambda x: f"{name(x)} {x['tf']}")
     table("By grade", lambda x: x.get("grade"))
     table("By killzone at the setup", lambda x: ck.clock(x["t"]).get("killzone") or "outside")
+    table("By part of the New York day (ictclock.DAY_MAP)", lambda x: ck.session(x["t"])["name"])
+    for sess, *_ in ck.DAY_MAP:
+        if any(ck.session(x["t"])["name"] == sess for x in rows):
+            table(f"  {sess}: by model", lambda x, s=sess: name(x) if ck.session(x["t"])["name"] == s else None)
     if split:
         table(f"By model, before {a.split}", lambda x: name(x) if x["t"] < split else None)
         table(f"By model, from {a.split} (out of sample for anything tuned before it)",
@@ -169,6 +173,10 @@ def main() -> None:
         m["n"] += 1
         m["sum_r"] += x["r"]
         m["wins"] += x["r"] > 0
+        ss = m.setdefault("sessions", {}).setdefault(ck.session(x["t"])["name"], {"n": 0, "sum_r": 0.0, "wins": 0})
+        ss["n"] += 1
+        ss["sum_r"] += x["r"]
+        ss["wins"] += x["r"] > 0
     out = {"generated": datetime.now(timezone.utc).isoformat(timespec="seconds"), "csv": a.csv, "silver": a.silver,
            "from": m1[start][0], "to": m1[-1][0], "step": a.step, "spread": a.spread, "models": models,
            "note": "bias from structure only, no Kronos, no news: see the docstring"}

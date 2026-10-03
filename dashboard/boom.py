@@ -1,5 +1,5 @@
-"""Boom / Crash: M1 scalp calls from ICT order flow, taken only with the higher timeframes, plus the trend reading
-of every timeframe that the chart's gold line shows.
+"""The reading engine behind the page (the name is historical): every closed M1 candle it reads all timeframes,
+runs the ICT playbook and the chart's brain, and keeps the trend reading and the live lines.
 
 Every closed M1 candle:
 
@@ -13,16 +13,13 @@ Every closed M1 candle:
      setup graded on the notes' checklist, and the models are ranked for the live market (time window, trend or
      range, measured record, a setup on the board). The M1 raid / CISD / FVG marks (ict_entries.py) stay on the
      chart.
-  3. BOOM / CRASH: a setup armed on this candle, graded A or A+, from one of the `top_models` best-ranked models,
-     with Kronos' next 30 minutes (M1 and M5 forecasts blended and calibrated, kronos_signal.py) on its side
-     (`kronos_mode` "require"; "prefer" lets Kronos only grade, "off" ignores it).
+  3. The chart's brain (brain.py): each closed M1 / M5 candle read in ICT and candlestick terms, one answer for
+     right now (BUY NOW on a confirmed close, GET READY, WAIT FOR ..., DON'T) and the one desk line: the best ICT
+     plan blended with Kronos' calibrated 30 minutes (state.ict.decision, state.ict.reads, state.ict.line).
 
-BOOM is the buy, CRASH the sell. Limit at the model's entry (FVG 50 %, breaker edge, unicorn overlap, OTE ...) or
-at market for the CISD models, stop beyond the sweep, TP1 at opposing liquidity (at least 1.5 R, else 2 R) and
-TP2 at the higher timeframe's draw. A limit waits 30 M1 / 12 M5 candles; a filled call ends at TP1, the stop or
-after 2 h (M1) / 6 h (M5). One call at a time. Nothing here places an order and none of it is proven: the
-playbook's track record (playbook_backtest.py, ~/.golddesk/playbook_track.json) says how each model really did.
-Finished calls go to ~/.golddesk/boom_calls.csv.
+Nothing here places an order and none of it is proven: the playbook's record (playbook_backtest.py,
+~/.golddesk/playbook_track.json) says how each model really did. The old BOOM / CRASH calls are retired; earlier
+calls stay in ~/.golddesk/boom_calls.csv.
 """
 from __future__ import annotations
 
@@ -35,6 +32,7 @@ from engine import Bars
 from ictmodel import MarketRead, consensus, daily
 from mesh import Mesh
 import nowcast as nc
+import brain
 from playbook import Playbook
 from tfdesk import desks
 
@@ -93,11 +91,14 @@ class BoomTracker:
         self.kronos30: dict | None = None        # Kronos' blended M1 / M5 30-minute forecast (kronos_signal.py)
         self.smt_fn = None                       # callable(gold bars by tf) -> SMT state by tf (set by the server)
         self.smt: dict | None = None
-        self.kronos_mode = "require"             # require: Kronos must agree; prefer: it grades only; off
-        self.kronos_running = lambda: False      # set by the server: is the Kronos worker loaded?
-        self.min_grade = ("A+", "A")
-        self.top_models = 3                      # calls come from the models ranked this high for the live market
         self.market_open = lambda: True
+        self.silver_bars: dict = {}              # silver candles by timeframe (set by the server's SMT reader)
+        self.quant: dict | None = None           # the quant model's 30-minute forecast (quant.py)
+        try:
+            from quant import QuantModel
+            self.quant_model = QuantModel()
+        except Exception as e:                   # not built yet / failed to load: the page says so
+            self.quant_model, self.quant = None, {"ok": False, "status": f"quant model unavailable: {e}"}
 
     # ------------------------------------------------------------ history file
     def _read(self) -> list:
@@ -133,65 +134,6 @@ class BoomTracker:
     def on_forecast30(self, fc: dict) -> None:
         """Kronos' 30-minute forecast (M1 and M5 blended, calibrated): the playbook's Kronos check reads it."""
         self.kronos30 = fc
-
-    def kronos_gate(self, d: int) -> tuple:
-        """(allowed?, why) for a call in direction d under the Kronos mode."""
-        fc = self.kronos30
-        fresh = fc and fc.get("up_prob") is not None and self.ict and abs((fc.get("t") or 0) - self.ict["t"]) <= 900
-        if self.kronos_mode == "off":
-            return True, "Kronos not used for calls"
-        if not fresh:
-            if self.kronos_mode == "require" and self.kronos_running():
-                return False, "waiting for Kronos' 30-minute forecast"
-            return True, "Kronos off: ICT only"
-        p = fc["up_prob"] if d == 1 else 1 - fc["up_prob"]
-        mv = (fc.get("move") or 0.0) * d
-        agree = p >= 0.55 and mv >= 0
-        against = p <= 0.45
-        if self.kronos_mode == "require" and not agree:
-            return False, f"Kronos 30 min does not confirm ({'up' if d == 1 else 'down'} {p:.0%})"
-        if against:
-            return False, f"Kronos 30 min against ({'up' if d == 1 else 'down'} {p:.0%})"
-        return True, f"Kronos 30 min {'agrees' if agree else 'neutral'}: {'up' if d == 1 else 'down'} {p:.0%}, {mv:+.2f}"
-
-    def _from_playbook(self, spread: float, t: int) -> dict | None:
-        """A BOOM / CRASH call from the playbook: a setup armed on this candle, A grade or better, from one of the
-        models that fit the live market best, with Kronos' next 30 minutes on its side."""
-        ict = self.ict
-        rank = {r["model"]: k for k, r in enumerate(ict.get("ranking") or [])}
-        cands = [s for s in self.playbook.new if s["grade"] in self.min_grade and rank.get(s["model"], 99) < self.top_models]
-        cands.sort(key=lambda s: (rank.get(s["model"], 99), -s["score"]))
-        self.gate_note = None
-        for s in cands:
-            ok, why = self.kronos_gate(s["dir"])
-            if not ok:
-                self.gate_note = f"{s['name']} {s['side']} {s['tf']} held back: {why}"
-                continue
-            return self._order_setup(s, why, rank.get(s["model"], 0) + 1, t)
-        return None
-
-    def _order_setup(self, s: dict, kronos_why: str, rank: int, t: int) -> dict:
-        d = s["dir"]
-        sec = 60 if s["tf"] == "M1" else 300
-        hold = {"M1": 120, "M5": 72}[s["tf"]] * sec
-        why = [f"{s['name']} on {s['tf']} ({s['grade']}, #{rank} for this market)"] + s["why"] + [kronos_why]
-        market = s["order"] == "market"
-        call = {"kind": NAME[d], "side": SIDE[d], "dir": d, "t": t, "tf": s["tf"], "order": s["order"],
-                "status": "filled" if market else "waiting", "entry": round(s["entry"], self.digits),
-                "sl": round(s["sl"], self.digits), "tp": round(s["tp1"], self.digits), "tp2": round(s["tp2"], self.digits),
-                "risk": s["risk"], "atr": s["risk"], "move": 0.0, "move_atr": 0, "minutes": hold // 60,
-                "fill_by": s["fill_by"], "expires": (t + hold) if market else s["fill_by"] + hold,
-                "strong": s["grade"] == "A+", "why": why, "model": s["name"], "model_id": s["model"],
-                "grade": s["grade"], "checks": s["checks"], "setup_id": s["id"],
-                "setup": {"pool": (s.get("sweep") or {}).get("kind"), "level": (s.get("sweep") or {}).get("level"),
-                          "extreme": (s.get("sweep") or {}).get("ext"), "gap": [s["zone"]["bottom"], s["zone"]["top"]]}}
-        if market:
-            call["t_in"] = t
-        call["text"] = (f"XAUUSD {call['kind']} ({s['name']}, {s['tf']}, {s['grade']}): {call['side']} "
-                        f"{'LIMIT @' if not market else 'NOW ~'} {self._px(call['entry'])} | SL {self._px(call['sl'])} | "
-                        f"TP1 {self._px(call['tp'])} | TP2 {self._px(call['tp2'])} | " + ", ".join(why[1:]))
-        self.active = call
-        return call
 
     def expire(self, quote: dict | None) -> None:          # kept for the server's poll loop
         return None
@@ -261,10 +203,14 @@ class BoomTracker:
                                                 news=news, spread=spread, market_open=self.market_open())
             except Exception as e:
                 self.error = f"ICT playbook skipped: {e}"
-            if not first and not self.active and self.ict:
-                call = self._from_playbook(spread, m1.t[n - 1])
-                if call:
-                    out.append(("boom", call))
+            if self.quant_model is not None:
+                try:
+                    sv = {tf: _closed(b) for tf, b in (self.silver_bars or {}).items() if b is not None and len(b)}
+                    self.quant = self.quant_model.predict(bars, utc, silver=sv or None, kronos30=self.kronos30)
+                except Exception as e:
+                    self.quant = {"ok": False, "status": f"quant skipped: {e}"}
+            if self.ict is not None:
+                self.ict["quant"] = self.quant
         self.sig = nc.sigma(m1.c[max(0, n - nc.SIGMA_N - 1):n])
         self._nowcast(m1.t[n - 1] + 60, m1.c[n - 1])               # from the close, for the mesh's record
         closed_nc = self.nowcast
@@ -278,6 +224,9 @@ class BoomTracker:
                       "k": (cs["parts"][-1]["items"]["up_prob"] if cs["kronos"] else None)}
                 if closed_nc:
                     rd["g"]["10-min line"] = round(closed_nc["target"] - closed_nc["last"], 3)
+                ln = (self.ict or {}).get("line")
+                if ln:
+                    rd["g"]["Desk line"] = round(ln["target"] - ln["last"], 3)
             if i == n - 1 and self.nodes is not None:
                 tu = utc(m1.t[i])
                 try:
@@ -318,6 +267,12 @@ class BoomTracker:
         if self.consensus is not None:
             self.consensus["live"] = self.nowcast
             self.consensus["live30"] = self.nowcast30
+        if self.ict is not None:                                   # the one line: ICT plan + Kronos (brain.py)
+            try:
+                self.ict["line"] = brain.desk_line(self.ict, self.kronos30, t, price, self.sig,
+                                                   (self.nowcast30 or {}).get("band"), self.digits, quant=self.quant)
+            except Exception as e:
+                self.ict["line"], self.error = None, f"Desk line skipped: {e}"
 
     # ------------------------------------------------------------ calls
     def consensus_htf(self, t: int, price: float) -> float | None:
@@ -441,9 +396,5 @@ class BoomTracker:
                 "stats": {"calls": len(h), "wins": wins, "losses": len(h) - wins,
                           "net_r": round(sum(s["r"] for s in h), 2),
                           "net_usd_001": round(sum(s["usd_001"] for s in h), 2)},
-                "rules": {"entry": "a fresh A / A+ setup of one of the top-ranked ICT models on M1 or M5 (playbook.py)",
-                          "sl": "beyond the sweep (0.30 or 0.1 ATR buffer)", "tp": "TP1 opposing liquidity (>= 1.5 R) or 2 R; "
-                          "TP2 the higher timeframe's draw", "kronos": self.kronos_mode,
-                          "grades": list(self.min_grade), "top_models": self.top_models},
-                "gate": getattr(self, "gate_note", None), "kronos30": self.kronos30,
+                "kronos30": self.kronos30,
                 "error": self.error, "proven": False}

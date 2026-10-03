@@ -27,6 +27,48 @@ MACROS = (("London Morning Macro", 153, 180), ("London Expansion Macro", 243, 27
 AMD = (("Accumulation (Asia)", 1200, 1560), ("Manipulation (London)", 120, 330), ("Distribution (London-NY)", 330, 960))
 
 
+# The New York day for gold, segment by segment: what the notes say each part of the day is for, and which
+# playbook models fit it. "avoid" segments are thin or erratic (lunch, the last hour, the daily break).
+DAY_MAP = (
+    ("Asia", 1200, 1440, False, "Accumulation: Asia builds the range London will raid. Mark its high and low; trade small.",
+     ("turtle_soup", "bpr", "pulse_rev")),
+    ("Asia late", 0, 120, False, "The Asian range finishes. Reactions at the new day opening gap.",
+     ("gap", "turtle_soup", "bpr")),
+    ("London open", 120, 180, False, "Manipulation: the Judas swing runs the Asian range against the daily bias "
+     "(London morning macro 02:33-03:00).", ("judas", "turtle_soup", "smt", "cisd_fvg", "hrlr")),
+    ("London Silver Bullet", 180, 240, False, "The 03:00-04:00 Silver Bullet: sweep, MSS toward the draw, enter the FVG.",
+     ("silver_bullet", "mss_fvg", "unicorn", "ifvg", "judas")),
+    ("London expansion", 240, 300, False, "Distribution after the London shift (macro 04:03-04:30): continuation entries.",
+     ("mss_fvg", "unicorn", "ote", "breaker", "pulse")),
+    ("London-NY transition", 300, 510, False, "Quieter: London's move retraces. Continuation from internal liquidity only.",
+     ("ote", "pulse", "ob_mt", "bpr")),
+    ("NY open", 510, 600, False, "08:30 data and the open: the NY Judas runs London's range (macros 08:50 and 09:50).",
+     ("judas", "turtle_soup", "smt", "cisd_fvg", "hrlr", "mss_fvg")),
+    ("NY AM Silver Bullet", 600, 660, False, "10:00-11:00, gold's best window: sweep, MSS, FVG entry toward the draw.",
+     ("silver_bullet", "mss_fvg", "unicorn", "ifvg", "breaker", "cisd_fvg")),
+    ("NY late morning", 660, 720, False, "Continuation and the last morning distribution (macros 10:50 and 11:50).",
+     ("ote", "pulse", "ob_mt", "bpr", "breaker")),
+    ("NY lunch", 720, 780, True, "Lunch: thin and choppy. Setups fail more; stand aside.", ()),
+    ("NY PM open", 780, 840, False, "The afternoon resumes the trend or retraces the morning (macro 13:10-13:40).",
+     ("pulse_rev", "turtle_soup", "ote", "pulse")),
+    ("NY PM Silver Bullet", 840, 900, False, "14:00-15:00 Silver Bullet.", ("silver_bullet", "mss_fvg", "unicorn", "ifvg")),
+    ("NY close", 900, 960, False, "The last hour: rebalancing into internal liquidity.", ("pulse_rev", "ote", "bpr")),
+    ("After hours", 960, 1020, True, "Thin until the daily break: no new trades.", ()),
+    ("Daily break", 1020, 1080, True, "17:00-18:00: gold is closed. The new day opening gap forms.", ()),
+    ("Globex open", 1080, 1200, False, "The reopen: price reacts to the NDOG / NWOG; slow until Asia.",
+     ("gap", "pulse", "bpr")),
+)
+
+
+def session(utc: int) -> dict:
+    """The DAY_MAP segment at this moment."""
+    m = ny_minute(utc)
+    for name, a, z, avoid, note, models in DAY_MAP:
+        if a <= m < z:
+            return {"name": name, "start": a, "end": z, "avoid": avoid, "note": note, "models": models}
+    return {"name": "Asia", "start": 1200, "end": 1440, "avoid": False, "note": "", "models": ()}
+
+
 def ny(utc: int) -> int:
     from smc import _ny
     return _ny(int(utc))

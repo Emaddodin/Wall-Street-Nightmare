@@ -26,6 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import brain
 from boom import BoomTracker
 import mesh as mesh_mod
 from mesh import Mesh
@@ -40,7 +41,7 @@ from soon import Ntfy, SoonAlerts, find_topic, ntfy_server
 
 STATIC = Path(__file__).resolve().parent / "static"
 MAGIC = 26100102       # tags orders placed from this page
-TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400}
+TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400, "D1": 86400}
 HISTORY_BARS = 3000    # entry-timeframe bars replayed on start-up for the on-page stats and markers
 
 
@@ -61,7 +62,7 @@ class MT5Source:
         if not mt5.symbol_select(self.symbol, True):
             raise RuntimeError(f"MT5 would not show {self.symbol} in Market Watch.")
         self.tfs = {"M1": mt5.TIMEFRAME_M1, "M5": mt5.TIMEFRAME_M5, "M15": mt5.TIMEFRAME_M15, "H1": mt5.TIMEFRAME_H1,
-                    "H4": mt5.TIMEFRAME_H4}
+                    "H4": mt5.TIMEFRAME_H4, "D1": mt5.TIMEFRAME_D1}
         self.io = threading.Lock()   # one MT5 call at a time; each call takes about a millisecond
         self._spec = None
 
@@ -381,11 +382,12 @@ class Hub:
         self.booted = False                     # history loaded; until then the page opens and says why not
         self.chart_tf = entry_tf                # the timeframe the page's chart shows (its last candle request)
         self.smc, self._smc_at, self._smc_tf, self._smc_err = None, 0.0, None, None
-        # XAU / XAG SMT: silver from the broker (or Yahoo, delayed), read on M1 / M5 / M15 / H1 for the playbook
-        self.silver = SilverFeed(source, lambda u: u + self.offset(u + self.offset(u)))
+        # XAU / XAG SMT: silver from your MT5 (same feed as the chart), read on M1 / M5 / M15 / H1 for the playbook
+        self.silver = SilverFeed(source, lambda u: u + self.offset(u + self.offset(u)), yahoo=None)   # MT5's silver only
         self.smt_reader = SMTReader()
         self.boom.smt_fn = self._smt
-        self.boom.kronos_running = lambda: bool(self.kronos and self.kronos.model is not None)
+        self.silver_bars: dict = {}
+        self.news = None                         # news.NewsDesk: calendar + headlines + gold impact (set in main)
         self.boom.market_open = lambda: self.src.kind == "demo" or market_hours(time.time())[0]
         self.bootstrap()
 
@@ -566,10 +568,28 @@ class Hub:
             sv = self.silver.rates(tf, len(g) + 1)
             if sv is None:
                 continue
+            self.silver_bars[tf] = sv
+            self.boom.silver_bars = self.silver_bars
             out[tf] = self.smt_reader.update(tf, g, sv, last_forming=False)
         out["summary"] = self.smt_reader.summary()
         out["feed"] = self.silver.info()
         return out
+
+    def _overall(self, market_open: bool) -> dict | None:
+        try:
+            return brain.overall(self.boom.ict, self._news_state(), self.boom.quant, self.boom.kronos30, self.boom.smt,
+                                 market_open)
+        except Exception as e:
+            return {"verdict": "MIXED", "score": 0, "confidence": 0, "do": "WAIT", "voices": [], "risks": [],
+                    "text": f"Overall analysis skipped: {e}"}
+
+    def _news_state(self) -> dict | None:
+        if not self.news:
+            return None
+        try:
+            return self.news.state(int(time.time()))
+        except Exception as e:
+            return {"status": f"offline: {e}", "headlines": [], "events": []}
 
     def on_kronos30(self, fc: dict) -> None:
         """Kronos' blended 30-minute forecast (M1 + M5, calibrated): the playbook checks setups against it."""
@@ -635,8 +655,7 @@ class Hub:
                 "events": self.events[-30:],
                 "error": self.error or getattr(self.src, "feed_note", None) or mk["note"],
                 "market": mk,
-                "positions": self.src.positions(), "caps": getattr(self.src, "caps", {"positions": True}),
-                "broker_rows": getattr(self.src, "rows", []),
+                "analysis_only": True,
                 "broker": self.src.broker() if hasattr(self.src, "broker") else {"connected": True, "message": None},
                 "kronos": self.kronos.state() if self.kronos else None,
                 "boom": self.boom.state(),
@@ -648,74 +667,15 @@ class Hub:
                 "alerts": self.soon.state() if self.soon else None,
                 "session": self.coach.state() if self.coach else None,
                 "smc": self.smc,
-                "smt": self.boom.smt,                  # XAU vs XAG divergence by timeframe and where silver comes from
+                "smt": self.boom.smt,
+                "news": self._news_state(),            # live calendar + headlines with their gold impact (news.py)
+                "quant": self.boom.quant,              # the quant model's 30-minute forecast (quant.py)                  # XAU vs XAG divergence by timeframe and where silver comes from
                 "ict": self.boom.ict,                  # the ICT playbook: every timeframe, every model, the best one, the talk
-                "max_lots": min(self.max_lots, self.spec.max_lot),
+                "overall": self._overall(mk["open"]),  # everything at once: verdict, each voice, risks (brain.overall)
             }
 
-    # ------------------------------------------------------------ manual orders (your clicks only)
-    def _round(self, px) -> float:
-        return round(float(px or 0.0), self.spec.digits)
-
-    def _lots(self, lots) -> float:
-        sp = self.spec
-        v = math.floor(float(lots) / sp.lot_step + 1e-9) * sp.lot_step
-        return round(v, 2)
-
-    def order(self, body: dict) -> dict:
-        side = str(body.get("side", "")).upper()
-        if side not in ("BUY", "SELL"):
-            return {"ok": False, "message": "Side must be BUY or SELL"}
-        lots = self._lots(body.get("lots", 0))
-        cap = min(self.max_lots, self.spec.max_lot)
-        if lots < self.spec.min_lot:
-            return {"ok": False, "message": f"Lot size is below your broker's minimum ({self.spec.min_lot})"}
-        if lots > cap + 1e-9:
-            return {"ok": False, "message": f"Lot size {lots} is above the {cap} lot cap. Raise --max-lots to allow it."}
-        tk = self.src.tick()
-        if not tk:
-            return {"ok": False, "message": "No live price from the broker right now"}
-        sl, tp = self._round(body.get("sl")), self._round(body.get("tp"))
-        if side == "BUY" and ((sl and sl >= tk["bid"]) or (tp and tp <= tk["ask"])):
-            return {"ok": False, "message": "For a BUY the stop must be below the bid and the target above the ask"}
-        if side == "SELL" and ((sl and sl <= tk["ask"]) or (tp and tp >= tk["bid"])):
-            return {"ok": False, "message": "For a SELL the stop must be above the ask and the target below the bid"}
-        res = self.src.market(side, lots, sl, tp)
-        self._log_trade(f"{side} {lots} lots", res, side)
-        if res.get("ok"):
-            self.boom.mesh.trade(side)                  # scored in the mesh as "Your trades"
-        return res
-
-    def close(self, body: dict) -> dict:
-        vol = body.get("volume")
-        res = self.src.close(int(body["ticket"]), self._lots(vol) if vol else None)
-        self._log_trade(f"Close #{body['ticket']}" + (f" {vol} lots" if vol else ""), res)
-        return res
-
-    def close_all(self) -> dict:
-        results = [self.src.close(p["ticket"]) for p in self.src.positions()]
-        ok = all(r["ok"] for r in results)
-        res = {"ok": ok, "message": f"Closed {sum(r['ok'] for r in results)} of {len(results)} positions",
-               "ms": round(sum(r.get("ms", 0) or 0 for r in results), 1)}
-        self._log_trade("Close all", res)
-        return res
-
-    def modify(self, body: dict) -> dict:
-        sl = self._round(body.get("sl"))
-        pos = next((p for p in self.src.positions() if p["ticket"] == int(body["ticket"])), None)
-        tk = self.src.tick()
-        if pos and tk and sl and ((pos["side"] == "BUY" and sl >= tk["bid"]) or (pos["side"] == "SELL" and sl <= tk["ask"])):
-            return {"ok": False, "message": "That stop is on the wrong side of the current price. Breakeven needs the trade in profit first."}
-        res = self.src.modify(int(body["ticket"]), self._round(body.get("sl")), self._round(body.get("tp")))
-        self._log_trade(f"Modify #{body['ticket']}", res)
-        return res
-
-    def _log_trade(self, what: str, res: dict, side: str | None = None) -> None:
-        with self.lock:
-            msg = res.get("message") or ""
-            price = f" @ {res['price']:.{self.spec.digits}f}" if res.get("ok") and res.get("price") else ""
-            self._event("order" if res.get("ok") else "reject",
-                        f"{what}{price}: {msg} ({res.get('ms', '?')} ms)", side)
+    # Gold Desk is analysis-only: no orders, closes or position changes leave this page. Execution is in your
+    # MT5 app. The broker connection is used for prices and candles only.
 
     def candles(self, tf: str, count: int) -> list:
         with self.lock:
@@ -792,14 +752,8 @@ class Handler(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", 0))
             body = json.loads(self.rfile.read(n) or b"{}")
             route = urlparse(self.path).path
-            if route == "/api/order":
-                return self._json(HUB.order(body))
-            if route == "/api/close":
-                return self._json(HUB.close(body))
-            if route == "/api/close_all":
-                return self._json(HUB.close_all())
-            if route == "/api/modify":
-                return self._json(HUB.modify(body))
+            if route in ("/api/order", "/api/close", "/api/close_all", "/api/modify", "/api/liquidate"):
+                return self._json({"ok": False, "message": "Gold Desk is analysis-only: trade in your MT5 app."}, 403)
             return self._json({"ok": False, "message": "unknown route"}, 404)
         except Exception as e:
             traceback.print_exc()
@@ -932,11 +886,8 @@ def main() -> None:
     ap.add_argument("--no-alerts", action="store_true", help="never push anything to ntfy")
     ap.add_argument("--session", default=WINDOW, help=f"your daily trading session in Tehran time, pushed to ntfy "
                                                       f"(default {WINDOW}; 'off' for none)")
-    ap.add_argument("--boom-kronos", default="require", choices=["require", "prefer", "off"],
-                    help="BOOM / CRASH and Kronos: require its 30-minute forecast to agree (default), let it only "
-                         "grade (prefer), or ignore it (off)")
-    ap.add_argument("--boom-grade", default="A", choices=["A+", "A", "B"],
-                    help="lowest playbook grade that may become a BOOM / CRASH call (default A)")
+    ap.add_argument("--news-llm", metavar="URL", help="local LLM for the news summary, e.g. http://127.0.0.1:8080 "
+                                                      "(llama.cpp / OpenAI-compatible); optional")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
@@ -969,8 +920,11 @@ def main() -> None:
     print(f"Data: {src.kind}  symbol: {src.symbol}  entry timeframe: {a.entry_tf}  loading history...")
     PORT = a.port
     HUB = Hub(src, Params(), a.utc_offset, a.max_lots, a.entry_tf)
-    HUB.boom.kronos_mode = a.boom_kronos
-    HUB.boom.min_grade = {"A+": ("A+",), "A": ("A+", "A"), "B": ("A+", "A", "B")}[a.boom_grade]
+    try:
+        from news import NewsDesk
+        HUB.news = NewsDesk(calendar=HUB.boom.nodes.calendar, fetch=src.kind != "demo", llm_url=a.news_llm)
+    except Exception as e:
+        print(f"News box off: {e}")
     threading.Thread(target=poll_loop, daemon=True).start()
     topic, where = find_topic(a.ntfy_topic)
     ntfy = Ntfy(topic, ntfy_server()) if topic and src.kind != "demo" and not a.no_alerts else None

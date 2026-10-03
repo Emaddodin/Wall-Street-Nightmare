@@ -31,6 +31,8 @@ import math
 import time
 from pathlib import Path
 
+import brain
+import candles as cdl
 import ictclock as ck
 from engine import Bars
 from ictlib import Tape, ote_zone
@@ -124,7 +126,7 @@ class Track:
             return
         self.data["setups"][s["id"]] = {k: s[k] for k in ("id", "model", "tf", "dir", "entry", "sl", "tp1", "t", "grade",
                                                          "order")} | {"stage": "armed", "fill_by": s["fill_by"], "name": s.get("name"),
-                                                            "hour": None}
+                                                            "session": s.get("session")}
         self._save()
 
     def step(self, tf: str, b: Bars, spread: float = SPREAD) -> list:
@@ -169,10 +171,12 @@ class Track:
             self._save()
         return out
 
-    def stats(self, model: str, tf: str | None = None) -> dict:
+    def stats(self, model: str, tf: str | None = None, session: str | None = None) -> dict:
         rs = [x["r"] for x in self.data["done"] if x["model"] == model and x.get("r") is not None
-              and (tf is None or x["tf"] == tf)]
+              and (tf is None or x["tf"] == tf) and (session is None or x.get("session") == session)]
         p = self.prior.get(model, {})
+        if session is not None:
+            p = (p.get("sessions") or {}).get(session, {})
         pn, pr = int(p.get("n", 0)), float(p.get("sum_r", 0.0))
         n, s = len(rs) + pn, sum(rs) + pr
         wins = sum(1 for r in rs if r > 0) + int(p.get("wins", 0))
@@ -377,7 +381,7 @@ class Builder:
             tp2 = entry + d * 3 * risk
         t_shift = T.b.t[seq["i"]] + T.b.sec if seq else ctx.t
         s = {"model": model, "name": MODELS[model][0], "tf": tf, "dir": d, "side": "BUY" if d == 1 else "SELL",
-             "boom": "BOOM" if d == 1 else "CRASH", "order": order, "t": t_shift,
+             "order": order, "t": t_shift,
              "entry": _r(entry), "sl": _r(sl), "tp1": _r(tp1), "tp2": _r(tp2), "risk": _r(risk),
              "rr1": _r((tp1 - entry) * d / risk), "rr2": _r((tp2 - entry) * d / risk),
              "zone": {"top": _r(max(zone)), "bottom": _r(min(zone))}, "why": list(why or []),
@@ -389,9 +393,88 @@ class Builder:
             s["shift"] = {"kind": seq["kind"], "time": T.b.t[seq["i"]],
                           "level": _r(seq["shift"].get("level", seq["shift"].get("ref")))}
         s["id"] = f"{model}:{tf}:{d}:{t_shift}"
+        s["shift_i"] = seq["i"] if seq else None
         self._status(s)
         self._checklist(s, seq)
+        self._trigger(s)
         return s
+
+    def _trigger(self, s: dict) -> None:
+        """Did the candle that just closed confirm the entry? The notes enter on a close, not on a touch:
+          - the shift candle itself for the CISD models (Pulse, NDOG / NWOG): its close is the entry;
+          - the inversion candle for the IFVG model (the video's entry: rejection, gap, then the lowest timeframe's
+            IFVG close);
+          - for every zone model, a candle that traded into the zone (FVG, breaker, unicorn overlap, OTE, BPR, OB)
+            and closed back out in the trade's direction, past the zone's middle: the rejection close; a candlestick
+            pattern on it (engulfing, hammer, pin bar, morning star ...) is named and counts as extra confirmation;
+          - for an M5 setup, an M1 CISD made inside the M5 zone (timeframe alignment, the Pulse model's step 2).
+        The entry is that candle's close (plus the spread for a buy); stop and targets stay the setup's."""
+        ctx, T, d, tf = self.ctx, self.T, s["dir"], self.tf
+        s["trigger"] = None
+        if s["status"] in ("invalid", "expired", "stopped", "target"):
+            return
+        b, j = T.b, T.n - 1
+        a = T.atr[-1] or 1.0
+        tol = 0.10 * a
+        top, bot = s["zone"]["top"], s["zone"]["bottom"]
+        mid = (top + bot) / 2
+        found = None
+        if s["shift_i"] is not None and s["shift_i"] == j and (s["order"] == "market" or s["model"] == "ifvg"):
+            kind = "the inversion candle closed through the FVG" if s["model"] == "ifvg" else "the CISD candle closed"
+            found = (tf, j, b, kind)
+        elif b.t[j] >= s["t"]:
+            tapped = (b.l[j] <= top + tol) if d == 1 else (b.h[j] >= bot - tol)
+            held = (b.l[j] > s["sl"]) if d == 1 else (b.h[j] < s["sl"])
+            closed = (b.c[j] > b.o[j] and b.c[j] >= mid) if d == 1 else (b.c[j] < b.o[j] and b.c[j] <= mid)
+            if tapped and held and closed:
+                found = (tf, j, b, "tapped the zone and closed back " + ("up" if d == 1 else "down"))
+        if found is None and tf == "M5" and "M1" in ctx.tapes:
+            M1 = ctx.tapes["M1"]
+            k = M1.n - 1
+            cs = M1.cisd[-1] if M1.cisd else None
+            if cs and cs["i"] == k and cs["dir"] == d and M1.b.t[k] >= s["t"] and bot - tol <= cs["ext"] <= top + tol:
+                found = ("M1", k, M1.b, f"an M1 CISD {'up' if d == 1 else 'down'} formed inside the M5 zone")
+        if not found:
+            return
+        ttf, k, bb, kind = found
+        close = bb.c[k]
+        entry = close + (ctx.spread if d == 1 else 0.0)
+        risk = (entry - s["sl"]) * d
+        if risk <= 0 or risk > RISK[tf][1]:
+            return
+        rr1 = (s["tp1"] - entry) * d / risk
+        if rr1 < 1.0:                                          # the move already happened: too late for this one
+            return
+        pat = cdl.confirms(bb, k, d)
+        fresh = bb.t[k] + bb.sec >= ctx.t                      # it is the candle that closed last
+        why = f"{ttf} candle closed at {close:.2f}: {kind}" + (f" as a {pat['name']}" if pat else "")
+        s["trigger"] = {"tf": ttf, "time": bb.t[k], "close": _r(close), "entry": _r(entry), "kind": kind,
+                        "pattern": pat["name"] if pat else None, "pattern_meaning": pat["meaning"] if pat else None,
+                        "risk": _r(risk), "rr1": _r(rr1), "rr2": _r((s["tp2"] - entry) * d / risk),
+                        "fresh": fresh, "text": why}
+        self._verdict(s)
+
+    def _verdict(self, s: dict) -> None:
+        """Everything that has to be true to enter on this close, and the answer."""
+        tr = s["trigger"]
+        need, missing = [], []
+        need.append(("Candle-close confirmation", True, tr["text"]))
+        need.append(("Candlestick pattern on the entry candle", bool(tr["pattern"]),
+                     tr["pattern"] or "plain close (no named pattern)"))
+        for c in s["checks"]:
+            need.append((c["key"], c["ok"], c["label"]))
+        good = s["grade"] in ("A+", "A")
+        kronos_against = s.get("kronos") == -1
+        hard = [c for c in s["checks"] if c["required"] and c["ok"] is False]
+        if not tr["fresh"]:
+            missing.append("this was an earlier candle")
+        if not good:
+            missing.append(f"grade {s['grade']} (A or A+ needed)")
+        if kronos_against:
+            missing.append("Kronos' next 30 minutes is against it")
+        missing += [c["label"] for c in hard]
+        s["entry_now"] = {"verdict": "ENTER" if not missing else ("LATE" if not tr["fresh"] else "SKIP"),
+                          "missing": missing, "checks": [{"label": t, "ok": ok, "key": k} for k, ok, t in need]}
 
     def _status(self, s: dict) -> None:
         """armed (waiting at the entry) / filled / invalid / expired, from the candles after the shift."""
@@ -820,6 +903,7 @@ class Playbook:
         self.best: dict | None = None
         self.error: str | None = None
         self.seen: dict = {}          # setup id -> shift time, so each setup is scored once
+        self.history: dict = {}       # tf -> the read of each closed candle, with the action at that close
 
     def update(self, bars: dict, utc, desks: dict | None = None, kronos30: dict | None = None, smt: dict | None = None,
                news: bool = False, spread: float = SPREAD, market_open: bool = True) -> dict | None:
@@ -861,6 +945,7 @@ class Playbook:
                 if not s:
                     continue
                 setups.append(s)
+                s["session"] = ck.session(utc(s["t"]))["name"]
                 if s["id"] not in self.seen:                            # first time seen: score it whatever happens
                     self.seen[s["id"]] = s["t"]                          # next (a fast fill is still a trade)
                     self.track.add(s)
@@ -876,25 +961,62 @@ class Playbook:
         reports = {name: tf_report(name, self.tapes[name], ctx) for name in ORDER if name in self.tapes}
         ranking = self._rank(ctx, setups)
         self.best = ranking[0] if ranking else None
-        talk = narrate(ctx, reports, ranking, setups, market_open)
+        reads = {}
+        for tf in ENTRY_TFS:
+            rd = brain.read_candle(ctx, tf) if tf in self.tapes else None
+            if rd:
+                reads[tf] = rd
+        decision = brain.decide(ctx, setups, ranking, reads, market_open)
+        for tf, rd in reads.items():                                   # the read of each candle, kept for the chart
+            hist = self.history.setdefault(tf, [])
+            if not hist or hist[-1]["time"] != rd["time"]:
+                entry = decision["action"].endswith("NOW") and decision.get("tf") == tf
+                rd = dict(rd, action=decision["action"], action_dir=decision.get("dir", 0) if entry else 0,
+                          model=decision.get("model") if entry else None)
+                hist.append(rd)
+                del hist[:-60]
+        talk = narrate(ctx, reports, ranking, setups, market_open, decision, reads)
         self.state = {
             "t": ctx.t, "price": _r(ctx.price), "clock": ctx.clock, "bias": round(ctx.bias, 2), "bias_why": ctx.bias_why,
             "regime": ctx.regime, "levels": _levels_out(lv), "timeframes": reports,
             "setups": sorted(setups, key=lambda s: (s["status"] != "armed", -s["score"]))[:12],
-            "ranking": ranking, "best": self.best, "talk": talk, "news": news,
+            "ranking": ranking, "best": self.best, "talk": talk, "news": news, "decision": decision,
+            "reads": reads, "history": {tf: h[-40:] for tf, h in self.history.items()},
+            "entries": [r for tf in self.history for r in self.history[tf] if r.get("action_dir")][-20:],
             "kronos30": {k: (kronos30 or {}).get(k) for k in ("up_prob", "move", "call", "dir", "confidence")} if kronos30 else None,
+            "session": ck.session(utc(ctx.t)), "day_map": self.day_map(utc(ctx.t)),
             "ms": round(1000 * (time.time() - t0)), "error": self.error, "proven": False,
         }
         return self.state
+
+    def day_map(self, utc_now: int) -> list:
+        """The New York day, segment by segment: what the notes say it is for, which models fit it, and how the
+        models have really done in it (backtest prior + live), best first."""
+        now = ck.session(utc_now)["name"]
+        out = []
+        for name, a, z, avoid, note, models in ck.DAY_MAP:
+            measured = []
+            for m in MODELS:
+                st = self.track.stats(m, session=name)
+                if st["n"] >= 10:
+                    measured.append({"model": m, "name": MODELS[m][0], "mean_r": st["mean_r"], "n": st["n"],
+                                     "edge": st["edge"], "win_pct": st["win_pct"]})
+            measured.sort(key=lambda x: -x["edge"])
+            out.append({"name": name, "start": f"{a // 60 % 24:02d}:{a % 60:02d}", "end": f"{z // 60 % 24:02d}:{z % 60:02d}",
+                        "start_min": a, "end_min": z, "now": name == now, "avoid": avoid, "note": note,
+                        "models": [{"model": m, "name": MODELS[m][0]} for m in models],
+                        "measured": measured[:4], "worst": [x for x in measured if x["mean_r"] < 0][-2:]})
+        return out
 
     def _rank(self, ctx: Ctx, setups: list) -> list:
         """Which model fits the live market: time window x regime x measured record x a setup on the board."""
         out = []
         utc_now = ctx.utc(ctx.t)
+        sess = ck.session(utc_now)
         for m, (name, windows, f_trend, f_range, kind) in MODELS.items():
-            if windows is None:
-                fit_t = 1.0
-            elif ck.in_window(utc_now, windows):
+            if sess["avoid"]:
+                fit_t = 0.15
+            elif m in sess["models"]:
                 fit_t = 1.0
             else:
                 fit_t = 0.0 if m in ("silver_bullet", "judas") else 0.35
@@ -903,7 +1025,8 @@ class Playbook:
             if ctx.clock.get("lunch"):
                 fit_t *= 0.5
             st = self.track.stats(m)
-            edge = st["edge"]
+            ss = self.track.stats(m, session=sess["name"])
+            edge = ss["edge"] if ss["n"] >= 15 else st["edge"]          # this session's record once there is one
             edge_score = max(0.0, min(1.0, 0.5 + edge))
             mine = [s for s in setups if s["model"] == m and s["status"] in ("armed", "filled")]
             top = max(mine, key=lambda s: s["score"]) if mine else None
@@ -913,11 +1036,14 @@ class Playbook:
             if ctx.news:
                 score *= 0.5
             why = []
-            why.append("in its time window" if fit_t == 1.0 and windows else ("any time" if windows is None else "outside its window"))
+            why.append(f"fits the {sess['name']}" if fit_t == 1.0 else
+                       (f"{sess['name']}: stand aside" if sess["avoid"] else f"not a {sess['name']} model"))
             why.append(f"{reg} market suits it" if fit_r >= 0.9 else f"{reg} market is not its best")
             why.append(f"record {st['mean_r']:+.2f} R over {st['n']} setups" if st["n"] else "no record yet")
+            if ss["n"]:
+                why.append(f"in the {sess['name']}: {ss['mean_r']:+.2f} R over {ss['n']}")
             out.append({"model": m, "name": name, "score": round(score, 3), "fit": round(fit, 2),
-                        "edge": edge, "stats": st, "setup": top, "why": why,
+                        "edge": edge, "stats": st, "session_stats": ss, "setup": top, "why": why,
                         "waiting_for": None if top else WAITING[m]})
         out.sort(key=lambda x: -x["score"])
         return out
@@ -936,19 +1062,21 @@ def _levels_out(lv: dict) -> dict:
 
 
 # ====================================================================== talk
-def narrate(ctx: Ctx, rep: dict, ranking: list, setups: list, market_open: bool = True) -> dict:
-    """The chart talking: the four phases of the gold notes, then one line of what to do now."""
+def narrate(ctx: Ctx, rep: dict, ranking: list, setups: list, market_open: bool = True, decision: dict | None = None,
+            reads: dict | None = None) -> dict:
+    """The chart talking: the four phases of the gold notes, what the last candles did, and what to do now."""
     px = ctx.price
     lines = []
     b = ctx.bias
     dirw = "bullish" if b > 0.15 else ("bearish" if b < -0.15 else "mixed")
-    h1 = rep.get("H1", {})
-    d1, h4 = rep.get("D1", {}), rep.get("H4", {})
+    h1, h4 = rep.get("H1", {}), rep.get("H4", {})
     p1 = f"Higher timeframes are {dirw} ({ctx.bias_why})."
     if h4.get("range"):
         p1 += f" H4 price is in {h4['range']['zone']} ({h4['range']['pos']:.0%} of {h4['range']['low']:.2f}-{h4['range']['high']:.2f})."
     if h1.get("do"):
         p1 += " " + h1["do"]
+    if h1.get("phase"):
+        p1 += f" H1: {h1['phase']['text']}."
     lines.append({"phase": "1 Context", "text": p1})
     c = ctx.clock
     now = c.get("silver_bullet") or c.get("macro") or c.get("killzone")
@@ -958,51 +1086,27 @@ def narrate(ctx: Ctx, rep: dict, ranking: list, setups: list, market_open: bool 
         p2 += " NY lunch: setups fail more, stand aside."
     if nxt:
         p2 += f" Next: {nxt['name']} at {nxt['start']} (in {nxt['in_min']} min)."
-    if ctx.news:
-        p2 += " High-impact USD news close: WAIT."
     if c.get("amd"):
         p2 += f" Power of 3: {c['amd']}."
     lines.append({"phase": "2 Time", "text": p2})
-    m15, m5, m1 = rep.get("M15", {}), rep.get("M5", {}), rep.get("M1", {})
-    p3 = " ".join(x for x in (m15.get("do"), m5.get("do"), m1.get("do")) if x)
-    smt = [r["smt"]["note"] for r in (m1, m5, m15) if r.get("smt") and r["smt"].get("state")]
+    p3 = []
+    for tf in ("M5", "M1"):
+        rd = (reads or {}).get(tf)
+        if rd:
+            p3.append(f"Last {tf} candle: " + "; ".join(e["text"] for e in rd["events"][:4]) + ".")
+    smt = [r["smt"]["note"] for r in (rep.get("M1", {}), rep.get("M5", {}), rep.get("M15", {})) if r.get("smt") and r["smt"].get("state")]
     if smt:
-        p3 += " " + smt[0]
-    lines.append({"phase": "3 Validation", "text": p3})
-    best = ranking[0] if ranking else None
-    armed = [s for s in setups if s["status"] == "armed"]
-    act = None
-    if best and best.get("setup") and best["setup"]["status"] == "armed":
-        s = best["setup"]
-        p4 = (f"Best model now: {best['name']} on {s['tf']} ({s['grade']}). {s['boom']} {s['side']} "
-              f"{'limit' if s['order'] == 'limit' else 'at market'} {s['entry']:.2f}, stop {s['sl']:.2f}, "
-              f"targets {s['tp1']:.2f} ({s['rr1']:.1f}R) and {s['tp2']:.2f} ({s['rr2']:.1f}R). " + "; ".join(s["why"]) + ".")
-        act = {"do": f"{s['side']} {s['tf']}", "level": s["entry"], "grade": s["grade"], "dir": s["dir"]}
-    elif best and best.get("setup"):
-        s = best["setup"]
-        p4 = (f"Best model now: {best['name']} on {s['tf']}: its {s['side']} from {s['entry']:.2f} is {s['status']} "
-              f"(stop {s['sl']:.2f}, targets {s['tp1']:.2f} / {s['tp2']:.2f}). Manage it; no new entry from it.")
-        act = {"do": f"MANAGE {s['side']} {s['tf']}", "level": s["entry"], "grade": s["grade"], "dir": s["dir"]}
-    elif armed:
-        s = max(armed, key=lambda s: s["score"])
-        p4 = (f"Best fit is {best['name']} (no setup yet: waiting for {best['waiting_for']}). Meanwhile {s['name']} on {s['tf']} "
-              f"has a {s['grade']} {s['side']} at {s['entry']:.2f}, stop {s['sl']:.2f}, target {s['tp1']:.2f}.")
-        act = {"do": f"WATCH {s['side']} {s['tf']}", "level": s["entry"], "grade": s["grade"], "dir": s["dir"]}
-    elif best:
-        p4 = f"Best fit now: {best['name']}. Waiting for {best['waiting_for']}."
-        act = {"do": "WAIT", "level": None, "grade": None, "dir": 0}
-    else:
-        p4 = "Not enough candles yet."
+        p3.append(smt[0])
+    lines.append({"phase": "3 Validation", "text": " ".join(p3) or "No closed candles yet."})
+    dec = decision or {"action": "WAIT", "text": "Not enough candles yet."}
+    p4 = dec["text"]
     k = ctx.kronos30
-    if k and k.get("up_prob") is not None:
-        p4 += f" Kronos next 30 min: {k.get('call', '?')} (up {k['up_prob']:.0%}, {k.get('move', 0):+.2f})."
-    lines.append({"phase": "4 Entry", "text": p4})
-    headline = (act or {}).get("do", "WAIT")
+    if k and k.get("up_prob") is not None and "Kronos" not in p4:
+        p4 += f" Kronos next 30 min: {k.get('call', '?')} (up {k['up_prob']:.0%})."
+    lines.append({"phase": "4 What to do", "text": p4})
+    headline = dec["action"]
     if not market_open:
-        headline = "MARKET CLOSED"
         lines.insert(0, {"phase": "Market", "text": "Gold is closed: this is the read of the last candles, ready for the open."})
-    elif ctx.news:
-        headline = "WAIT (news)"
-    return {"headline": headline, "action": act, "lines": lines,
-            "summary": " ".join(l["text"] for l in lines[-1:]),
-            "price": _r(px)}
+    return {"headline": headline, "action": {"do": headline, "level": dec.get("level"), "grade": dec.get("grade"),
+                                             "dir": dec.get("dir", 0), "model": dec.get("model"), "tf": dec.get("tf")},
+            "lines": lines, "summary": p4, "price": _r(px)}

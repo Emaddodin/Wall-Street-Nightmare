@@ -34,7 +34,7 @@ from engine import Bars, Spec
 
 HERE = Path(__file__).resolve().parent
 EA = HERE / "mt5" / "GoldDeskBridge.mq5"
-TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400}
+TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400, "D1": 86400}
 FRESH = 5.0          # the EA writes at least once a second; older than this means MT5 or the EA stopped
 TAKE = 3.0           # seconds MT5 has to pick an order up before Gold Desk takes it back
 RUN = 30.0           # once MT5 has it: how long the broker may take to answer

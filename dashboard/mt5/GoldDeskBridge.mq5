@@ -13,7 +13,7 @@
 //| Put it on any one chart; it finds gold (XAUUSD / GOLD) itself.   |
 //+------------------------------------------------------------------+
 #property copyright "Gold Desk"
-#property version   "1.10"
+#property version   "1.11"
 #property description "Feeds Gold Desk this terminal's gold prices, account and trades, and places your Gold Desk clicks here."
 
 #include <Trade\Trade.mqh>
@@ -34,8 +34,8 @@ double   g_lastBid = 0, g_lastAsk = 0;
 ulong    g_lastWrite = 0, g_lastSlow = 0, g_lastOwner = 0;
 string   g_slow = "";              // account, spec and trades part of the state (rebuilt every 200 ms or after a trade)
 bool     g_dirty = true;
-ENUM_TIMEFRAMES g_tfs[5] = {PERIOD_M1, PERIOD_M5, PERIOD_M15, PERIOD_H1, PERIOD_H4};
-string   g_tfn[5] = {"M1", "M5", "M15", "H1", "H4"};
+ENUM_TIMEFRAMES g_tfs[6] = {PERIOD_M1, PERIOD_M5, PERIOD_M15, PERIOD_H1, PERIOD_H4, PERIOD_D1};
+string   g_tfn[6] = {"M1", "M5", "M15", "H1", "H4", "D1"};
 
 //+------------------------------------------------------------------+
 string Js(const string s)
@@ -208,7 +208,7 @@ string BarsPart(const int dg)
    string s = "\"bars\":{";
    MqlRates r[];
    ArraySetAsSeries(r, false);
-   for(int k = 0; k < 5; k++)
+   for(int k = 0; k < 6; k++)
      {
       if(k > 0)
          s += ",";
@@ -321,7 +321,7 @@ string Fail(const string why)
 void WriteBars(const string id, const string tf, const int count, const string sym)
   {
    int k = -1;
-   for(int i = 0; i < 5; i++)
+   for(int i = 0; i < 6; i++)
       if(g_tfn[i] == tf)
          k = i;
    string name = DIR_OUT + "res-" + id + ".txt";

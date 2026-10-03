@@ -80,6 +80,7 @@ class Tape:
         self.breaks: list = []        # {"dir", "kind" MSS|BOS|CHoCH, "i", "level", "swing_i", "ext", "ext_i",
                                       #  "sweep", "disp", "fvg", "leg_ob"}
         self.trend = 0
+        self.untaken, self.ext_levels, self.cisd_ref = {1: [], -1: []}, [], {1: None, -1: None}
         if n >= 2 * pivot + 3:
             self._run(external or [])
 
@@ -241,6 +242,16 @@ class Tape:
                     live_ob.append(ob)
         self.untaken = untaken
         self.ext_levels = ext_levels
+        # the level a CISD would have to close beyond right now: the open of the run still delivering price
+        # (or of the last run that made the extreme), per side
+        self.cisd_ref = {}
+        for d in (1, -1):
+            if runs[d] is not None:
+                self.cisd_ref[d] = o[runs[d]]
+            elif ref[d]:
+                self.cisd_ref[d] = ref[d][0]
+            else:
+                self.cisd_ref[d] = None
 
     def _sweep(self, d: int, j: int, lv: dict, ext_i: int) -> None:
         """A sweep at j of level lv. d: +1 when a low was swept (bullish), -1 a high."""

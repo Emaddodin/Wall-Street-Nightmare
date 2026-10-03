@@ -128,39 +128,3 @@ def test_track_resolves_target():
     done = tr.step("M1", bars(rows, t0=T0 + 60), spread=0.2)
     assert done and done[0]["how"] == "target" and done[0]["r"] > 1.9
     assert tr.stats("mss_fvg")["n_live"] == 1
-
-
-def _boom_with(setup, kronos30, mode="require", running=True):
-    from boom import BoomTracker
-    bt = BoomTracker(2, log=None)
-    bt.kronos_mode, bt.kronos_running = mode, (lambda: running)
-    bt.playbook.new = [setup]
-    bt.ict = {"t": setup["t"], "ranking": [{"model": setup["model"]}]}
-    bt.kronos30 = kronos30
-    return bt, bt._from_playbook(0.2, setup["t"])
-
-
-def _setup(grade="A", d=1):
-    return {"id": "mss_fvg:M1:1:1", "model": "mss_fvg", "name": "MSS + FVG", "tf": "M1", "dir": d, "order": "limit",
-            "side": "BUY" if d == 1 else "SELL",
-            "t": T0, "entry": 2001.9, "sl": 1996.7, "tp1": 2012.3, "tp2": 2017.5, "risk": 5.2, "grade": grade,
-            "score": 0.8, "why": ["swept M1 swing low 1998.00"], "checks": [], "fill_by": T0 + 1800,
-            "zone": {"top": 2003.0, "bottom": 2000.4}, "sweep": {"kind": "M1 swing low", "level": 1998.0, "ext": 1997.0}}
-
-
-def test_boom_needs_kronos_agreement():
-    agree = {"t": T0, "up_prob": 0.63, "move": 1.4}
-    against = {"t": T0, "up_prob": 0.38, "move": -1.0}
-    _, call = _boom_with(_setup(), agree)
-    assert call and call["kind"] == "BOOM" and call["entry"] == 2001.9 and call["tp2"] == 2017.5
-    assert any("Kronos" in w for w in call["why"])
-    bt, call = _boom_with(_setup(), against)
-    assert call is None and "Kronos" in bt.gate_note
-    _, call = _boom_with(_setup(), None, running=True)            # Kronos loaded but no forecast yet: wait
-    assert call is None
-    _, call = _boom_with(_setup(), None, running=False)           # no Kronos at all: ICT only
-    assert call is not None
-    _, call = _boom_with(_setup(grade="B"), agree)                # below the grade bar
-    assert call is None
-    _, call = _boom_with(_setup(d=-1), agree)                     # a CRASH against an up forecast
-    assert call is None
