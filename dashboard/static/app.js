@@ -556,13 +556,19 @@
     // (light = 9 in 10 end inside, darker = the middle half) and one label at the tip. Odds and plan live in the cards.
     shade("lo", "hi", "rgba(214,173,82,.10)");
     shade("p25", "p75", "rgba(214,173,82,.22)");
-    zx.strokeStyle = "rgba(214,173,82,.16)"; zx.lineWidth = 1;     // texture: past 30-minute stretches at today's size
+    zx.save();                                                       // texture: past 30-minute stretches at today's
+    zx.beginPath();                                                  // size, kept inside the range
+    pts.forEach((p, i) => (i ? zx.lineTo(p.x, y(p.b.hi)) : zx.moveTo(p.x, y(p.b.hi))));
+    for (let i = pts.length - 1; i >= 0; i--) zx.lineTo(pts[i].x, y(pts[i].b.lo));
+    zx.closePath(); zx.clip();
+    zx.strokeStyle = "rgba(214,173,82,.22)"; zx.lineWidth = 1;
     for (const sm of k.samples || []) {
       zx.beginPath(); let on = false;
       for (const p of [{ time: k.t, value: k.last }, ...sm]) { const xx = ts.timeToCoordinate(p.time - (p.time % sec)), yy = y(p.value);
         if (xx == null || yy == null || xx > right) continue; on ? zx.lineTo(xx, yy) : zx.moveTo(xx, yy); on = true; }
       zx.stroke();
     }
+    zx.restore();
     const end = pts[pts.length - 1], x0 = pts[0].x, mv = k.target - k.last, l = leanOf(k);
     zx.fillStyle = "rgba(236,232,223,.07)"; zx.fillRect(Math.round(x0), 0, 1, zc.getBoundingClientRect().height - ts.height());   // now | next 10 min
     zx.fillStyle = "rgba(214,173,82,.9)"; zx.beginPath(); zx.arc(x0, y(k.last), 3, 0, 7); zx.fill();   // starts at the live price
