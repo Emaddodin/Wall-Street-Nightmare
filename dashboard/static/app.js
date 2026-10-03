@@ -39,9 +39,13 @@
     upColor: C.up, downColor: C.down, borderVisible: false, wickUpColor: C.up, wickDownColor: C.down,
     priceFormat: { type: "price", precision: 2, minMove: 0.01 },
   });
-  const forecast = chart.addLineSeries({ color: C.gold, lineWidth: 2, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  let bandRange = null;              // the shading's lowest / highest price, so the price scale keeps the whole band in view
+  const forecast = chart.addLineSeries({ color: C.gold, lineWidth: 2, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+    autoscaleInfoProvider: (orig) => { const r = orig(); if (!bandRange) return r;
+      const lo = Math.min(bandRange[0], r ? r.priceRange.minValue : Infinity), hi = Math.max(bandRange[1], r ? r.priceRange.maxValue : -Infinity);
+      return { priceRange: { minValue: lo, maxValue: hi } }; } });
   let last = null, loadedTf = null, first = 0, times = [];
-  const ovl = Object.assign({ kronos: true, scalper: false, boom: true, smc: true, flow: true }, store.get("ovl2", {}));   // SMC/ICT covers the scalper's zones
+  const ovl = Object.assign({ kronos: true, scalper: false, boom: false, smc: true, flow: true }, store.get("ovl3", {}));   // signals off by default: the measured line comes first   // SMC/ICT covers the scalper's zones
 
   async function loadCandles() {
     const want = tf;
@@ -167,6 +171,7 @@
     const key = ok ? `${tf}${k.t}${k.mix ? "c" : "k"}${k.target}${k.live ? k.last : ""}` : "";
     if (key === fcKey) return;
     fcKey = key;
+    bandRange = ok && Array.isArray(k.band) && k.band.length ? [Math.min(...k.band.map((b) => b.lo)), Math.max(...k.band.map((b) => b.hi))] : null;
     if (!ok) { forecast.setData([]); return; }
     const sec = TFSEC[tf], start = k.t - (k.t % sec), byBar = new Map([[start, k.last]]);
     for (const p of k.path) { const b = p.time - (p.time % sec); if (b >= start) byBar.set(b, p.value); }
@@ -487,8 +492,16 @@
       for (let i = pts.length - 1; i >= 0; i--) zx.lineTo(pts[i].x, y(pts[i].b[lo]));
       zx.closePath(); zx.fillStyle = fill; zx.fill();
     };
-    shade("lo", "hi", "rgba(214,173,82,.10)");
-    shade("p25", "p75", "rgba(214,173,82,.20)");
+    shade("lo", "hi", k.live ? "rgba(214,173,82,.13)" : "rgba(214,173,82,.10)");
+    shade("p25", "p75", k.live ? "rgba(214,173,82,.26)" : "rgba(214,173,82,.20)");
+    if (k.live) {                      // the measured range: dotted edges and where they end
+      zx.save(); zx.setLineDash([2, 3]); zx.strokeStyle = "rgba(214,173,82,.75)"; zx.lineWidth = 1;
+      for (const e of ["lo", "hi"]) { zx.beginPath(); pts.forEach((p, i) => (i ? zx.lineTo(p.x, y(p.b[e])) : zx.moveTo(p.x, y(p.b[e])))); zx.stroke(); }
+      zx.restore();
+      const end = pts[pts.length - 1];
+      tag(`HI ${fmt(end.b.hi)}`, end.x + 4, y(end.b.hi), C.gold, { pri: 66, faint: true });
+      tag(`LO ${fmt(end.b.lo)}`, end.x + 4, y(end.b.lo), C.gold, { pri: 66, faint: true });
+    }
   }
   chart.timeScale().subscribeVisibleLogicalRangeChange(() => requestAnimationFrame(drawZones));
   new ResizeObserver(() => requestAnimationFrame(drawZones)).observe(zc);
@@ -498,10 +511,10 @@
   document.querySelectorAll("#ovl button").forEach((b) => {
     b.classList.toggle("on", !!ovl[b.dataset.o]);
     b.addEventListener("click", () => {
-      ovl[b.dataset.o] = !ovl[b.dataset.o]; store.set("ovl2", ovl);
+      ovl[b.dataset.o] = !ovl[b.dataset.o]; store.set("ovl3", ovl);
       b.classList.toggle("on", ovl[b.dataset.o]);
       markerKey = ""; fcKey = "x";
-      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); renderSmcRead(); renderTrend(); renderDesks(); }
+      if (S) { drawMarkers(); drawLines(); drawForecast(); drawZones(); renderSmcRead(); renderTrend(); renderDesks(); renderBoom(); renderScalper(); }
     });
   });
 
@@ -764,7 +777,7 @@
   //              history: [...with exit, how, r, usd_001], stats: {calls, wins, losses, net_r, net_usd_001}, proven}
   function renderBoom() {
     const bm = S.boom, el = $("boom");
-    el.hidden = !bm;
+    el.hidden = !bm || !ovl.boom;
     if (!bm) return;
     const st = bm.stats || {}, a = bm.active;
     const tally = st.calls
@@ -841,11 +854,25 @@
     const word = (c.label || "mixed").toUpperCase();
     pill.innerHTML = TF6.map((t) => `<span class="tfa">${tfName(t)}${arrow(deskDir(t))}</span>`).join("") +
       `<b class="${cls === "flat" ? "" : cls}">${c.bias > 0 ? "▲" : c.bias < 0 ? "▼" : "•"} ${word} ${sc}</b>`;
+    const lb = Array.isArray(c.band) && c.band.length ? c.band : lineBand(c, S.kronos), le = lb[lb.length - 1];
+    if (c.live && c.up_prob != null && le) {
+      const up = Math.round(+c.up_prob * 100);
+      el.innerHTML = `<span class="name">Next 10 minutes</span><span class="untested">RANGE CHECKED</span>
+        <span class="call" style="grid-column:1 / -1;color:var(--fg)"><span class="num" style="white-space:nowrap">${fmt(le.lo)} – ${fmt(le.hi)}</span></span>
+        <span class="meta num">Middle half ${fmt(le.p25)} – ${fmt(le.p75)} · line ends ${fmt(c.target)} (${c.target - c.last >= 0 ? "+" : ""}${fmt(c.target - c.last)})</span>
+        <span class="odds"><span>Up <b class="up">${up}%</b></span><span>Down <b class="down">${100 - up}%</b></span></span>
+        <span class="split"><i style="width:${up}%"></i></span>
+        <span class="tfs6">${TF6.map((t) => `<span>${tfName(t)}${arrow(deskDir(t))}</span>`).join("")}</span>
+        <span class="parts">${(c0.parts || []).map((p) => { const v = Math.max(-1, Math.min(1, +p.score || 0));
+          return `<span>${esc(p.name)}</span><span class="bar"><i style="${v >= 0 ? `left:50%;width:${v * 50}%;background:var(--up)` : `right:50%;width:${-v * 50}%;background:var(--down)`}"></i></span><span class="num ${tone(v)}">${v > 0 ? "+" : ""}${v.toFixed(2)}</span>`; }).join("")}</span>
+        <span class="meta">Gold line and shading on the 1m chart, redone with every price. Checked on past gold: about 9 in 10 ten-minute moves ended inside the light shading and half inside the dark one, so the range is honest. Which way it goes was a coin flip, so read the up/down odds as a lean, not a call.${c.kronos ? " Kronos is in it." : ""}</span>`;
+      return;
+    }
     el.innerHTML = `<span class="name">Trend reading</span><span class="untested">${c.proven ? "TESTED" : "NOT A FORECAST"}</span>
       <span class="call ${cls}">${c.bias > 0 ? "▲ UP" : c.bias < 0 ? "▼ DOWN" : "— FLAT"} ${c.target != null ? `<span class="num" style="font-size:14px">${fmt(c.target)} (${c.target - c.last >= 0 ? "+" : ""}${fmt(c.target - c.last)})</span>` : ""}</span><span></span>
       <span class="odds"><span>Reading <b class="${cls === "flat" ? "" : cls}">${word} ${sc}</b></span><span>in ${horizon(c.minutes || 120)}</span></span>
       <span class="split"><i style="width:${Math.round((1 + Math.max(-1, Math.min(1, +c.score || 0))) * 50)}%"></i></span>
-      ${(() => { const b = Array.isArray(c.band) && c.band.length ? c.band : lineBand(c, S.kronos), e = b[b.length - 1]; return e ? `<span class="meta num">Likely ends between ${fmt(e.lo)} and ${fmt(e.hi)} · middle half ${fmt(e.p25)} to ${fmt(e.p75)}</span>` : ""; })()}
+      ${le ? `<span class="meta num">Likely ends between ${fmt(le.lo)} and ${fmt(le.hi)} · middle half ${fmt(le.p25)} to ${fmt(le.p75)}</span>` : ""}
       <span class="tfs6">${TF6.map((t) => `<span>${tfName(t)}${arrow(deskDir(t))}</span>`).join("")}</span>
       <span class="parts">${(c.parts || []).map((p) => { const v = Math.max(-1, Math.min(1, +p.score || 0));
         return `<span>${esc(p.name)}</span><span class="bar"><i style="${v >= 0 ? `left:50%;width:${v * 50}%;background:var(--up)` : `right:50%;width:${-v * 50}%;background:var(--down)`}"></i></span><span class="num ${tone(v)}">${v > 0 ? "+" : ""}${v.toFixed(2)}</span>`; }).join("")}</span>
@@ -890,6 +917,7 @@
   }
   function renderScalper() {
     const s = S.active;
+    $("scalper").hidden = !ovl.scalper;
     $("scalper").innerHTML = s
       ? `<span class="name">Scalper</span><button class="use" data-src="scalper">Use SL/TP</button>
          <span class="call ${s.dir === 1 ? "up" : "down"}">${s.dir === 1 ? "▲ BUY" : "▼ SELL"} <span class="num" style="font-size:14px">${fmt(s.entry)}</span></span>
