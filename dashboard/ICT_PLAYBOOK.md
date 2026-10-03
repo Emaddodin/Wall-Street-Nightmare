@@ -1,16 +1,110 @@
 # Gold Desk ICT playbook
 
-Gold Desk reads gold the ICT way on every timeframe. It picks the model that fits the live market and talks you through it on the chart. Its BOOM / CRASH calls come from those models and from Kronos' next 30 minutes.
+Gold Desk is an analysis-only gold chart on your MT5's candles. It reads every timeframe the ICT way, reads every closed candle, and picks the model that fits the live market. It then tells you in words what to do now: "BUY on this close because…", "get ready", "wait for…", or "don't". It draws one forecast line from the ICT plan, Kronos and the quant model together. You place the trade yourself in MT5.
 
 Everything here comes from the `goldictcontents` folder:
 
 - *ICT Concepts for Gold Trading* (the long write-up)
 - the @ICT_Success slides: Premium / Discount, OTE, Pulse Model, HRLR / LRLR, IFVG, Breaker Block, Unicorn, Top 5 Models, AMD, MSS + FVG
-- your note to add XAU / XAG SMT
+- the video (an NQ trader's week, read from its frames and an offline transcript; see "The video's entry" below)
+- your notes to add XAU / XAG SMT and every candlestick pattern
 
 The slides give definitions and drawings, but rarely numbers. Where a rule had to be chosen, this file says so (**chosen**).
 
-The video in the folder couldn't be opened by the Drive tools, so nothing in it is used. If it holds rules not covered below, tell me what it says.
+## The video's entry
+
+The video is 81 seconds of an NQ trader explaining his trades. The charts show NQ with the NY AM high / low, the London high and the NY lunch range marked. His long was taken around 09:45 New York after price dipped below the NY AM low, with the exit at the NY AM high.
+
+The offline transcript is rough, but the rule he repeats ("every single one of my trades…") is clear:
+
+1. **Rejection** from a higher-timeframe level: a wick into the level, then a close away from it.
+2. The rejection leaves a **big fair value gap** (displacement).
+3. An **inversion fair value gap** on the lowest timeframe (he uses 15 seconds). He enters on the close of the candle that inverts it.
+4. The higher-timeframe order flow stays intact, and price runs with almost no drawdown.
+
+In Gold Desk this is the **IFVG** model's candle-close trigger on M1 (your lowest timeframe):
+- a sweep or rejection at a key level
+- a candle closing through the opposite FVG
+- the entry on that close
+
+The candle read also names "wicked into <HTF key level> and closed away from it (rejection)" whenever it happens.
+
+## Candle-close entries
+
+The notes enter on a close, not on a touch, so every model's setup has a **trigger**: the candle that confirms it.
+
+- **Zone models** (FVG, breaker, Unicorn overlap, OTE, BPR, order block, gaps): a candle trades into the zone and closes back out in the trade's direction, past the zone's middle. That's the rejection close.
+- **CISD models** (Pulse, NDOG / NWOG): the CISD candle's close.
+- **IFVG**: the inversion candle's close (the video's entry).
+- **M5 setups**: also an M1 CISD made inside the M5 zone (timeframe alignment, the Pulse model's step 2).
+
+A candlestick pattern on the trigger candle is named, and counts as extra confirmation. Then the full entry checklist is checked, and the answer is one of:
+
+- **ENTER**: A or A+ grade, nothing required failing, and Kronos not against it.
+- **SKIP**: it triggered, but something says no. The page shows what.
+- **LATE**: an earlier candle.
+
+## Candlestick patterns
+
+`candles.py` has the 33 patterns of the Chart Guys cheat sheet, ported from the repo's MotiveWave study with the same rules, plus pin bars and inside / outside bars:
+
+- **Single**: hammer, inverted hammer, dragonfly / gravestone / long-legged doji, doji, spinning top, marubozu, shooting star, hanging man
+- **Double**: engulfing, harami, piercing line, dark cloud cover, tweezer top / bottom, kicker
+- **Triple**: morning / evening (doji) star, abandoned baby, three white soldiers / black crows, three inside / outside up / down
+
+Gold barely gaps, so gap patterns rarely print on M1 / M5. A pattern is only a confirmation of an ICT entry, never a signal on its own.
+
+## The brain: what to do right now
+
+`brain.py` reads each closed M1 and M5 candle:
+- what it swept
+- CISD, MSS / BOS / CHoCH
+- FVG left, IFVG inverted, breaker made
+- a higher-timeframe key level it rejected
+- its pattern
+
+It then gives one answer, in this order:
+
+| Answer | When |
+|---|---|
+| **MARKET CLOSED / WAIT (news)** | gold is closed, or a high-impact USD event is within 15 minutes before / 10 after |
+| **BUY NOW / SELL NOW** | a model's trigger candle just closed with the verdict ENTER (the model and the pattern are named) |
+| **DON'T BUY / DON'T SELL** | a model triggered but the checklist says no |
+| **GET READY** | an armed setup's zone is where price is; the next close decides |
+| **WAIT FOR BUY / SELL** | a setup is armed further away: wait for the pullback, don't chase |
+| **WATCH** | a sweep happened and the shift is missing: wait for a CISD beyond <level> |
+| **WAIT** | nothing set up: where and when to look, with the higher-timeframe bias |
+
+**The one line** is 30 minutes ahead from the live price. It blends:
+- the best ICT plan (pull back to its zone, then away toward its liquidity)
+- Kronos' calibrated 30 minutes
+- the quant model's forecast
+
+Each is weighted by its conviction. A voice that hasn't beaten a coin is turned down. When they disagree, the line goes flat and its label says so. It is scored live in the mesh as "Desk line".
+
+**The overall analysis** weighs every voice (higher timeframes, the ICT setup, timeframe alignment, the last candle, premium / discount, Kronos, the quant model, SMT, news) into a verdict with a confidence. It lists what is against it and what lowers confidence now: news, the session, outside the killzones, a ranging market, voices disagreeing.
+
+## The New York day map
+
+`ictclock.DAY_MAP` splits the New York day into 16 segments. Each segment has the notes' purpose and the models that fit it:
+
+- **Asia**: accumulation
+- **London open**: the Judas swing
+- **London Silver Bullet**
+- **London expansion**
+- **London-NY transition**
+- **NY open**: the NY Judas, 08:50 and 09:50 macros
+- **NY AM Silver Bullet**: gold's best window
+- **NY late morning**
+- **NY lunch**: avoid
+- **NY PM open**
+- **NY PM Silver Bullet**
+- **NY close**
+- **After hours**: avoid
+- **Daily break**: avoid
+- **Globex open**: NDOG / NWOG
+
+The selector prefers the models that fit the current segment. Once a model has 15+ setups in that segment, it uses the model's record there. `playbook_backtest.py` prints every model's record by segment, and the page's day map shows the measured best and worst models per segment.
 
 ## Where it lives
 
@@ -20,7 +114,8 @@ The video in the folder couldn't be opened by the Drive tools, so nothing in it 
 | `ictclock.py` | New York time: killzones, Silver Bullet, macros, AMD phase; PDH / PDL, PWH / PWL, Asian range, NDOG / NWOG, midnight open |
 | `smt.py`, `silver.py` | XAU vs XAG (and DXY) SMT divergence on M1 / M5 / M15 / H1; silver candles from your broker, else Yahoo (delayed) |
 | `playbook.py` | The models, the checklist and grade, the "best model now" selector, each timeframe's own read, the talk |
-| `boom.py` | BOOM / CRASH calls from the playbook, confirmed by Kronos |
+| `brain.py` | The read of every closed candle, what to do now, the one line, the overall analysis |
+| `candles.py` | 33 candlestick patterns plus pin / inside / outside bars |
 | `kronos_signal.py`, `kronos_calib.py` | Kronos' 30-minute forecast from M1 and M5, blended and calibrated live |
 | `kronos_finetune.py` | Fine-tunes Kronos on your gold M1 / M5 history |
 | `playbook_backtest.py` | Each model's record on a year of gold, used as the selector's prior |
@@ -143,19 +238,6 @@ Each model gets a score:
 - **Setup on the board**: the grade score of the setup it has armed (or filled) right now.
 
 The page shows the whole ranking with each model's record and what it is waiting for.
-
-## BOOM / CRASH
-
-A call fires when all of these hold:
-- a setup was armed on this candle
-- its grade is A or A+ (`--boom-grade`)
-- its model is in the top 3 for the live market
-- Kronos' 30-minute forecast agrees: up ≥ 55 % and a positive move for a BOOM, the mirror for a CRASH (`--boom-kronos require`)
-
-How the Kronos condition behaves:
-- If Kronos is loaded but has no fresh forecast yet, the call waits.
-- If Kronos isn't installed, calls are ICT-only and say so.
-- `--boom-kronos prefer` lets Kronos only grade the setup, and `off` ignores it.
 
 ## Kronos, 30 minutes ahead, tuned for M1 and M5
 

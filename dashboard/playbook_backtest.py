@@ -158,6 +158,8 @@ def main() -> None:
     table("By model (all)", name)
     table("By model and timeframe", lambda x: f"{name(x)} {x['tf']}")
     table("By grade", lambda x: x.get("grade"))
+    table("By entry type (limit at the zone vs. on the confirming candle's close)", lambda x: x.get("entry_kind", "limit"))
+    table("Candle-close entries by model", lambda x: name(x) if x.get("entry_kind") == "close" else None)
     table("By killzone at the setup", lambda x: ck.clock(x["t"]).get("killzone") or "outside")
     table("By part of the New York day (ictclock.DAY_MAP)", lambda x: ck.session(x["t"])["name"])
     for sess, *_ in ck.DAY_MAP:

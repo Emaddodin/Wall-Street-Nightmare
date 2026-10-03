@@ -126,7 +126,8 @@ class Track:
             return
         self.data["setups"][s["id"]] = {k: s[k] for k in ("id", "model", "tf", "dir", "entry", "sl", "tp1", "t", "grade",
                                                          "order")} | {"stage": "armed", "fill_by": s["fill_by"], "name": s.get("name"),
-                                                            "session": s.get("session")}
+                                                            "session": s.get("session"),
+                                                            "entry_kind": s.get("entry_kind", "limit")}
         self._save()
 
     def step(self, tf: str, b: Bars, spread: float = SPREAD) -> list:
@@ -951,6 +952,11 @@ class Playbook:
                     self.track.add(s)
                     if s["status"] == "armed":
                         new.append(s)
+                tr = s.get("trigger")
+                if tr and tr["fresh"] and s["id"] + ":close" not in self.seen:    # the candle-close entry, scored too
+                    self.seen[s["id"] + ":close"] = s["t"]
+                    self.track.add(dict(s, id=s["id"] + ":close", order="market", entry=tr["entry"], tf=tr["tf"],
+                                        t=tr["time"], fill_by=tr["time"] + 600, entry_kind="close"))
         for tf in ENTRY_TFS:
             if tf in bars and bars[tf] is not None and len(bars[tf]):
                 self.track.step(tf, bars[tf], spread)
