@@ -1,8 +1,8 @@
 # Gold Desk
 
-One page on your own PC for gold scalping: your broker's live chart with the signals drawn on it (entries on M5 by default, with the H4 trend, H1 structure and M15 zones behind them; `--entry-tf M1` for the old H1 / M15 / M5 ladder), the session clock, lot size from your balance, Buy / Sell / Close buttons, alerts, and a backtest tab on your MT5 history.
+One page for gold: your broker's live chart, read the ICT way on every timeframe, with the model that fits the market right now, its entry, stop and targets drawn on the chart, Kronos' next 30 minutes, and the chart telling you in plain words what to do. You place the trade yourself (on your phone, on M1); the page is for the charts and the read. The candles are your broker's own feed (MT5 or LiteFinance), so the chart matches the one on your phone.
 
-Every price comes from the MetaTrader 5 terminal running on the same PC, so the chart matches your broker exactly. Orders go out through that terminal, and only when you click.
+**What's new: the ICT playbook** (full detail in [ICT_PLAYBOOK.md](ICT_PLAYBOOK.md)). Every concept from the `goldictcontents` notes is read on D1, H4, H1, M15, M5 and M1: sweeps / turtle soup, CISD, MSS vs BOS / CHoCH, FVG / IFVG / BPR with CE, order blocks with MT, breakers, the Unicorn, OTE, premium / discount, IRL <-> ERL, HRLR / LRLR, killzones, macros, Silver Bullet, AMD / Judas swing, NDOG / NWOG and XAU / XAG SMT. Sixteen models look for setups on M1 and M5, each graded on the notes' checklist; the best model for the live market is picked and drawn; BOOM / CRASH calls come from it when Kronos' 30-minute forecast agrees. The page opens in chart-only mode (no order buttons) on M1.
 
 ## Start it
 
@@ -28,7 +28,7 @@ Options (add them after `start_dashboard.bat` in a terminal, or after `server.py
 Paste this once in Terminal:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/Emaddodin/Wall-Street-Nightmare/refs/heads/claude/project-thread-ild2ro/dashboard/mac/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Emaddodin/Wall-Street-Nightmare/refs/heads/claude/eager-dirac-gtv0q1/dashboard/mac/install.sh | bash
 ```
 
 It puts Gold Desk in `~/GoldDesk`, installs the LiteFinance browser driver and Kronos, and adds a **Gold Desk** icon to your Desktop. Double-click that icon to trade: it updates Gold Desk to the latest version, stops any older copy, starts it with Kronos and the scalper on the chart, and opens the page. The first start also tests Kronos and the Boom / Crash calls on the last 30 days of gold in the background and shows the result on the page. Settings (demo or real badge, Kronos size) are in `~/.golddesk/config.sh`.
@@ -70,7 +70,13 @@ python3 server.py --litefinance --account demo
 
 Like the [Kronos BTC demo](https://shiyu-coder.github.io/Kronos-demo/), Gold Desk draws many separate sample paths (10 on M5, 30 for the day view) and shows what they say together: the **upside probability** (share of paths that end above the last close), the **volatility amplification probability** (share of paths that move more, bar to bar, than the last as many real bars did) and the range the paths cover. After every closed hour it also forecasts the next **24 hours on H1 bars**, as the demo does for BTC (`state.kronos.day`). Every forecast is scored once its last bar has closed: direction right, and whether price ended inside the paths' range (`state.kronos.track`, kept in `~/.golddesk/kronos_track.json`).
 
-**Boom / Crash** (`boom.py`, entries in `ict_entries.py`, `state.boom`) are M1 scalp calls from ICT order flow: in the London and New York AM killzones an M1 candle raids external liquidity (an M15 swing, the Asian range, PDH / PDL) and closes back, a change in state of delivery (CISD) follows, and the call is a LIMIT order at the 50% of the fair value gap the move left, stop beyond the raid, target 2 R. Only when the D1 / H4 / H1 reading points the same way. Every finished call is saved to `~/.golddesk/boom_calls.csv`. `ict_backtest.py` on a year of gold: raids against the higher timeframes lost; with them, slightly positive on too few calls to prove anything. UNTESTED signals, not trades.
+**ICT playbook** (`playbook.py`, `ictlib.py`, `ictclock.py`, `state.ict`): each timeframe's own ICT read (structure, dealing range, OTE, IRL / ERL and where it sits in that cycle, the latest sweep / CISD / MSS / SMT, and what to do on it), sixteen models searched on M1 and M5 with entry, stop, TP1 / TP2 and a graded checklist, the ranking of the models for the live market (time window, trend or range, measured record, a setup on the board) and the talk: the four phases of the gold notes in sentences and one headline (BUY M1 / WATCH / WAIT / MARKET CLOSED). `playbook_backtest.py` measures every model on a year of gold and the live record is kept in `~/.golddesk/playbook_track.json`; both feed the ranking. See [ICT_PLAYBOOK.md](ICT_PLAYBOOK.md).
+
+**Boom / Crash** (`boom.py`, `state.boom`): a fresh A / A+ setup of one of the three models that fit the live market best, with Kronos' next 30 minutes on its side (`--boom-kronos require`, the default; `prefer` lets Kronos only grade, `off` ignores it; `--boom-grade` sets the bar). Limit at the model's entry (or at market for the CISD models), stop beyond the sweep, TP1 at opposing liquidity, TP2 at the higher timeframe's draw. Every finished call is saved to `~/.golddesk/boom_calls.csv`. The old raid -> CISD -> FVG call is now one of the models ("CISD + FVG (classic)"); `ict_backtest.py` found it slightly positive with the higher timeframes on too few calls to prove anything. UNTESTED signals, not trades.
+
+**XAU / XAG SMT** (`smt.py`, `silver.py`, `state.smt`): gold against silver on M1, M5, M15 and H1 from confirmed swings, plus a "forming" check at the moment of a sweep, with the correlation shown (SMT is ignored when it breaks). Silver comes from your broker (MT5, the MT5 bridge EA v1.10 or LiteFinance), else Yahoo's delayed feed; the page says which.
+
+**Kronos, next 30 minutes** (`state.kronos.m30`, `kronos_calib.py`, `kronos_finetune.py`): with `--kronos`, after every closed M1 candle Kronos forecasts 30 M1 candles and after every M5 candle 6 M5 candles; the two are blended into one 30-minute path, band, up-probability and move, weighted by each one's live skill (M1 first). A live calibrator shrinks the probability and the move to what Kronos actually achieved on your feed (Brier skill, hit rate against the coin range, all on the page). `kronos_finetune.py` fine-tunes Kronos on your gold M1 / M5 history; a model that beats the pretrained one on held-out months is used automatically.
 
 **Trend reading** (`ictmodel.py`, `state.consensus`, `state.flow`): every M1 candle Gold Desk scores what D1, H4, H1, M15, M5 and M1 structure, the H1 / H4 EMA regime, the ICT events (M15 turtle soup, M5 CISD, the London / New York Judas swing of the Asian range, M15 fair value gaps) and Kronos say together, from -1 to +1, and draws it as the gold line (half the Kronos path, leaning with the score). `ict_train.py` shows the same inputs do not predict the next 30-120 minutes better than a coin flip, so the reading describes the chart; it is not a forecast.
 
@@ -143,5 +149,10 @@ A click reaches MT5 in a few milliseconds, because the page and the terminal are
 | `mt5bridge.py`, `mt5/GoldDeskBridge.mq5` | Your MT5 app as the price and order source (Mac or Windows) |
 | `coach.py` | Your daily trading session on ntfy: start, New York open, 15 minutes left, recap, ready setups |
 | `smc.py` | Smart Money / ICT read of the chart (structure, order blocks, FVGs, liquidity, premium / discount, OTE, killzones, key levels) |
+| `playbook.py`, `ictlib.py`, `ictclock.py` | ICT playbook: every timeframe's read, the 16 models, checklist and grade, the best model now, the talk |
+| `playbook_backtest.py` | Each model's record on gold M1 history (feeds the ranking) |
+| `smt.py`, `silver.py` | XAU / XAG (and DXY) SMT divergence and the silver feed |
+| `kronos_calib.py`, `kronos_finetune.py` | Live calibration of the 30-minute Kronos forecast; fine-tuning Kronos on gold |
+| `ICT_PLAYBOOK.md` | The concepts, the models and the rules, where each comes from |
 | `static/` | The page, plus TradingView Lightweight Charts 4.2.3 (Apache 2.0) |
 | `start_dashboard.bat`, `start_demo.bat` | Double-click starters |

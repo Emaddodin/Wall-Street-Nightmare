@@ -1,10 +1,10 @@
 #!/bin/bash
 # Gold Desk one-time setup for macOS. Safe to run again; it deletes nothing outside ~/GoldDesk.
-#   curl -fsSL https://raw.githubusercontent.com/Emaddodin/Wall-Street-Nightmare/refs/heads/claude/project-thread-ild2ro/dashboard/mac/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Emaddodin/Wall-Street-Nightmare/refs/heads/claude/eager-dirac-gtv0q1/dashboard/mac/install.sh | bash
 main() {
   set -e
   local REPO=https://github.com/Emaddodin/Wall-Street-Nightmare.git
-  local BRANCH=claude/project-thread-ild2ro
+  local BRANCH=claude/eager-dirac-gtv0q1
   local APP="$HOME/GoldDesk" CONF="$HOME/.golddesk"
   say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 

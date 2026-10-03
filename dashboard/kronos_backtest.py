@@ -10,11 +10,20 @@ P/L is in dollars for 0.01 lot (1 oz).
     python3 kronos_backtest.py --litefinance-days 30                 # LiteFinance history (public feed)
     python3 kronos_backtest.py --csv ~/dukascopy_xauusd_m1.csv       # any M1 CSV with time/open/high/low/close
     python3 kronos_backtest.py --tf M1 --litefinance-days 20         # the old M1 test
+    python3 kronos_backtest.py --tf M1 --horizon 30 --csv data/dukascopy_xauusd_m1.csv.gz   # the 30-minute M1 test
+
+--calib-out PATH draws `--paths` sample paths per forecast (16 by default) and writes every resolved forecast
+(upside probability, forecast move, real move from the last close, last close) into the offline prior that
+kronos_calib.py loads (default ~/.golddesk/kronos_calib_prior.json), under "M1x30" for --tf M1 --horizon 30 and
+"M5x30" for --tf M5 --horizon 6. The live calibrator then starts from what Kronos measured here instead of from
+"no skill". It measures; it does not add an edge. --ft-dir tests a model saved by kronos_finetune.py (test it
+on months it was not trained on: --last-days covering only its validation months).
 """
 from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import json
 import math
 import random
@@ -24,6 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from engine import LADDER, Bars
+from kronos_calib import PRIOR_FILE, write_prior
 from kronos_signal import DEFAULT_REPO, HORIZON, Kronos
 
 SEC = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400}
@@ -32,7 +42,8 @@ RES = {"M1": "1", "M5": "5", "M15": "15", "H1": "60", "H4": "240"}
 
 def load_csv(path: str) -> list:
     rows = []
-    with open(Path(path).expanduser(), newline="") as f:
+    op = gzip.open if str(path).endswith(".gz") else open
+    with op(Path(path).expanduser(), "rt", newline="") as f:
         rd = csv.reader(f)
         head = [h.strip().lower() for h in next(rd)]
         def col(*names):
@@ -124,7 +135,15 @@ def main() -> None:
     ap.add_argument("--repo", default=str(DEFAULT_REPO))
     ap.add_argument("--out", default="kronos_backtest_trades.csv")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--paths", type=int, default=0,
+                    help="sample paths per forecast for the upside probability (default 0 = averaged samples; "
+                         "16 with --calib-out)")
+    ap.add_argument("--calib-out", nargs="?", const=str(PRIOR_FILE), default=None, metavar="PATH",
+                    help=f"write the resolved forecasts as the live calibrator's prior (default {PRIOR_FILE})")
+    ap.add_argument("--ft-dir", help="use a model saved by kronos_finetune.py instead of the pretrained one")
     a = ap.parse_args()
+    if a.calib_out and a.paths < 2:
+        a.paths = 16
 
     sec = SEC[a.tf]
     a.horizon = a.horizon or HORIZON.get(a.tf, 15)
@@ -151,13 +170,19 @@ def main() -> None:
 
     import torch
     torch.manual_seed(a.seed)
-    k = Kronos(a.repo, a.size, a.lookback, a.horizon, a.samples, a.min_atr)
-    print(f"Model on {k.device}.")
-    res, t0 = [], time.time()
+    k = Kronos(a.repo, a.size, a.lookback, a.horizon, a.samples, a.min_atr, ft_dir=a.ft_dir)
+    print(f"Model on {k.device}." + (f" {k.name} from {a.ft_dir}." if a.ft_dir else ""))
+    res, calib, t0 = [], [], time.time()
     for j in range(0, len(pts), a.batch):
         chunk = pts[j:j + a.batch]
-        fc = k.forecast_batch([rows[i - a.lookback + 1:i + 1] for i in chunk], step=sec)
+        windows = [rows[i - a.lookback + 1:i + 1] for i in chunk]
+        if a.paths >= 2:
+            fc = k.forecast_paths_batch(windows, step=sec, paths=a.paths)
+        else:
+            fc = k.forecast_batch(windows, step=sec)
         for i, f in zip(chunk, fc):
+            if a.paths >= 2:     # for the calibrator: the real move from the last close, as the live track scores it
+                calib.append([f["up_prob"], f["move"], rows[i + a.horizon][4] - rows[i][4], rows[i][4]])
             entry = rows[i + 1][1]
             exit_ = rows[i + a.horizon][4]
             real = exit_ - entry
@@ -192,6 +217,14 @@ def main() -> None:
 
     print("Verdict (Kronos alone):", verdict)
     print(f"Every forecast: {Path(a.out).resolve()}")
+    if a.calib_out:
+        name = f"{a.tf}x{a.horizon * sec // 60}"
+        meta = {"tf": a.tf, "horizon": a.horizon, "paths": a.paths, "model": k.name, "size": a.size,
+                "data": a.csv or f"litefinance {a.litefinance_days or 30} days",
+                "from": datetime.fromtimestamp(rows[pts[0]][0], timezone.utc).strftime("%Y-%m-%d"),
+                "to": datetime.fromtimestamp(rows[pts[-1]][0], timezone.utc).strftime("%Y-%m-%d")}
+        p = write_prior(a.calib_out, name, calib, meta)
+        print(f"Calibration prior: {len(calib)} forecasts as {name} -> {p}")
 
 
 if __name__ == "__main__":

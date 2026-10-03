@@ -1,10 +1,10 @@
 #!/bin/bash
 # What the "Gold Desk" icon on the Desktop runs: update, stop any older copy, start, open the page.
-# With a VPS (VPS=stratton in ~/.golddesk/config.sh, the default) the broker page runs there 24/7;
+# With a VPS (VPS=stratton in ~/.golddesk/config.sh; off by default) the broker page runs there 24/7;
 # this updates it, then opens it here through your SSH key. Nothing is opened to the internet.
 main() {
-  local APP="$HOME/GoldDesk" CONF="$HOME/.golddesk" BRANCH=claude/project-thread-ild2ro
-  ACCOUNT=demo; KRONOS=small; PORT=8765; VPS=stratton; VPS_KRONOS=small; MT5=auto
+  local APP="$HOME/GoldDesk" CONF="$HOME/.golddesk" BRANCH=claude/eager-dirac-gtv0q1
+  ACCOUNT=demo; KRONOS=small; PORT=8765; VPS=; VPS_KRONOS=small; MT5=auto     # VPS=stratton to use one
   [ -f "$CONF/config.sh" ] && . "$CONF/config.sh"
 
   echo "Gold Desk: checking for updates..."

@@ -344,6 +344,8 @@ class LiteFinanceSource:
     so the dashboard runs even while the broker page can't open (no browser, logged out); the page keeps
     retrying in the background and `broker` says why trading is off meanwhile."""
     kind = "litefinance"
+    silver_symbols = ("XAGUSD",)    # for silver.SilverFeed: each wrong guess would cost rate-limited requests
+    dollar_symbols = ()             # no dollar index candles here: DollarFeed goes straight to Yahoo
 
     def __init__(self, headless: bool = False, account_type: str | None = None, url: str = CHART,
                  session: Path = SESSION, chrome: str | None = None, dry_run: bool = False):
@@ -370,6 +372,9 @@ class LiteFinanceSource:
         self.feed_note: str | None = None       # why the candles are not updating, shown on the page
         self.data_lock = threading.Lock()
         self.http_lock = threading.Lock()
+        self.cache_of: dict = {}                # other symbols (silver for the SMT): symbol -> {tf: rows}, with
+        self._fresh_of: dict = {}               # their own re-read times and lock, apart from gold's
+        self.sym_lock = threading.Lock()
         self._conn = None
         self.note = ""          # last message LiteFinance showed after an order
         self.rows: list = []    # open trades as LiteFinance prints them
@@ -621,17 +626,23 @@ class LiteFinanceSource:
         }""")
 
     # ------------------------------------------------------------ market data
-    def _fetch(self, tf: str, t_from: int, t_to: int) -> list:
+    def _fetch(self, tf: str, t_from: int, t_to: int, symbol: str | None = None) -> list:
+        sym = symbol or self.symbol
+        gold = sym == self.symbol
         path = "/chart/get-history?" + urlencode(
-            {"symbol": self.symbol, "resolution": RES[tf], "from": int(t_from), "to": int(t_to)})
+            {"symbol": sym, "resolution": RES[tf], "from": int(t_from), "to": int(t_to)})
         status, text = self._get(path)
         if status is None and self.connected:        # Python couldn't reach it: try through the logged-in page
             r = self._call(lambda p: p.evaluate(FETCH_JS, self.base + path))
             status, text = r["status"], r["text"]
         if status == 200:
-            self._backoff, self.feed_note = BACKOFF[0], None
+            if gold:
+                self._backoff, self.feed_note = BACKOFF[0], None
             return parse_history(text)
-        if status == 429:
+        if not gold and status != 429:               # another symbol's trouble leaves gold's feed alone
+            raise RuntimeError(f"LiteFinance {sym} candles: " +
+                               (str(text)[:120] if status is None else f"HTTP {status}"))
+        if status == 429:                            # the address is refused for every symbol: hold them all
             wait, self._backoff = self._backoff, min(self._backoff * 2, BACKOFF[1])
             self._hold_until = time.time() + wait
             self.feed_note = (f"LiteFinance is refusing this server for now (too many requests). Gold Desk waits "
@@ -672,46 +683,53 @@ class LiteFinanceSource:
         with self.data_lock:
             return self._load_locked(tf, count)
 
-    def _due(self, tf: str, rows: list) -> bool:
-        """Re-read the tail now? Once each bar has closed, then every REFRESH_* seconds."""
-        sec, now, last = SEC[tf], time.time(), self._fresh_at.get(tf, 0.0)
+    def _due(self, tf: str, rows: list, fresh_at: dict | None = None) -> bool:
+        """Re-read the tail now? Once each bar has closed, then every REFRESH_* seconds. fresh_at: another
+        symbol's re-read times (no live quote of its own, so it never re-reads faster than REFRESH_LIVE)."""
+        other = fresh_at is not None
+        fresh_at = self._fresh_at if fresh_at is None else fresh_at
+        sec, now, last = SEC[tf], time.time(), fresh_at.get(tf, 0.0)
         end = rows[-1][0] + sec + SETTLE                    # the cached last bar is final from here
         if now >= end > last:
             return True
-        gap = REFRESH_HTF if sec > 300 else REFRESH_LIVE if now - self._quote_at < 5 else REFRESH_IDLE
+        gap = REFRESH_HTF if sec > 300 else REFRESH_LIVE if other or now - self._quote_at < 5 else REFRESH_IDLE
         if now - end > 600:                                 # market closed (weekend, holiday): nothing new
             gap = max(gap, 300.0)
         return now - last >= gap
 
-    def _load_locked(self, tf: str, count: int) -> list:
+    def _load_locked(self, tf: str, count: int, symbol: str | None = None) -> list:
+        """Gold's candles (symbol None), or another symbol's from its own cache (`rates_of`, under sym_lock)."""
         sec, now = SEC[tf], int(time.time())
-        rows = self.cache[tf]
+        other = symbol is not None and symbol != self.symbol
+        cache = self.cache_of.setdefault(symbol, {}) if other else self.cache
+        fresh_at = self._fresh_of.setdefault(symbol, {}) if other else None
+        rows = cache.get(tf) or []
         held = time.time() < self._hold_until
-        due = not rows or self._due(tf, rows)
+        due = not rows or self._due(tf, rows, fresh_at)
         if rows and (held or (not due and len(rows) >= count)):
             return rows[-count:]                     # cached; while LiteFinance refuses, whatever we have
         if held:
             raise RuntimeError(self.feed_note or "LiteFinance candles are paused for a moment")
         if due:
-            self._fresh_at[tf] = time.time()
+            (self._fresh_at if fresh_at is None else fresh_at)[tf] = time.time()
         if rows and due:                           # refresh the tail (the last bar may still be forming)
-            fresh = self._fetch(tf, rows[-1][0] - 2 * sec, now + sec)
+            fresh = self._fetch(tf, rows[-1][0] - 2 * sec, now + sec, symbol)
             keep = [r for r in rows if r[0] < (fresh[0][0] if fresh else now + sec)]
             rows = keep + fresh
-            self.cache[tf] = rows[-max(count, 6000):]
+            cache[tf] = rows[-max(count, 6000):]
         chunk = 5000 * sec                          # LiteFinance answers up to about a week of M1 per call
         to = rows[0][0] if rows else now + sec
         empty = 0
-        while len(rows) < count and empty < 5:     # walk back through weekends and holidays
-            got = [r for r in self._fetch(tf, to - chunk, to - 1) if r[0] < to]
+        while len(rows) < count and empty < (2 if other else 5):     # walk back through weekends and holidays
+            got = [r for r in self._fetch(tf, to - chunk, to - 1, symbol) if r[0] < to]
             if got:
                 rows = got + rows
                 empty = 0
             else:
                 empty += 1
             to -= chunk
-            self.cache[tf] = rows[-max(count, 6000):]
-        self.cache[tf] = rows[-max(count, 6000):]
+            cache[tf] = rows[-max(count, 6000):]
+        cache[tf] = rows[-max(count, 6000):]
         return rows[-count:]
 
     def tick(self) -> dict | None:
@@ -738,6 +756,21 @@ class LiteFinanceSource:
         b = Bars(sec)
         for r in rows[-int(count):]:
             b.append(r[0], r[1], r[2], r[3], r[4], r[5], self.spread)
+        return b
+
+    def rates_of(self, symbol: str, tf: str, count: int) -> Bars:
+        """Another LiteFinance symbol's candles (XAGUSD for the SMT reading), from the same history feed, in its
+        own cache. UTC like gold's; the last bar may be forming (as LiteFinance last sent it: there is no live
+        quote of it). Raises LookupError when LiteFinance has no candles of it, RuntimeError otherwise."""
+        if symbol == self.symbol:
+            return self.rates(tf, count)
+        with self.sym_lock:
+            rows = [list(r) for r in self._load_locked(tf, int(count), symbol)]
+        if not rows:
+            raise LookupError(f"LiteFinance has no {symbol} {tf} candles")
+        b = Bars(SEC[tf])
+        for r in rows[-int(count):]:
+            b.append(r[0], r[1], r[2], r[3], r[4], r[5], 0.0)
         return b
 
     def spec(self) -> Spec:

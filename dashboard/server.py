@@ -34,6 +34,8 @@ from coach import WINDOW, SessionCoach
 from engine import (LADDER, Bars, Engine, Params, Spec, SESSION_NAMES, market_hours, ny7_offset, run_backtest,
                     session_of, session_ok, utc_minutes)
 from smc import analyze as smc_analyze
+from silver import SilverFeed
+from smt import SMTReader
 from soon import Ntfy, SoonAlerts, find_topic, ntfy_server
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -87,6 +89,18 @@ class MT5Source:
         for x in r:
             b.append(int(x["time"]), x["open"], x["high"], x["low"], x["close"], float(x["tick_volume"]),
                      float(x["spread"]) * pt)
+        return b
+
+    def rates_of(self, symbol: str, tf: str, count: int) -> Bars:
+        """Candles of another symbol (silver for SMT) from the same terminal."""
+        with self.io:
+            self.mt5.symbol_select(symbol, True)
+            r = self.mt5.copy_rates_from_pos(symbol, self.tfs[tf], 0, int(count))
+        if r is None or not len(r):
+            raise LookupError(f"MT5 has no {symbol} {tf} candles")
+        b = Bars(TF_SECONDS[tf])
+        for x in r:
+            b.append(int(x["time"]), x["open"], x["high"], x["low"], x["close"], float(x["tick_volume"]), 0.0)
         return b
 
     def tick(self) -> dict | None:
@@ -260,6 +274,23 @@ class DemoSource:
             b.append(*agg[k])
         return b
 
+    def rates_of(self, symbol: str, tf: str, count: int) -> Bars:
+        """Demo silver: gold's moves x1.3 in percent plus its own slow wander, so swings mostly match and
+        sometimes don't (that's SMT)."""
+        if not symbol.upper().startswith(("XAG", "SILVER")):
+            raise LookupError(f"demo has no {symbol}")
+        g = self.rates(tf, count)
+        b = Bars(g.sec)
+        if not len(g):
+            return b
+        base = g.c[0]
+        for i in range(len(g)):
+            k = g.t[i] // 900
+            w = 0.004 * math.sin(k / 7.0) + 0.003 * math.sin(k / 2.3 + 1.0)        # silver's own drift
+            f = lambda px: 31.0 * (1 + 1.3 * (px / base - 1)) * (1 + w)
+            b.append(g.t[i], round(f(g.o[i]), 3), round(f(g.h[i]), 3), round(f(g.l[i]), 3), round(f(g.c[i]), 3), g.v[i], 0.02)
+        return b
+
     def tick(self) -> dict:
         self._advance()
         return {"bid": self.form[4], "ask": round(self.form[4] + 0.20, 2), "time": self.form[0] + 30}
@@ -350,6 +381,12 @@ class Hub:
         self.booted = False                     # history loaded; until then the page opens and says why not
         self.chart_tf = entry_tf                # the timeframe the page's chart shows (its last candle request)
         self.smc, self._smc_at, self._smc_tf, self._smc_err = None, 0.0, None, None
+        # XAU / XAG SMT: silver from the broker (or Yahoo, delayed), read on M1 / M5 / M15 / H1 for the playbook
+        self.silver = SilverFeed(source, lambda u: u + self.offset(u + self.offset(u)))
+        self.smt_reader = SMTReader()
+        self.boom.smt_fn = self._smt
+        self.boom.kronos_running = lambda: bool(self.kronos and self.kronos.model is not None)
+        self.boom.market_open = lambda: self.src.kind == "demo" or market_hours(time.time())[0]
         self.bootstrap()
 
     # server clock -> UTC
@@ -519,6 +556,26 @@ class Hub:
                 for pr in self.soon.check(eng, fc, self.sec, busy):
                     self._event("soon", f"{pr['title']}: watch {pr['area'][0]:.2f}-{pr['area'][1]:.2f}", pr["side"])
 
+    def _smt(self, bars: dict) -> dict:
+        """SMT of gold against silver on each timeframe, from closed gold candles (boom.py calls this)."""
+        out = {}
+        for tf in ("M1", "M5", "M15", "H1"):
+            g = bars.get(tf)
+            if g is None or not len(g):
+                continue
+            sv = self.silver.rates(tf, len(g) + 1)
+            if sv is None:
+                continue
+            out[tf] = self.smt_reader.update(tf, g, sv, last_forming=False)
+        out["summary"] = self.smt_reader.summary()
+        out["feed"] = self.silver.info()
+        return out
+
+    def on_kronos30(self, fc: dict) -> None:
+        """Kronos' blended 30-minute forecast (M1 + M5, calibrated): the playbook checks setups against it."""
+        with self.lock:
+            self.boom.on_forecast30(fc)
+
     # ------------------------------------------------------------ API payloads
     def coach_snapshot(self) -> dict:
         """What the session pushes report: price, the day's read and today's setups (coach.py, its own thread)."""
@@ -591,6 +648,8 @@ class Hub:
                 "alerts": self.soon.state() if self.soon else None,
                 "session": self.coach.state() if self.coach else None,
                 "smc": self.smc,
+                "smt": self.boom.smt,                  # XAU vs XAG divergence by timeframe and where silver comes from
+                "ict": self.boom.ict,                  # the ICT playbook: every timeframe, every model, the best one, the talk
                 "max_lots": min(self.max_lots, self.spec.max_lot),
             }
 
@@ -873,6 +932,11 @@ def main() -> None:
     ap.add_argument("--no-alerts", action="store_true", help="never push anything to ntfy")
     ap.add_argument("--session", default=WINDOW, help=f"your daily trading session in Tehran time, pushed to ntfy "
                                                       f"(default {WINDOW}; 'off' for none)")
+    ap.add_argument("--boom-kronos", default="require", choices=["require", "prefer", "off"],
+                    help="BOOM / CRASH and Kronos: require its 30-minute forecast to agree (default), let it only "
+                         "grade (prefer), or ignore it (off)")
+    ap.add_argument("--boom-grade", default="A", choices=["A+", "A", "B"],
+                    help="lowest playbook grade that may become a BOOM / CRASH call (default A)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
@@ -905,6 +969,8 @@ def main() -> None:
     print(f"Data: {src.kind}  symbol: {src.symbol}  entry timeframe: {a.entry_tf}  loading history...")
     PORT = a.port
     HUB = Hub(src, Params(), a.utc_offset, a.max_lots, a.entry_tf)
+    HUB.boom.kronos_mode = a.boom_kronos
+    HUB.boom.min_grade = {"A+": ("A+",), "A": ("A+", "A"), "B": ("A+", "A", "B")}[a.boom_grade]
     threading.Thread(target=poll_loop, daemon=True).start()
     topic, where = find_topic(a.ntfy_topic)
     ntfy = Ntfy(topic, ntfy_server()) if topic and src.kind != "demo" and not a.no_alerts else None

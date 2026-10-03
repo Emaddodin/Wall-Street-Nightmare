@@ -13,7 +13,7 @@
 //| Put it on any one chart; it finds gold (XAUUSD / GOLD) itself.   |
 //+------------------------------------------------------------------+
 #property copyright "Gold Desk"
-#property version   "1.00"
+#property version   "1.10"
 #property description "Feeds Gold Desk this terminal's gold prices, account and trades, and places your Gold Desk clicks here."
 
 #include <Trade\Trade.mqh>
@@ -312,7 +312,13 @@ string Fail(const string why)
    return "{\"ok\":false,\"message\":" + Js(why) + "}";
   }
 
-void WriteBars(const string id, const string tf, const int count)
+//+------------------------------------------------------------------+
+//| Candle history. sym empty: gold, the reply exactly as before.    |
+//| sym given (silver for Gold Desk's SMT reading): that symbol's    |
+//| candles, its name echoed in the header so Gold Desk can tell     |
+//| them from gold's.                                                |
+//+------------------------------------------------------------------+
+void WriteBars(const string id, const string tf, const int count, const string sym)
   {
    int k = -1;
    for(int i = 0; i < 5; i++)
@@ -324,20 +330,39 @@ void WriteBars(const string id, const string tf, const int count)
       WriteAtomic(name, Fail("unknown timeframe " + tf));
       return;
      }
+   string s = g_sym;
+   if(sym != "")
+     {
+      bool custom = false;
+      if(!SymbolExist(sym, custom))
+        {
+         WriteAtomic(name, "{\"ok\":false,\"nosym\":true,\"sym\":" + Js(sym) + ",\"message\":" +
+                     Js("No " + sym + " in this MT5") + "}");
+         return;
+        }
+      if(!SymbolInfoInteger(sym, SYMBOL_SELECT))
+         SymbolSelect(sym, true);               // history of a symbol outside Market Watch may not load
+      s = sym;
+     }
    MqlRates r[];
    ArraySetAsSeries(r, false);
-   int got = CopyRates(g_sym, g_tfs[k], 0, count, r);
+   int got = CopyRates(s, g_tfs[k], 0, count, r);
    if(got <= 0)
      {
-      WriteAtomic(name, Fail("MT5 is still loading " + tf + " history (error " + IntegerToString(GetLastError()) + ")"));
+      WriteAtomic(name, Fail("MT5 is still loading " + (sym == "" ? "" : sym + " ") + tf + " history (error " +
+                             IntegerToString(GetLastError()) + ")"));
       return;
      }
-   int dg = (int)SymbolInfoInteger(g_sym, SYMBOL_DIGITS);
+   int dg = (int)SymbolInfoInteger(s, SYMBOL_DIGITS);
    string tmp = name + ".tmp";
    int h = FileOpen(tmp, FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
    if(h == INVALID_HANDLE)
       return;
-   FileWriteString(h, "{\"ok\":true,\"n\":" + IntegerToString(got) + "}\n");
+   if(sym == "")
+      FileWriteString(h, "{\"ok\":true,\"n\":" + IntegerToString(got) + "}\n");
+   else
+      FileWriteString(h, "{\"ok\":true,\"n\":" + IntegerToString(got) + ",\"sym\":" + Js(sym) + ",\"point\":" +
+                      D(SymbolInfoDouble(s, SYMBOL_POINT), 10) + ",\"digits\":" + IntegerToString(dg) + "}\n");
    for(int i = 0; i < got; i++)
       FileWriteString(h, IntegerToString((long)r[i].time) + "," + D(r[i].open, dg) + "," + D(r[i].high, dg) + "," +
                       D(r[i].low, dg) + "," + D(r[i].close, dg) + "," + IntegerToString(r[i].tick_volume) + "," +
@@ -385,7 +410,7 @@ void RunCommand(const string file)
      }
    if(op == "bars")
      {
-      WriteBars(id, Val(keys, vals, "tf"), (int)StringToInteger(Val(keys, vals, "count")));
+      WriteBars(id, Val(keys, vals, "tf"), (int)StringToInteger(Val(keys, vals, "count")), Val(keys, vals, "symbol"));
       return;
      }
    if(op == "ping")

@@ -5,7 +5,8 @@ The EA and Gold Desk talk through files in MT5's shared "Common\\Files\\GoldDesk
 
 - state.json   written by the EA whenever gold's price moves (and once a second): price, the last three
                candles of each timeframe, account, open gold trades, contract details;
-- in/cmd-*.txt one request from Gold Desk (an order, a close, a stop move, or candle history), which the EA
+- in/cmd-*.txt one request from Gold Desk (an order, a close, a stop move, or candle history of gold or,
+               for the SMT reading, another symbol such as silver), which the EA
                claims by renaming it, so a request runs once or not at all;
 - out/res-*.txt the EA's answer.
 
@@ -20,6 +21,7 @@ from __future__ import annotations
 import glob
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -37,6 +39,11 @@ FRESH = 5.0          # the EA writes at least once a second; older than this mea
 TAKE = 3.0           # seconds MT5 has to pick an order up before Gold Desk takes it back
 RUN = 30.0           # once MT5 has it: how long the broker may take to answer
 HOME = Path.home()
+SYMBOL_OK = re.compile(r"^[A-Za-z0-9._#+!$&@-]{1,40}$")    # broker symbol names; never a line break into a request
+REUSE = 2.0          # other symbols' candles (silver for the SMT): ask MT5 again at most this often per timeframe
+OLD_EA = ("The GoldDeskBridge EA running in MT5 is an older version that only sends gold candles. Run "
+          "python3 mt5bridge.py --install (or copy mt5/GoldDeskBridge.mq5 into MT5), compile it and put it back "
+          "on the chart to get silver.")
 
 # Wine prefixes MT5 runs in: MetaQuotes' Mac app, CrossOver, PlayOnMac, plain Wine; and Windows itself.
 PREFIXES = [str(HOME / "Library/Application Support/*"), str(HOME / "Library/Application Support/CrossOver/Bottles/*"),
@@ -161,6 +168,8 @@ class MT5BridgeSource:
         self.cache: dict = {tf: [] for tf in TF_SECONDS}
         self._short: dict = {}                       # timeframe -> (bars MT5 had, when): don't ask again at once
         self.locks = {tf: threading.Lock() for tf in TF_SECONDS}
+        self._of: dict = {}                          # (symbol, tf) -> (when, rows, point): other symbols, apart
+        self._of_lock = threading.Lock()             # from gold's cache and locks
         self._read()
         threading.Thread(target=self._watch, daemon=True).start()
         end = time.time() + wait
@@ -332,6 +341,48 @@ class MT5BridgeSource:
         if len(rows) < count:
             self._short[tf] = (len(rows), time.time())                    # MT5 has no more than this for now
         return rows
+
+    def rates_of(self, symbol: str, tf: str, count: int) -> Bars:
+        """Candles of another symbol of this MT5 (silver for the SMT reading), oldest first, the last one
+        forming, on the same server clock as gold's. Leaves gold's cache alone. Raises LookupError when MT5
+        has no such symbol, NotImplementedError when the EA is too old to send other symbols, RuntimeError
+        otherwise (history still loading, MT5 not answering)."""
+        sec, count = TF_SECONDS[tf], int(count)
+        if not SYMBOL_OK.match(symbol or ""):
+            raise LookupError(f"not a symbol name: {symbol!r}")
+        with self._of_lock:
+            hit = self._of.get((symbol, tf))
+            if hit and time.time() - hit[0] < REUSE and len(hit[1]) >= count:
+                rows, pt = hit[1], hit[2]
+            else:
+                rows, pt = self._load_of(symbol, tf, count)
+                self._of[(symbol, tf)] = (time.time(), rows, pt)
+        b = Bars(sec)
+        for r in rows[-count:]:
+            b.append(int(r[0]), r[1], r[2], r[3], r[4], float(r[5]), float(r[6]) * pt)
+        return b
+
+    def _load_of(self, symbol: str, tf: str, count: int) -> tuple:
+        if not self._fresh():
+            raise RuntimeError(self.broker()["message"])
+        text = self._ask({"op": "bars", "tf": tf, "count": count, "symbol": symbol}, take=TAKE + 2, run=20.0)
+        head, _, body = text.partition("\n")
+        try:
+            info = json.loads(head)
+        except ValueError:
+            raise RuntimeError(f"MT5's {symbol} answer couldn't be read")
+        if not info.get("ok"):
+            if info.get("nosym"):
+                raise LookupError(info.get("message") or f"MT5 has no {symbol}")
+            raise RuntimeError(info.get("message") or f"MT5 gave no {symbol} {tf} candles")
+        if info.get("sym") != symbol:                # an older EA ignored "symbol" and sent gold: never use it
+            raise NotImplementedError(OLD_EA)
+        rows = []
+        for line in body.splitlines():
+            p = line.split(",")
+            if len(p) == 7:
+                rows.append([int(p[0]), float(p[1]), float(p[2]), float(p[3]), float(p[4]), float(p[5]), float(p[6])])
+        return rows, float(info.get("point") or 0.0)
 
     # ------------------------------------------------------------ manual trading (only on your clicks)
     def market(self, side: str, lots: float, sl: float, tp: float) -> dict:
