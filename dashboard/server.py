@@ -29,6 +29,7 @@ from urllib.parse import parse_qs, urlparse
 from boom import BoomTracker
 import mesh as mesh_mod
 from mesh import Mesh
+from nodes import Nodes
 from coach import WINDOW, SessionCoach
 from engine import (LADDER, Bars, Engine, Params, Spec, SESSION_NAMES, market_hours, ny7_offset, run_backtest,
                     session_of, session_ok, utc_minutes)
@@ -343,6 +344,7 @@ class Hub:
         self.tick_ = None
         self.kronos = None
         self.boom = BoomTracker(self.spec.digits, mesh=Mesh(None if source.kind == "demo" else mesh_mod.DIR))
+        self.boom.nodes = Nodes(fetch=source.kind != "demo")   # clock, calendar, cross-markets for the mesh
         self.soon: SoonAlerts | None = None     # "setup likely soon" pushes to your phone (needs Kronos)
         self.coach: SessionCoach | None = None  # your daily session on your phone: start, NY, end, ready setups
         self.booted = False                     # history loaded; until then the page opens and says why not
@@ -585,7 +587,7 @@ class Hub:
                 "flow": self.boom.flow,                # M1 raids, CISDs and limit orders, for chart marks
                 "nowcast": self.boom.nowcast,          # the 10-minute line + band from the live price (nowcast.py)
                 "timeframes": self.boom.desks,         # each timeframe's own concepts, call and levels (tfdesk.py)
-                "mesh": self.boom.mesh.state(),        # live record + scoreboard of every source (mesh.py)
+                "mesh": dict(self.boom.mesh.state(), nodes=self.boom.nodes.state(int(time.time()))),        # live record + scoreboard of every source (mesh.py)
                 "alerts": self.soon.state() if self.soon else None,
                 "session": self.coach.state() if self.coach else None,
                 "smc": self.smc,
@@ -621,6 +623,8 @@ class Hub:
             return {"ok": False, "message": "For a SELL the stop must be above the ask and the target below the bid"}
         res = self.src.market(side, lots, sl, tp)
         self._log_trade(f"{side} {lots} lots", res, side)
+        if res.get("ok"):
+            self.boom.mesh.trade(side)                  # scored in the mesh as "Your trades"
         return res
 
     def close(self, body: dict) -> dict:
@@ -790,7 +794,7 @@ class Handler(BaseHTTPRequestHandler):
             if u.path.startswith("/api/research/"):          # read-only copies of the test's own files
                 name = u.path.rsplit("/", 1)[1]
                 f = RESEARCH.parent / "kronos_research.log" if name == "log" else RESEARCH / name
-                ok = name in RESEARCH_FILES or name == "log" or (name.startswith("boom_kronos_") and name.endswith(".txt")
+                ok = name in RESEARCH_FILES or name == "log" or (name.startswith(("boom_kronos_", "mesh_nodes_")) and name.endswith(".txt")
                                                                    and "/" not in name and ".." not in name)
                 if ok and f.is_file():
                     return self._send(200, f.read_bytes(), "text/plain; charset=utf-8")
@@ -826,7 +830,7 @@ def research_state() -> dict:
             "done": bool(log and "All settings done" in log),
             "log_tail": log.replace("\r", "\n").splitlines()[-8:] if log else None,
             "report": rd(RESEARCH / "report.md"),
-            "files": sorted(f.name for f in RESEARCH.glob("*") if f.name in RESEARCH_FILES or f.name.startswith("boom_kronos_"))}
+            "files": sorted(f.name for f in RESEARCH.glob("*") if f.name in RESEARCH_FILES or f.name.startswith(("boom_kronos_", "mesh_nodes_")))}
 
 
 def poll_loop() -> None:

@@ -70,6 +70,7 @@ class BoomTracker:
         self.desks: dict = {}                    # each timeframe's own concepts and call (tfdesk.py)
         self.nowcast: dict | None = None         # the 10-minute line from the live price, every poll (nowcast.py)
         self.sig: float | None = None            # one-minute sigma of the last closed candles
+        self.nodes = None                        # nodes.Nodes: clock, calendar, cross-markets (set by the server)
         self.flow: dict = {"raids": [], "cisd": [], "orders": []}
         self.watch: list = []
         self.trend = None                        # kept for soon.py's signature
@@ -174,6 +175,19 @@ class BoomTracker:
                       "k": (cs["parts"][-1]["items"]["up_prob"] if cs["kronos"] else None)}
                 if closed_nc:
                     rd["g"]["10-min line"] = round(closed_nc["target"] - closed_nc["last"], 3)
+            if i == n - 1 and self.nodes is not None:
+                tu = utc(m1.t[i])
+                try:
+                    gold = {utc(m1.t[k]): (m1.h[k], m1.l[k], m1.c[k]) for k in range(max(0, n - 70), n)}
+                    votes = self.nodes.votes(gold, tu)
+                    news = self.nodes.calendar.near(tu + 60) is not None
+                except Exception as e:
+                    votes, news, self.error = {}, False, f"Mesh nodes skipped: {e}"
+                if rd is not None:
+                    rd["g"].update(votes)
+                    rd["news"] = news
+                elif news:
+                    rd = {"x": {}, "news": True}
             self.mesh.record(m1.t[i] + 60, m1.o[i], m1.h[i], m1.l[i], m1.c[i], rd)
         self.watch = self._watch()
         self._nowcast(m1.t[n], self._live_px(quote, m1.c[n]))
